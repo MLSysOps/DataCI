@@ -1,7 +1,16 @@
 Given a product title, we are going to determine the product cateogry.
-# 0. Prepare
+# 0. Prerequisites
 
-1. Get raw data from our data hub
+## Initialize DataCI
+
+```shell
+python dataci/init.py
+```
+
+## Download Sample Raw Data 
+
+For this tutorial, we download sampled product data provided by our e-commerce partners. This data
+is collected from internal online data lake with proper removal of confidential information.
 ```shell
 # saved at data/pairwise_raw/
 cp dataset/multimodal_pairwise_v1 data/pairwise_raw/
@@ -9,12 +18,6 @@ cp dataset/multimodal_pairwise_v1 data/pairwise_raw/
 # |   |- 202211_pairwise.csv
 # |- val
 #     |- 202211_pairwise.csv
-```
-
-2. Init DataCI repository
-
-```shell
-python dataci/init.py
 ```
 
 # 1. Build Text Classification Dataset
@@ -52,7 +55,7 @@ def text_clean_train(data):
 @stage(inputs='feat:text_clean', dependency='auto', outputs='feat:text_aug')
 def text_augementation(data):
     data['text'] = txtaugs.insert_punctuation_chars(
-        data['text']
+        data['text'],
         granularity="all",
         cadence=5.0,
         vary_chars=True,
@@ -62,6 +65,12 @@ def text_augementation(data):
 
 train_data_pipeline = Pipeline([text_clean, text_augmentation])
 ```
+
+Run the train data pipeline:
+```python
+train_data_pipeline()
+```
+The output `text_aug.feat` will be used as train dataset.
 
 2. Build validation dataset v1
 ```python
@@ -79,19 +88,21 @@ def text_clean_val(data):
 val_data_pipeline = Pipeline([text_clean_val])
 ```
 
-3. Run training with the built train and val dataset v1
+Run the validation data pipeline:
 ```python
-# dvc repro train_data_pipeline/dvc.yaml
-train_data_pipeline()
-# dvc repro val_data_pipeline/dvc.yaml
 val_data_pipeline()
 ```
-This output many intermedia features like `train_data_pipeline:text_aug`.
+The output `text_clean.feat` will be used as validation dataset. 
 
-Now you can apply training code and get the model, and training result.
+3. Run training with the built train and val dataset v1
+Now you can apply a simple text classification training on a pre-trained BERT:
+```shell
+python train.py --train-dataset ./train_data_pipeline:text_aug --val-dataset ./val_data_pipeline:text_clean
+```
 
 4. Save data pipeline
 
+You can now publish your data pipeline for a better management.
 ```python
 train_data_pipeline.publish()
 val_data_pipeline.publish()
@@ -105,49 +116,21 @@ val_data_pipeline.publish()
 #     python text_augmentation.py
 ```
 
-
-
-## 1.3 Publish first verion of text dataset
+## 1.3 Publish first version of text dataset
 
 ```shell
 python dataci/dataset.py publish -n text_classification \
-  -s train=train_data_pipeline:text_aug,val=val_data_pipeline:text_aug
+  -s train=train_data_pipeline:text_aug,val=val_data_pipeline:text_clean
 ```
 Publish a new dataset `text_classification` using previous cached feature.  
 The new dataset train split uses the latest feature `text_aug` output by pipeline `train_data_pipeline`.  
-The new dataset val split uses the latest feature `text_aug` output by pipeline `val_data_pipeline`.  
+The new dataset val split uses the latest feature `text_aug` output by pipeline `val_data_pipeline`.
 
-# 2. Run Data-centric Benchmark
+# 2. Try with New Data Augmentation Method
 
-Great! We have just create a `text_classification` dataset with train and test splits.
-Now, we can easily train any SOTA text model and get its performance.
+Let's create a second version of `text_dataset` with different data augmentation method to improve the model performance.
 
-We have provide a easy-to-use data-centric benchmark tool. We can benchmark the dataset by training a sentence BERT
-model.
-```python
-metrics = run_benchmark(
-    type='data_augmentation',
-    ml_task='text_classification',
-    model='sentencebert',
-    dataset={'name': 'text_classification', 'version': 'latest', 'feature_col': 'to_product_name', 'label_col': 'cateogry_lv1'},
-    splits=['train', 'val']
-)
-# store metrics with the train, test dataset
-```
-
-# 3. Check Performance and Debugging
-
-1. Visuliazation
-
-2. Bad Cases
-
-3. Data flow trace
-
-# 4. Try with new training dataset
-
-Let's create a second version of `text_dataset` to improve the model performance.
-
-## 4.1 Write a second version train data pipeline
+## 2.1 Write a second version train data pipeline
 We design a better data augmentation method for `train_data_pipeline_v2`:
 ```python
 @stage(inputs='feat:text_clean', dependency='auto', outputs='feat:text_aug')
@@ -167,7 +150,7 @@ def better_text_augementation(data):
 train_data_pipeline_v2 = Pipeline([text_clean, better_text_augementation])
 ```
 
-## 4.2 Publish train data pipeline v2
+## 2.2 Publish train data pipeline v2
 ```python
 train_data_pipeline_v2.publish(name='train_data_pipeline')
 ```
@@ -181,7 +164,7 @@ dataci pipeline ls -n train_data_pipeline
 # | - v2
 ```
 
-## 4.3 Publish text classification dataset v2
+## 2.3 Publish text classification dataset v2
 It is easy to update output dataset once our data pipeline have new version:
 ```python
 train_data_pipeline(dataset_update=True)
@@ -200,7 +183,7 @@ dataci dataset update -n text_classification
 # Finish 1/1!
 ```
 
-# 5. Try with more raw data
+# 3. Try with more raw data
 Assume our parterner hand over more raw data to us, and we are working on the new dataset:
 ```shell
 # Download pairwise_raw_v2
@@ -226,13 +209,13 @@ dataci dataset update -n text_classification --all
 # To run all pipeline versions, please add `--all`.
 ```
 
-# 6. Summary
+# 4. Summary
 That is a long journey! Wait, how many dataset we have and what are their performance?
 It seems quite messy after we publish many datasets and pipelines, run a lot of workflows 
 and benchmarks.  
 Lickly, when we developing our data pipelines, DataCI helps in managing and auditing all of them!
 
-## 5.1 How many datasets and their relationship?
+## 4.1 How many datasets and their relationship?
 
 1. Check all registered dataset
 ```shell
@@ -288,7 +271,7 @@ Val Metrics     AUC 0.75    AUC 0.70
 View detailed compare result at https://localhost:8888/dataset/text_classification/compare&to=v3&source=v1
 ```
 
-## 5.2 What is the best performance?
+## 4.2 What is the best performance?
 ```shell
 dataci benchmark ls -desc=val/auc text_classification
 
@@ -301,7 +284,7 @@ bench1  v1              0.75        0.86        0.70        0.72
 Total 1 benchmark, 3 records
 ```
 
-## 5.3 How many pipelines are built?
+## 4.3 How many pipelines are built?
 ```shell
 dataci pipeline ls -a
 train_data_pipeline
