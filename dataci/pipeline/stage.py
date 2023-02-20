@@ -5,7 +5,7 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Feb 20, 2023
 """
-from abc import ABC, abstractclassmethod
+from abc import ABC, abstractmethod
 
 import pandas as pd
 
@@ -18,7 +18,7 @@ class Stage(ABC):
         self.dependency = dependency
     
     def resolve(self):
-        """Resolve shortcut init arguements"""
+        """Resolve shortcut init argument"""
         # Resolve input: find the dataset path
         
         # Resolve outputs: 
@@ -28,7 +28,7 @@ class Stage(ABC):
         # Resolve run function
     
     @staticmethod
-    @abstractclassmethod
+    @abstractmethod
     def run(data):
         raise NotImplementedError('Method `run` not implemented.')
 
