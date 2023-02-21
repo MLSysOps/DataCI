@@ -16,14 +16,15 @@ class Repo(object):
 
     def __init__(self):
         self.root_dir = self.find_root()
+        self.dataci_dir = self.root_dir / self.DATACI_DIR
 
     @property
     def dataset_dir(self):
-        return self.root_dir / 'dataset'
+        return self.dataci_dir / 'dataset'
 
     @property
     def pipeline_dir(self):
-        return self.root_dir / 'pipeline'
+        return self.dataci_dir / 'pipeline'
 
     @staticmethod
     def find_root(root=None):

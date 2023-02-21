@@ -5,8 +5,9 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Feb 20, 2023
 """
+import hashlib
 import re
-
+from pathlib import Path
 
 NAME_PATTERN = re.compile(r'^[a-z]\w*$', flags=re.IGNORECASE)
 VERSION_PATTERN = re.compile(r'latest|[a-f\d]{7,40}', flags=re.IGNORECASE)
@@ -69,3 +70,32 @@ def parse_dataset_identifier(name_str: str):
     split = (split and split.lower()) or 'all'
 
     return {'dataset_name': dataset_name, 'version': version, 'split': split}
+
+
+def generate_dataset_version_id(dataset_path, output_pipeline_id=None, log_message=None, parent_id=None):
+    # TODO: Change the version ID generating logic: https://www.quora.com/How-are-Git-commit-IDs-generated
+    # Find .dvc traced data files
+    dataset_path = Path(dataset_path)
+    output_pipeline_id = output_pipeline_id or list()
+    log_message = log_message or ''
+    parent_id = parent_id or ''
+
+    if not dataset_path.is_dir():
+        raise FileNotFoundError(f'dataset path {dataset_path} is not found.')
+    dataset_trackers = list(map(str, list(dataset_path.glob('*.dvc'))))
+    dataset_trackers.sort()
+
+    if len(dataset_trackers) == 0:
+        raise ValueError(
+            f'No dataset trackers (*.dvc) found in the direct sub-directory of {dataset_path}. '
+        )
+    dataset_obj = b''
+    for dataset_tracker in dataset_trackers:
+        with open(dataset_tracker, 'rb') as f:
+            dataset_obj += f.read()
+    output_pipeline_id_obj = ','.join(output_pipeline_id).encode()
+    log_message_obj = log_message.encode()
+    parent_id = parent_id.encode()
+
+    packed_obj = dataset_obj + output_pipeline_id_obj + log_message_obj + parent_id
+    return hashlib.sha1(packed_obj).hexdigest()

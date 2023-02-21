@@ -1,11 +1,7 @@
 import argparse
-import logging
-import os
-import subprocess
-import time
-from pathlib import Path
 
-import yaml
+from dataci.dataset import publish_dataset
+from dataci.repo import Repo
 
 
 def publish(args):
@@ -22,41 +18,8 @@ def publish(args):
             |- train
             |- val
     """
-    dataci_repo_dir = Path(os.getcwd()) / '.dataci'
-    dataset_name = args.name
-    targets = Path(args.targets)
-    
-    # check dataset splits
-    splits = list()
-    for split_dir in os.scandir(targets):
-        if split_dir.is_dir():
-            splits.append(split_dir.name)
-    for split in splits:
-        if split not in ['train', 'val', 'test']:
-            raise ValueError(f'{split} is not a valid split name. Expected "train", "val", "test".')
-    targets = [(targets / split).resolve() for split in splits]
-
-    # Data file version controled by DVC
-    logging.info(f'Caching dataset files: {targets}')
-    subprocess.run(['dvc', 'add'] + targets)
-    
-    # Save tracked dataset to repo
-    repo_dataset_path = dataci_repo_dir / 'dataset' / dataset_name
-    repo_dataset_path.mkdir(exist_ok=True)
-    # Patch meta data to each generated .dvc file
-    # FIXME: hard coded version, need generate version
-    meta = {'version': '1', 'timestamp': int(time.time()), 'output_pipeline': []}
-    for target in targets:
-        dvc_filename = target.with_suffix('.dvc')
-        with open(dvc_filename, 'r') as f:
-            dvc_config = yaml.safe_load(f)
-        dvc_config['meta'] = meta
-        # Save tracked dataset to repo
-        dataset_tracked_file = repo_dataset_path / (dvc_filename.stem + ".yaml")
-        print(dataset_tracked_file)
-        logging.info(f'Adding meta data: {dataset_tracked_file}')
-        with open(dataset_tracked_file, 'a') as f:
-            yaml.safe_dump({meta['version']: dvc_config}, f)
+    repo = Repo()
+    publish_dataset(repo=repo, dataset_name=args.name, targets=args.targets)
 
 
 if __name__ == '__main__':

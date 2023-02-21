@@ -4,16 +4,18 @@ Given a product title, we are going to determine the product cateogry.
 ## Initialize DataCI
 
 ```shell
-python dataci/init.py
+python dataci/command/init.py
 ```
 
 ## Download Sample Raw Data 
 
 For this tutorial, we download sampled product data provided by our e-commerce partners. This data
 is collected from internal online data lake with proper removal of confidential information.
+
 ```shell
 # saved at data/pairwise_raw/
-cp dataset/multimodal_pairwise_v1 data/pairwise_raw/
+mkdir -p data
+cp -r dataset/multimodal_pairwise_v1 data/pairwise_raw/
 # |- train
 # |   |- 202211_pairwise.csv
 # |- val
@@ -26,9 +28,7 @@ cp dataset/multimodal_pairwise_v1 data/pairwise_raw/
 
 Add this dataset with two split into the data repository.
 ```shell
-python dataci/dataset.py publish -n pairwise_raw data/pairwise_raw
-# dvc add data/pairwise_raw/train
-# dvc add data/pairwise_raw/val
+python dataci/command/dataset.py publish -n pairwise_raw data/pairwise_raw
 ```
 
 ## 1.2 Build a dataset for text classification 
