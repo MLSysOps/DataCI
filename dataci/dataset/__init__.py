@@ -12,6 +12,8 @@ import re
 import subprocess
 import time
 from collections import OrderedDict, defaultdict
+from copy import deepcopy
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
@@ -26,11 +28,11 @@ LIST_DATASET_IDENTIFIER_PATTERN = re.compile(
 )
 
 
-def publish_dataset(repo: Repo, dataset_name, targets, output_pipeline=None, log_message=None, parent_dataset=None):
+def publish_dataset(repo: Repo, dataset_name, targets, yield_pipeline=None, parent_dataset=None, log_message=None, ):
     targets = Path(targets).resolve()
-    output_pipeline = output_pipeline or list()
-    log_message = log_message or ''
+    yield_pipeline = yield_pipeline or list()
     parent_dataset = parent_dataset or None
+    log_message = log_message or ''
 
     # check dataset splits
     splits = list()
@@ -40,37 +42,24 @@ def publish_dataset(repo: Repo, dataset_name, targets, output_pipeline=None, log
     for split in splits:
         if split not in ['train', 'val', 'test']:
             raise ValueError(f'{split} is not a valid split name. Expected "train", "val", "test".')
-    dataset_files = [(targets / split).resolve() for split in splits]
+    dataset_files = {split: (targets / split).resolve() for split in splits}
 
     # Data file version controlled by DVC
-    logger.info(f'Caching dataset files: {dataset_files}')
-    subprocess.run(['dvc', 'add'] + list(map(str, dataset_files)))
+    logger.info(f'Caching dataset files: {dataset_files.values()}')
+    subprocess.run(['dvc', 'add'] + list(map(str, dataset_files.values())))
 
-    # Save tracked dataset to repo
     repo_dataset_path = repo.dataset_dir / dataset_name
-    repo_dataset_path.mkdir(exist_ok=True)
 
-    # Patch meta data to each generated .dvc file
-    meta = {
-        'version': generate_dataset_version_id(targets),
-        'timestamp': int(time.time()),
-        'output_pipeline': output_pipeline,
-        'log_message': log_message,
-        'parent_dataset': parent_dataset,
-        'shadow': False,
-    }
-    for file in dataset_files:
-        dvc_filename = file.with_suffix('.dvc')
-        with open(dvc_filename, 'r') as f:
-            dvc_config = yaml.safe_load(f)
-        dvc_config['meta'] = meta
-
+    for split, dataset_file in dataset_files.items():
+        dataset = Dataset(
+            dataset_name=dataset_name, split=split, dataset_files=dataset_file, yield_pipeline=yield_pipeline,
+            parent_dataset=parent_dataset, log_message=log_message,
+        )
         # Save tracked dataset with version to repo
-        dataset_tracked_file = repo_dataset_path / (dvc_filename.stem + ".yaml")
-        print(dataset_tracked_file)
-        logging.info(f'Adding meta data: {dataset_tracked_file}')
-        with open(dataset_tracked_file, 'a') as f:
-            yaml.safe_dump({meta['version']: dvc_config}, f, sort_keys=False)
+        dataset_config_file = repo_dataset_path / (split + ".yaml")
+        logging.info(f'Adding meta data: {dataset_config_file}')
+        with open(dataset_config_file, 'a') as f:
+            yaml.safe_dump({dataset.version: dataset.config}, f, sort_keys=False)
 
 
 def list_dataset(repo: Repo, dataset_identifier=None):
@@ -135,3 +124,74 @@ def list_dataset(repo: Repo, dataset_identifier=None):
             for ver in versions:
                 ret_dataset_dict[dataset][split.stem][ver] = dataset_version_config[ver]['meta']
     return ret_dataset_dict
+
+
+class Dataset(object):
+    def __init__(
+            self,
+            dataset_name,
+            version=None,
+            split=None,
+            dataset_files=None,
+            yield_pipeline=None,
+            parent_dataset=None,
+            log_message=None,
+            meta=None,
+    ):
+        self.dataset_name = dataset_name
+        # Filled if the dataset is published
+        self.version = version
+        self.split = split
+        self.meta = meta
+        # Filled if the dataset is not published
+        self.dataset_files = Path(dataset_files) if dataset_files else None
+        self.create_date = None
+        self.yield_pipeline = yield_pipeline
+        self.parent_dataset = parent_dataset
+        self.log_message = log_message
+        self.shadow = False
+
+        if self.meta:
+            self._parse_meta_info()
+        else:
+            assert self.version is None, 'The dataset is creating with an assigned version'
+            self._build_meta_info()
+
+    def _parse_meta_info(self):
+        self.create_date = self.meta['timestamp']
+        self.yield_pipeline = self.meta['yield_pipeline']
+        self.parent_dataset = self.meta['parent_dataset']
+        self.log_message = self.meta['log_message']
+        self.shadow_version = self.meta['version'] if self.meta != self.version else None
+
+    def _build_meta_info(self):
+        self.create_date = int(time.time())
+        self.yield_pipeline = self.yield_pipeline or list()
+        self.log_message = self.log_message or ''
+
+        self.meta = {
+            'timestamp': self.create_date,
+            'parent_dataset': self.parent_dataset,
+            'yield_pipeline': self.yield_pipeline,
+            'log_message': self.log_message,
+            'version': generate_dataset_version_id(
+                self.dataset_files.parent, self.yield_pipeline, self.log_message, self.parent_dataset
+            )
+        }
+        self.version = self.meta['version']
+
+    @property
+    @lru_cache(maxsize=None)
+    def dvc_config(self):
+        if self.dataset_files:
+            dvc_filename = self.dataset_files.with_suffix('.dvc')
+            with open(dvc_filename, 'r') as f:
+                dvc_config = yaml.safe_load(f)
+            return dvc_config
+
+    @property
+    @lru_cache(maxsize=None)
+    def config(self):
+        config = deepcopy(self.dvc_config)
+        config['meta'] = self.meta
+        return config

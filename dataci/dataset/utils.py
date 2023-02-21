@@ -72,13 +72,13 @@ def parse_dataset_identifier(name_str: str):
     return {'dataset_name': dataset_name, 'version': version, 'split': split}
 
 
-def generate_dataset_version_id(dataset_path, output_pipeline_id=None, log_message=None, parent_id=None):
+def generate_dataset_version_id(dataset_path, yield_pipeline=None, log_message=None, parent_dataset=None):
     # TODO: Change the version ID generating logic: https://www.quora.com/How-are-Git-commit-IDs-generated
     # Find .dvc traced data files
     dataset_path = Path(dataset_path)
-    output_pipeline_id = output_pipeline_id or list()
+    yield_pipeline = yield_pipeline or list()
     log_message = log_message or ''
-    parent_id = parent_id or ''
+    parent_dataset = parent_dataset or ''
 
     if not dataset_path.is_dir():
         raise FileNotFoundError(f'dataset path {dataset_path} is not found.')
@@ -93,9 +93,9 @@ def generate_dataset_version_id(dataset_path, output_pipeline_id=None, log_messa
     for dataset_tracker in dataset_trackers:
         with open(dataset_tracker, 'rb') as f:
             dataset_obj += f.read()
-    output_pipeline_id_obj = ','.join(output_pipeline_id).encode()
+    output_pipeline_id_obj = ','.join(yield_pipeline).encode()
     log_message_obj = log_message.encode()
-    parent_id = parent_id.encode()
+    parent_dataset = parent_dataset.encode()
 
-    packed_obj = dataset_obj + output_pipeline_id_obj + log_message_obj + parent_id
+    packed_obj = dataset_obj + output_pipeline_id_obj + log_message_obj + parent_dataset
     return hashlib.sha1(packed_obj).hexdigest()
