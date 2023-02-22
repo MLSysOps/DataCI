@@ -63,7 +63,7 @@ def publish_dataset(repo: Repo, dataset_name, targets, yield_pipeline=None, pare
             yaml.safe_dump({dataset.version: dataset.config}, f, sort_keys=False)
 
 
-def list_dataset(repo: Repo, dataset_identifier=None):
+def list_dataset(repo: Repo, dataset_identifier=None, tree_view=True):
     """
     List dataset with optional dataset identifier to query.
 
@@ -75,9 +75,12 @@ def list_dataset(repo: Repo, dataset_identifier=None):
             - version (optional): Version ID or the starting few characters of version ID. It will search
                 all matched versions of this dataset. Default to list all versions.
             - split (optional): In one of "train", "val", "split" or "all". Default to list all splits.
+        tree_view (bool): View the queried dataset as a 3-level-tree, level 1 is dataset name, level 2 is split tag,
+            and level 3 is version.
 
     Returns:
-        A dict of dataset information. The format is {dataset_name: {split_tag: {version_id: dataset_info}}}.
+        A dict (tree_view=True, default) or a list (tree_view=False) of dataset information.
+            If view as a tree, the format is {dataset_name: {split_tag: {version_id: dataset_info}}}.
 
     Examples:
         >>> repo = Repo()
@@ -114,6 +117,7 @@ def list_dataset(repo: Repo, dataset_identifier=None):
             datasets.append(folder.name)
 
     ret_dataset_dict = defaultdict(lambda: defaultdict(OrderedDict))
+    ret_dataset_list = list()
     for dataset in datasets:
         # Check matched splits
         splits = list((repo.dataset_dir / dataset).glob(f'{split}.yaml'))
@@ -125,10 +129,15 @@ def list_dataset(repo: Repo, dataset_identifier=None):
                 dataset_version_config: dict = yaml.safe_load(f)
             versions = fnmatch.filter(dataset_version_config.keys(), version)
             for ver in versions:
-                ret_dataset_dict[dataset][split][ver] = Dataset(
+                dataset_obj = Dataset(
                     dataset_name=dataset, version=ver, split=split, meta=dataset_version_config[ver]['meta']
                 )
-    return ret_dataset_dict
+                if tree_view:
+                    ret_dataset_dict[dataset][split][ver] = dataset_obj
+                else:
+                    ret_dataset_list.append(dataset_obj)
+
+    return ret_dataset_dict if tree_view else ret_dataset_list
 
 
 class Dataset(object):
