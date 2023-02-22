@@ -10,15 +10,16 @@ import logging
 import os
 import re
 import subprocess
-import time
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
+from typing import Optional
 
 import yaml
 
-from dataci.dataset.utils import generate_dataset_version_id, parse_dataset_identifier
+from dataci.dataset.utils import generate_dataset_version_id, parse_dataset_identifier, generate_dataset_identifier
 from dataci.repo import Repo
 
 logger = logging.getLogger(__name__)
@@ -95,6 +96,7 @@ def list_dataset(repo: Repo, dataset_identifier=None):
         >>> list_dataset(repo=repo, dataset_identifier='dataset1[*]')
         ValueError: Invalid dataset identifier dataset1[*]
     """
+    dataset_identifier = dataset_identifier or '*'
     matched = LIST_DATASET_IDENTIFIER_PATTERN.match(dataset_identifier)
     if not matched:
         raise ValueError(f'Invalid dataset identifier {dataset_identifier}')
@@ -117,12 +119,15 @@ def list_dataset(repo: Repo, dataset_identifier=None):
         splits = list((repo.dataset_dir / dataset).glob(f'{split}.yaml'))
 
         # Check matched version
-        for split in splits:
-            with open(split) as f:
+        for split_path in splits:
+            split = split_path.stem
+            with open(split_path) as f:
                 dataset_version_config: dict = yaml.safe_load(f)
             versions = fnmatch.filter(dataset_version_config.keys(), version)
             for ver in versions:
-                ret_dataset_dict[dataset][split.stem][ver] = dataset_version_config[ver]['meta']
+                ret_dataset_dict[dataset][split][ver] = Dataset(
+                    dataset_name=dataset, version=ver, split=split, meta=dataset_version_config[ver]['meta']
+                )
     return ret_dataset_dict
 
 
@@ -145,10 +150,11 @@ class Dataset(object):
         self.meta = meta
         # Filled if the dataset is not published
         self.dataset_files = Path(dataset_files) if dataset_files else None
-        self.create_date = None
+        self.create_date: Optional[datetime] = None
         self.yield_pipeline = yield_pipeline
         self.parent_dataset = parent_dataset
         self.log_message = log_message
+        self.size: Optional[int] = None
         self.shadow = False
 
         if self.meta:
@@ -157,20 +163,26 @@ class Dataset(object):
             assert self.version is None, 'The dataset is creating with an assigned version'
             self._build_meta_info()
 
+    def __repr__(self):
+        if all((self.dataset_name, self.version, self.split)):
+            return generate_dataset_identifier(self.dataset_name, self.version[:7], split=self.split)
+        else:
+            return f'{self.dataset_name} ! Unpublished'
+
     def _parse_meta_info(self):
-        self.create_date = self.meta['timestamp']
+        self.create_date = datetime.fromtimestamp(self.meta['timestamp'])
         self.yield_pipeline = self.meta['yield_pipeline']
         self.parent_dataset = self.meta['parent_dataset']
         self.log_message = self.meta['log_message']
         self.shadow_version = self.meta['version'] if self.meta != self.version else None
 
     def _build_meta_info(self):
-        self.create_date = int(time.time())
+        self.create_date = datetime.now()
         self.yield_pipeline = self.yield_pipeline or list()
         self.log_message = self.log_message or ''
 
         self.meta = {
-            'timestamp': self.create_date,
+            'timestamp': int(self.create_date.timestamp()),
             'parent_dataset': self.parent_dataset,
             'yield_pipeline': self.yield_pipeline,
             'log_message': self.log_message,
