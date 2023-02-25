@@ -9,16 +9,13 @@ import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-import pandas as pd
-
 from dataci.dataset import list_dataset
 
 logger = logging.getLogger(__name__)
 
 
 class Stage(ABC):
-    def __init__(self, repo, name: str, inputs: str, outputs: str, dependency='auto') -> None:
-        self.repo = repo
+    def __init__(self, name: str, inputs: str, outputs: str, dependency='auto') -> None:
         self.name = name
         self.inputs = inputs
         self.outputs = outputs
@@ -52,17 +49,6 @@ class Stage(ABC):
         # Resolve dependencies
         pass
 
-    @staticmethod
     @abstractmethod
-    def run(data):
+    def run(self):
         raise NotImplementedError('Method `run` not implemented.')
-
-    def __call__(self):
-        # Read input
-        df = pd.read_csv(self.inputs)
-        
-        # Execute user override :code:`run` function
-        outputs = df.apply(self.run(df), axis=1)
-        
-        # Dump output
-        outputs.to_csv(self.outputs, index=False)
