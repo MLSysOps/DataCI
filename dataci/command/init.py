@@ -14,9 +14,10 @@ def run(args):
             shutil.rmtree(dataci_repo_dir)
     # Init dataci directory
     data_ci_folders = [
-        dataci_repo_dir, 
+        dataci_repo_dir,
         dataci_repo_dir / 'dataset',
         dataci_repo_dir / 'pipeline',
+        dataci_repo_dir / 'tmp',
     ]
     for folder in data_ci_folders:
         folder.mkdir(exist_ok=True)

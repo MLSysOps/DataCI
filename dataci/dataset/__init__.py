@@ -29,7 +29,7 @@ LIST_DATASET_IDENTIFIER_PATTERN = re.compile(
 )
 
 
-def publish_dataset(repo: Repo, dataset_name, targets, yield_pipeline=None, parent_dataset=None, log_message=None, ):
+def publish_dataset(repo: Repo, dataset_name, targets, yield_pipeline=None, parent_dataset=None, log_message=None):
     targets = Path(targets).resolve()
     yield_pipeline = yield_pipeline or list()
     parent_dataset = parent_dataset or None
@@ -130,7 +130,8 @@ def list_dataset(repo: Repo, dataset_identifier=None, tree_view=True):
             versions = fnmatch.filter(dataset_version_config.keys(), version)
             for ver in versions:
                 dataset_obj = Dataset(
-                    dataset_name=dataset, version=ver, split=split, meta=dataset_version_config[ver]['meta']
+                    dataset_name=dataset, version=ver, split=split, config=dataset_version_config[ver],
+                    repo=repo,
                 )
                 if tree_view:
                     ret_dataset_dict[dataset][split][ver] = dataset_obj
@@ -146,19 +147,22 @@ class Dataset(object):
             dataset_name,
             version=None,
             split=None,
+            config=None,
+            repo=None,
             dataset_files=None,
             yield_pipeline=None,
             parent_dataset=None,
             log_message=None,
-            meta=None,
     ):
         self.dataset_name = dataset_name
+        self.__published = False
         # Filled if the dataset is published
         self.version = version
         self.split = split
-        self.meta = meta
+        self.config = config
+        self.repo = repo
         # Filled if the dataset is not published
-        self.dataset_files = Path(dataset_files) if dataset_files else None
+        self._dataset_files = Path(dataset_files) if dataset_files else None
         self.create_date: Optional[datetime] = None
         self.yield_pipeline = yield_pipeline
         self.parent_dataset = parent_dataset
@@ -166,11 +170,12 @@ class Dataset(object):
         self.size: Optional[int] = None
         self.shadow = False
 
-        if self.meta:
-            self._parse_meta_info()
+        if self.config:
+            self._parse_config()
+            self.__published = True
         else:
             assert self.version is None, 'The dataset is creating with an assigned version'
-            self._build_meta_info()
+            self._build_config()
 
     def __repr__(self):
         if all((self.dataset_name, self.version, self.split)):
@@ -178,41 +183,56 @@ class Dataset(object):
         else:
             return f'{self.dataset_name} ! Unpublished'
 
-    def _parse_meta_info(self):
-        self.create_date = datetime.fromtimestamp(self.meta['timestamp'])
-        self.yield_pipeline = self.meta['yield_pipeline']
-        self.parent_dataset = self.meta['parent_dataset']
-        self.log_message = self.meta['log_message']
-        self.shadow_version = self.meta['version'] if self.meta != self.version else None
+    def _parse_config(self):
+        meta = self.config['meta']
+        self.create_date = datetime.fromtimestamp(meta['timestamp'])
+        self.yield_pipeline = meta['yield_pipeline']
+        self.parent_dataset = meta['parent_dataset']
+        self.log_message = meta['log_message']
+        self.shadow_version = meta['version'] if meta != self.version else None
+        self._dataset_files = self.repo.tmp_dir / self.dataset_name / self.version / self.split
 
-    def _build_meta_info(self):
+    def _build_config(self):
         self.create_date = datetime.now()
         self.yield_pipeline = self.yield_pipeline or list()
         self.log_message = self.log_message or ''
 
-        self.meta = {
+        meta = {
             'timestamp': int(self.create_date.timestamp()),
             'parent_dataset': self.parent_dataset,
             'yield_pipeline': self.yield_pipeline,
             'log_message': self.log_message,
             'version': generate_dataset_version_id(
-                self.dataset_files.parent, self.yield_pipeline, self.log_message, self.parent_dataset
+                self._dataset_files.parent, self.yield_pipeline, self.log_message, self.parent_dataset
             )
         }
-        self.version = self.meta['version']
+        self.version = meta['version']
+        self.config = deepcopy(self.dvc_config)
+        self.config['meta'] = meta
+
+    @property
+    def dataset_files(self):
+        # The dataset files is already cached
+        if self._dataset_files.exists():
+            return self._dataset_files
+        # The dataset files need to recover from DVC
+        self._dataset_files.parent.mkdir(exist_ok=True)
+        dataset_file_tracker = self._dataset_files.with_suffix('.dvc')
+        with open(dataset_file_tracker, 'w') as f:
+            yaml.safe_dump(self.dvc_config, f)
+        # dvc checkout
+        cmd = ['dvc', 'checkout', '-f', str(dataset_file_tracker)]
+        subprocess.run(cmd)
+        return self._dataset_files
 
     @property
     @lru_cache(maxsize=None)
     def dvc_config(self):
-        if self.dataset_files:
-            dvc_filename = self.dataset_files.with_suffix('.dvc')
-            with open(dvc_filename, 'r') as f:
-                dvc_config = yaml.safe_load(f)
+        if self.__published:
+            dvc_config = deepcopy(self.config)
+            del dvc_config['meta']
             return dvc_config
-
-    @property
-    @lru_cache(maxsize=None)
-    def config(self):
-        config = deepcopy(self.dvc_config)
-        config['meta'] = self.meta
-        return config
+        dvc_filename = self._dataset_files.with_suffix('.dvc')
+        with open(dvc_filename, 'r') as f:
+            dvc_config = yaml.safe_load(f)
+        return dvc_config

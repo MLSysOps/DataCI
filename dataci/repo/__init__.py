@@ -26,6 +26,10 @@ class Repo(object):
     def pipeline_dir(self):
         return self.dataci_dir / 'pipeline'
 
+    @property
+    def tmp_dir(self):
+        return self.dataci_dir / 'tmp'
+
     @staticmethod
     def find_root(root=None):
         root = Path(root or os.curdir)
