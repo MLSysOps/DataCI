@@ -11,6 +11,8 @@ from distutils.dir_util import copy_tree
 from pathlib import Path
 from shutil import copyfile
 
+import pandas as pd
+
 from dataci.dataset import list_dataset
 from dataci.repo import Repo
 
@@ -65,5 +67,19 @@ class Stage(ABC):
         pass
 
     @abstractmethod
-    def run(self):
+    def run(self, inputs):
         raise NotImplementedError('Method `run` not implemented.')
+
+    def output_serializer(self, outputs, dest):
+        """Output serializer to save the output data/feature."""
+        if outputs is None:
+            return
+        if isinstance(outputs, pd.DataFrame):
+            logger.info(f'Save output to {dest}')
+            outputs.to_csv(dest, index=False)
+        else:
+            raise ValueError(f'Not support output object type: {type(outputs)}.')
+
+    def __call__(self):
+        outputs = self.run(self.inputs)
+        self.output_serializer(outputs, self.outputs)
