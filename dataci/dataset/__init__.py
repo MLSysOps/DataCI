@@ -57,9 +57,10 @@ def publish_dataset(repo: Repo, dataset_name, targets, yield_pipeline=None, pare
             parent_dataset=parent_dataset, log_message=log_message,
         )
         # Save tracked dataset with version to repo
-        dataset_config_file = repo_dataset_path / (split + ".yaml")
+        dataset_config_file = (repo_dataset_path / split).with_suffix(".yaml")
         logging.info(f'Adding meta data: {dataset_config_file}')
-        with open(dataset_config_file, 'a') as f:
+        dataset_config_file.parent.mkdir(exist_ok=True)
+        with open(dataset_config_file, 'a+') as f:
             yaml.safe_dump({dataset.version: dataset.config}, f, sort_keys=False)
 
 
@@ -216,7 +217,7 @@ class Dataset(object):
         if self._dataset_files.exists():
             return self._dataset_files
         # The dataset files need to recover from DVC
-        self._dataset_files.parent.mkdir(exist_ok=True)
+        self._dataset_files.parent.mkdir(exist_ok=True, parents=True)
         dataset_file_tracker = self._dataset_files.with_suffix('.dvc')
         with open(dataset_file_tracker, 'w') as f:
             yaml.safe_dump(self.dvc_config, f)

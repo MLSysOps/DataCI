@@ -1,3 +1,4 @@
 .dvc
 .dataci
 data
+**/__pycache__

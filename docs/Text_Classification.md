@@ -16,11 +16,10 @@ is collected from internal online data lake with proper removal of confidential 
 # saved at data/pairwise_raw/
 mkdir -p data
 cp -r dataset/multimodal_pairwise_v1 data/pairwise_raw/
-# |- train
-# |   |- 202211_pairwise.csv
-# |- val
-#     |- 202211_pairwise.csv
 ```
+This dataset contains train and test splits. Each split contains a CSV file with 3 columns: 
+`product_id`, `product_title` and `lv3_category`. We are going to build a pipeline to classify the product category 
+(`lv3_category`) based on its raw, dirty `product_title`.
 
 # 1. Build Text Classification Dataset
 
@@ -40,7 +39,7 @@ import textclean
 import augly.text as txtaugs
 
 
-@stage(inputs='dataset:pairwise_raw[train]', dependency='auto', outputs='feat:text_clean')
+@stage(inputs='dataset:pairwise_raw[train]', dependency='auto', outputs='text_clean.csv')
 def text_clean_train(data):
     text = data['text']
     # remove emoji, space, and to lower case
@@ -52,7 +51,7 @@ def text_clean_train(data):
     return data
 
 
-@stage(inputs='feat:text_clean', dependency='auto', outputs='feat:text_aug')
+@stage(inputs='text_clean.csv', dependency='auto', outputs='text_aug.csv')
 def text_augementation(data):
     data['text'] = txtaugs.insert_punctuation_chars(
         data['text'],
@@ -70,11 +69,12 @@ Run the train data pipeline:
 ```python
 train_data_pipeline()
 ```
-The output `text_aug.feat` will be used as train dataset.
+The output `text_aug.csv` will be used as train dataset.
 
 2. Build validation dataset v1
+Similarly, we build the validation pipeline and run it to generate the validation dataset:
 ```python
-@stage(inputs='dataset:pairwise_raw[val]', dependency='auto', outputs='feat:text_clean')
+@stage(inputs='dataset:pairwise_raw[val]', dependency='auto', outputs='text_clean.csv')
 def text_clean_val(data):
     # remove emoji, space, and to lower case
     text = clean(text, to_ascii=False, lower=True, normalize_whitespace=True, no_emoji=True)
@@ -86,16 +86,12 @@ def text_clean_val(data):
 
 
 val_data_pipeline = Pipeline([text_clean_val])
-```
-
-Run the validation data pipeline:
-```python
 val_data_pipeline()
 ```
-The output `text_clean.feat` will be used as validation dataset. 
+The output `text_clean.csv` will be used as validation dataset. 
 
 3. Run training with the built train and val dataset v1
-Now you can apply a simple text classification training on a pre-trained BERT:
+Now you can simple train a pre-trained BERT on this text classification dataset v1:
 ```shell
 python train.py --train-dataset ./train_data_pipeline:text_aug --val-dataset ./val_data_pipeline:text_clean
 ```
@@ -106,14 +102,6 @@ You can now publish your data pipeline for a better management.
 ```python
 train_data_pipeline.publish()
 val_data_pipeline.publish()
-# mkdir -p train_data_pipeline
-# cd train_data_pipeline
-# dvc stage add -n text_clean \
-#     -d text_clean.py -d ../data/pairwise_raw/train -o text_clean_0.csv \
-#     python text_clean.py
-# dvc stage add -n text_augmentation \
-#     -d text_augmentation.py -d text_clean_0.csv -o text_augmentation_0.csv \
-#     python text_augmentation.py
 ```
 
 ## 1.3 Publish first version of text dataset
