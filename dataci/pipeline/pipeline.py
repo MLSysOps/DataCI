@@ -5,12 +5,9 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: FebK 23, 2023
 """
-import inspect
 import os
 import subprocess
 from pathlib import Path
-
-import cloudpickle
 
 from dataci.repo import Repo
 from .stage import Stage
@@ -18,8 +15,8 @@ from .utils import cwd
 
 
 class Pipeline(object):
-    def __init__(self, repo: Repo, name, version=None, basedir=os.curdir):
-        self.repo = repo
+    def __init__(self, name, version=None, basedir=os.curdir, repo: Repo = None):
+        self.repo = repo or Repo()
         self.name = name
         self.version = version or 'latest'
         self.basedir = Path(basedir)
@@ -43,8 +40,19 @@ class Pipeline(object):
             for stage in self.stages:
                 # For each stage
                 # resolve input and output feature path
-                stage.inputs = str(self.feat_dir / stage.inputs)
-                stage.outputs = str(self.feat_dir / stage.outputs)
+                if stage._inputs.type == 'local':
+                    stage._inputs.path = str(self.feat_dir / stage.inputs)
+                elif stage._inputs.type == 'dataset':
+                    sym_link_path = self.feat_dir / stage._inputs.name
+                    # create a symbolic link
+                    if not sym_link_path.exists():
+                        os.symlink(stage.inputs, sym_link_path, target_is_directory=True)
+                    stage._inputs.path = sym_link_path
+                if stage._outputs.type == 'local':
+                    stage._outputs.path = str(self.feat_dir / stage.outputs)
+                elif stage._outputs.type == 'dataset':
+                    # TODO: if dest is a dataset
+                    pass
 
                 # Pack the stage object and all its dependencies to `code_dir`
                 with open((self.code_dir / stage.name).with_suffix('.pkl'), 'wb') as f:
@@ -67,10 +75,14 @@ class Pipeline(object):
                 # manage stages by dvc
                 # dvc stage add -n <stage name> -d stage.py -d input.csv -O output.csv -w self.workdir python stage.py
                 cmd = [
-                    'dvc', 'stage', 'add', '-f', '-n', str(stage.name),  # '-d', str(stage.dependency),
+                    'dvc', 'stage', 'add', '-f', '-n', str(stage.name),
                     '-O', stage.outputs, '-w', str(self.workdir),
-                    'python', str((self.code_dir / f'{stage.name}.py').relative_to(self.workdir))
                 ]
+                # Add dependencies
+                for dependency in stage.dependency:
+                    cmd += ['-d', str(Path(dependency).relative_to(self.workdir))]
+                # Add running command
+                cmd += ['python', str((self.code_dir / f'{stage.name}.py').relative_to(self.workdir))]
                 subprocess.call(cmd)
 
     def __call__(self):

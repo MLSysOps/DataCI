@@ -1,9 +1,11 @@
+import os
+
 import augly.text as txtaugs
 import pandas as pd
 import unicodedata
 from cleantext import clean
 
-from dataci.pipeline import Stage
+from dataci.pipeline import Stage, Pipeline
 
 
 class TextClean(Stage):
@@ -18,7 +20,7 @@ class TextClean(Stage):
         return text
 
     def run(self, inputs):
-        df = pd.read_csv(inputs / '202211_pairwise.csv')
+        df = pd.read_csv(os.path.join(inputs, 'train.csv'))
         df['to_product_name'] = df['to_product_name'].map(self.clean)
         return df
 
@@ -37,6 +39,17 @@ class TextAugmentation(Stage):
 
 text_clean = TextClean('text_clean', inputs='pairwise_raw[train]', outputs='text_clean.csv')
 text_augmentation = TextAugmentation('text_augmentation', inputs='text_clean.csv', outputs='text_aug.csv')
-print('Running text clean')
-text_clean()
-text_augmentation()
+# Debug run
+print('Debug run')
+# print('Running text clean')
+# text_clean()
+# print('Running text augmentation')
+# text_augmentation()
+# Define a pipeline
+print('Define a pipeline')
+pipeline = Pipeline('train_text_classification')
+pipeline.add_stage(text_clean)
+pipeline.add_stage(text_augmentation)
+pipeline.build()
+print('Run pipeline')
+pipeline()
