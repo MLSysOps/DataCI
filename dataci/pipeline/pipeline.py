@@ -15,6 +15,9 @@ from .utils import cwd
 
 
 class Pipeline(object):
+    CODE_DIR = 'code'
+    FEAT_DIR = 'feat'
+
     def __init__(self, name, version=None, basedir=os.curdir, repo: Repo = None):
         self.repo = repo or Repo()
         self.name = name
@@ -23,11 +26,9 @@ class Pipeline(object):
 
         # prepare working directory
         self.workdir = (self.basedir / self.name / self.version).resolve()
-        self.code_dir = self.workdir / 'code'
-        self.feat_dir = self.workdir / 'feat'
         self.workdir.mkdir(exist_ok=True, parents=True)
-        self.code_dir.mkdir(exist_ok=True)
-        self.feat_dir.mkdir(exist_ok=True)
+        (self.workdir / self.CODE_DIR).mkdir(exist_ok=True)
+        (self.workdir / self.FEAT_DIR).mkdir(exist_ok=True)
 
         # stages
         self.stages = list()
@@ -40,49 +41,28 @@ class Pipeline(object):
             for stage in self.stages:
                 # For each stage
                 # resolve input and output feature path
-                if stage._inputs.type == 'local':
-                    stage._inputs.path = str(self.feat_dir / stage.inputs)
-                elif stage._inputs.type == 'dataset':
-                    sym_link_path = self.feat_dir / stage._inputs.name
-                    # create a symbolic link
-                    if not sym_link_path.exists():
-                        os.symlink(stage.inputs, sym_link_path, target_is_directory=True)
-                    stage._inputs.path = sym_link_path
-                if stage._outputs.type == 'local':
-                    stage._outputs.path = str(self.feat_dir / stage.outputs)
-                elif stage._outputs.type == 'dataset':
-                    # TODO: if dest is a dataset
-                    pass
+                stage.code_base_dir = Path(self.CODE_DIR)
+                stage.feat_base_dir = Path(self.FEAT_DIR)
 
                 # Pack the stage object and all its dependencies to `code_dir`
-                with open((self.code_dir / stage.name).with_suffix('.pkl'), 'wb') as f:
-                    cloudpickle.dump(stage, f)
-                # Generate run stage execution file
-                # TODO: use reflection to obtain the run stage code
-                with open((self.code_dir / stage.name).with_suffix('.py'), 'w') as f:
-                    f.writelines(inspect.cleandoc(
-                        f"""import pickle
-                        
-                        
-                        with open(
-                            r'{(self.code_dir / stage.name).with_suffix(".pkl").relative_to(self.workdir)}', 'rb'
-                        ) as f:
-                            stage_obj = pickle.load(f)
-                        stage_obj.run()
-                        """
-                    ))
+                file_dict = stage.serialize()
+                for file_path, file_bytes in file_dict.items():
+                    with open(file_path, 'wb') as f:
+                        f.write(file_bytes)
 
                 # manage stages by dvc
                 # dvc stage add -n <stage name> -d stage.py -d input.csv -O output.csv -w self.workdir python stage.py
                 cmd = [
                     'dvc', 'stage', 'add', '-f', '-n', str(stage.name),
-                    '-O', stage.outputs, '-w', str(self.workdir),
+                    '-O', stage.outputs.path, '-w', str(self.workdir),
                 ]
                 # Add dependencies
+                print(stage.dependency)
                 for dependency in stage.dependency:
-                    cmd += ['-d', str(Path(dependency).relative_to(self.workdir))]
+                    dependency = Path(dependency)
+                    cmd += ['-d', str(dependency.relative_to(self.workdir) if dependency.is_absolute() else dependency)]
                 # Add running command
-                cmd += ['python', str((self.code_dir / f'{stage.name}.py').relative_to(self.workdir))]
+                cmd += ['python', os.path.join(self.CODE_DIR, f'{stage.name}.py')]
                 subprocess.call(cmd)
 
     def __call__(self):

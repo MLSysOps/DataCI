@@ -41,9 +41,9 @@ text_clean = TextClean('text_clean', inputs='pairwise_raw[train]', outputs='text
 text_augmentation = TextAugmentation('text_augmentation', inputs='text_clean.csv', outputs='text_aug.csv')
 # Debug run
 print('Debug run')
-# print('Running text clean')
-# text_clean()
-# print('Running text augmentation')
+print('Running text clean')
+text_clean()
+print('Running text augmentation')
 # text_augmentation()
 # Define a pipeline
 print('Define a pipeline')
