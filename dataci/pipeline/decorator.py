@@ -10,11 +10,25 @@ from typing import Callable
 from .stage import Stage
 
 
-def stage(name, inputs, outputs, dependency='auto', repo=None) -> Callable[[Callable], Stage]:
+def stage(inputs, outputs, name=None, dependency='auto', repo=None) -> Callable[[Callable], Stage]:
+    """Pipeline stage decorator. Convert the wrapped function into a
+    :code:`dataci.pipeline.stage.Stage` object.
+
+    Args:
+        inputs (str or os.PathLike): Stage inputs dataset name or data path.
+        outputs (str os os.PathLike): Stage outputs dataset name or data path.
+        name (str): Stage name. Default to `None`, which will infer from the name of wrapped function.
+        dependency (str or list of str): Dependencies of the stage. Default to 'auto', which will
+            automatically applied all the stage inputs and the stage's code.
+        repo (dataci.repo.Repo): Dataci Repo. Default to `None`, which will automatically infer the
+            repo location.
+    """
+
     def decorator_stage(run):
         def wrapper_stage():
+            stage_name = name or run.__name__
             # Convert stage name to camel case
-            name_components = name.split('_')
+            name_components = stage_name.split('_')
             name_camel_case = name_components[0] + ''.join(x.title() for x in name_components[1:]) + 'Stage'
             # Generate stage class of the wrapped `run` function
             stage_cls = type(
