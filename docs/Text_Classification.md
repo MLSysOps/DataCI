@@ -7,7 +7,7 @@ Given a product title, we are going to determine the product cateogry.
 python dataci/command/init.py
 ```
 
-## Download Sample Raw Data 
+## Download Sample Raw Data
 
 For this tutorial, we download sampled product data provided by our e-commerce partners. This data
 is collected from internal online data lake with proper removal of confidential information.
@@ -15,10 +15,12 @@ is collected from internal online data lake with proper removal of confidential 
 ```shell
 # saved at data/pairwise_raw/
 mkdir -p data
+rm -r data/*
 cp -r dataset/multimodal_pairwise_v1 data/pairwise_raw/
 ```
-This dataset contains train and test splits. Each split contains a CSV file with 3 columns: 
-`product_id`, `product_title` and `lv3_category`. We are going to build a pipeline to classify the product category 
+
+This dataset contains train and val splits. Each split contains a CSV file with 3 columns:
+`product_id`, `product_title` and `lv3_category`. We are going to build a pipeline to classify the product category
 (`lv3_category`) based on its raw, dirty `product_title`.
 
 # 1. Build Text Classification Dataset
@@ -26,6 +28,7 @@ This dataset contains train and test splits. Each split contains a CSV file with
 ## 1.1 Publish raw data
 
 Add this dataset with two split into the data repository.
+
 ```shell
 python dataci/command/dataset.py publish -n pairwise_raw data/pairwise_raw
 ```
@@ -33,36 +36,35 @@ python dataci/command/dataset.py publish -n pairwise_raw data/pairwise_raw
 ## 1.2 Build a dataset for text classification 
 
 1. Build train dataset v1
+
 ```python
-import unicodedata
-import textclean
 import augly.text as txtaugs
+import os
+import pandas as pd
+
+from dataci.pipeline import Pipeline, stage
 
 
-@stage(inputs='dataset:pairwise_raw[train]', dependency='auto', outputs='text_clean.csv')
-def text_clean_train(data):
-    text = data['text']
-    # remove emoji, space, and to lower case
-    text = clean(text, to_ascii=False, lower=True, normalize_whitespace=True, no_emoji=True)
-    
-    # remove accent
-    data['text'] = ''.join(c for c in unicodedata.normalize('NFD', text) if unicodedata.category(c) != 'Mn')
-
-    return data
+@stage(inputs='pairwise_raw[train]', outputs='text_clean.csv')
+def text_clean(inputs):
+    df = pd.read_csv(os.path.join(inputs, 'train.csv'))
+    df['to_product_name'] = df['to_product_name'].map(lambda text: text.lower())
+    return df
 
 
-@stage(inputs='text_clean.csv', dependency='auto', outputs='text_aug.csv')
-def text_augementation(data):
-    data['text'] = txtaugs.insert_punctuation_chars(
-        data['text'],
+@stage(inputs='text_clean.csv', outputs='text_augmentation.csv')
+def text_augmentation(inputs):
+    df = pd.read_csv(inputs)
+    transform = txtaugs.InsertPunctuationChars(
         granularity="all",
         cadence=5.0,
         vary_chars=True,
     )
-    return data
+    df['to_product_name'] = df['to_product_name'].map(transform)
+    return df
 
 
-train_data_pipeline = Pipeline([text_clean, text_augmentation])
+train_data_pipeline = Pipeline(name='train_data_pipeline', stages=[text_clean, text_augmentation])
 ```
 
 Run the train data pipeline:
@@ -73,19 +75,17 @@ The output `text_aug.csv` will be used as train dataset.
 
 2. Build validation dataset v1
 Similarly, we build the validation pipeline and run it to generate the validation dataset:
+
 ```python
-@stage(inputs='dataset:pairwise_raw[val]', dependency='auto', outputs='text_clean.csv')
-def text_clean_val(data):
-    # remove emoji, space, and to lower case
-    text = clean(text, to_ascii=False, lower=True, normalize_whitespace=True, no_emoji=True)
-    
-    # remove accent
-    text = ''.join(c for c in unicodedata.normalize('NFD', text) if unicodedata.category(c) != 'Mn')
+@stage(inputs='pairwise_raw[val]', outputs='text_clean.csv')
+def text_clean_val(inputs):
+    df = pd.read_csv(os.path.join(inputs, 'val.csv'))
+    df['to_product_name'] = df['to_product_name'].map(lambda text: text.lower())
 
-    return text
+    return df
 
 
-val_data_pipeline = Pipeline([text_clean_val])
+val_data_pipeline = Pipeline(name='val_data_pipeline', stages=text_clean_val)
 val_data_pipeline()
 ```
 The output `text_clean.csv` will be used as validation dataset. 
@@ -120,22 +120,28 @@ Let's create a second version of `text_dataset` with different data augmentation
 
 ## 2.1 Write a second version train data pipeline
 We design a better data augmentation method for `train_data_pipeline_v2`:
+
 ```python
-@stage(inputs='feat:text_clean', dependency='auto', outputs='feat:text_aug')
-def better_text_augementation(data):
-    text = txtaugs.insert_punctuation_chars(
-        data['text']
-        granularity="all",
-        cadence=5.0,
-        vary_chars=True,
-    )
-    text = textaugs.insert_whitespace_chars(text)
-    text = textaugs.insert_zero_width_chars(text)
-    data['text'] = text
-    return data
+import unicodedata
+from cleantext import clean
 
 
-train_data_pipeline_v2 = Pipeline([text_clean, better_text_augementation])
+def clean_func(text):
+    # remove emoji, space, and to lower case
+    text = clean(text, to_ascii=False, lower=True, normalize_whitespace=True, no_emoji=True)
+    # remove accent
+    text = ''.join(c for c in unicodedata.normalize('NFD', text) if unicodedata.category(c) != 'Mn')
+    return text
+
+
+@stage(inputs='pairwise_raw[val]', outputs='text_clean.csv')
+def text_clean(inputs):
+    df = pd.read_csv(os.path.join(inputs, 'train.csv'))
+    df['to_product_name'] = df['to_product_name'].map(lambda text: text.lower())
+    return df
+
+
+train_data_pipeline_v2 = Pipeline([text_clean, text_augmentation])
 ```
 
 ## 2.2 Publish train data pipeline v2
