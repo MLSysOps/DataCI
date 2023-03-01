@@ -3,11 +3,12 @@
 """
 Author: Li Yuanming
 Email: yuanmingleee@gmail.com
-Date: FebK 23, 2023
+Date: Feb 23, 2023
 """
 import os
 import subprocess
 from pathlib import Path
+from typing import Iterable, Union
 
 from dataci.repo import Repo
 from .stage import Stage
@@ -18,7 +19,14 @@ class Pipeline(object):
     CODE_DIR = 'code'
     FEAT_DIR = 'feat'
 
-    def __init__(self, name, version=None, basedir=os.curdir, repo: Repo = None):
+    def __init__(
+            self,
+            name: str,
+            version: str = None,
+            basedir: os.PathLike = os.curdir,
+            repo: Repo = None,
+            stages: Union[Iterable[Stage], Stage] = None
+    ):
         self.repo = repo or Repo()
         self.name = name
         self.version = version or 'latest'
@@ -31,7 +39,9 @@ class Pipeline(object):
         (self.workdir / self.FEAT_DIR).mkdir(exist_ok=True)
 
         # stages
-        self.stages = list()
+        self.stages = stages or list()
+        if not isinstance(self.stages, Iterable):
+            self.stages = [self.stages]
 
     def add_stage(self, stage: Stage):
         self.stages.append(stage)
@@ -57,7 +67,6 @@ class Pipeline(object):
                     '-O', stage.outputs.path, '-w', str(self.workdir),
                 ]
                 # Add dependencies
-                print(stage.dependency)
                 for dependency in stage.dependency:
                     dependency = Path(dependency)
                     cmd += ['-d', str(dependency.relative_to(self.workdir) if dependency.is_absolute() else dependency)]

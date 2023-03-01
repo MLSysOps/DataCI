@@ -5,8 +5,7 @@ import pandas as pd
 import unicodedata
 from cleantext import clean
 
-from dataci.pipeline import Pipeline, Stage
-from dataci.pipeline.decorator import stage
+from dataci.pipeline import Pipeline, stage
 
 
 def clean_func(text):
