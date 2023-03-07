@@ -19,6 +19,8 @@ class Pipeline(object):
     CODE_DIR = 'code'
     FEAT_DIR = 'feat'
 
+    from .publish import publish  # type: ignore[misc]
+
     def __init__(
             self,
             name: str,
@@ -31,6 +33,7 @@ class Pipeline(object):
         self.name = name
         self.version = version or 'latest'
         self.basedir = Path(basedir)
+        self.is_built = False
 
         # prepare working directory
         self.workdir = (self.basedir / self.name / self.version).resolve()
@@ -42,6 +45,24 @@ class Pipeline(object):
         self.stages = stages or list()
         if not isinstance(self.stages, Iterable):
             self.stages = [self.stages]
+
+    @property
+    def inputs(self):
+        # Get all inputs and outputs
+        inputs, outputs = set(), set()
+        for stage in self.stages:
+            inputs.add(stage.inputs)
+            outputs.add(stage.outputs)
+        # Cancel all inputs that come from some stage's outputs
+        return list(inputs - outputs)
+
+    @property
+    def outputs(self):
+        # all outputs from all stages
+        outputs = list()
+        for stage in self.stages:
+            outputs.append(stage.outputs)
+        return outputs
 
     def add_stage(self, stage: Stage):
         self.stages.append(stage)
@@ -76,6 +97,7 @@ class Pipeline(object):
                 # Add running command
                 cmd += ['python', os.path.join(self.CODE_DIR, f'{stage.name}.py')]
                 subprocess.call(cmd)
+        self.is_built = True
 
     def __call__(self):
         # dvc repo

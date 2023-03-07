@@ -40,7 +40,7 @@ class DataPath(object):
             datasets = list_dataset(self._repo, value, tree_view=False)
             if len(datasets) == 1:
                 path = datasets[0].dataset_files
-                sym_link_path = os.path.join(self.basedir, self.name)
+                sym_link_path = os.path.normpath(os.path.join(self.basedir, self.name))
                 # create a symbolic link to the basedir
                 if not os.path.exists(sym_link_path):
                     os.symlink(path, sym_link_path, target_is_directory=True)
@@ -51,11 +51,20 @@ class DataPath(object):
             pass
         # try: input is a local file
         logger.debug(f'Assume data path {value} as local file')
-        self.path = os.path.join(self.basedir, value)
+        self.path = os.path.normpath(os.path.join(self.basedir, value))
         self.type = new_type
+
+    def __str__(self):
+        return self.path
 
     def __repr__(self):
         return f'DataPath(name={self.name},type={self.type},path={self.path},basedir={self.basedir})'
+
+    def __eq__(self, other):
+        return self.path == str(other)
+
+    def __hash__(self):
+        return hash(self.path)
 
 
 class Stage(ABC):

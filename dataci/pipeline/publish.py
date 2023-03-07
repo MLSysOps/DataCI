@@ -8,18 +8,20 @@ Date: Mar 05, 2023
 import os
 from distutils.dir_util import copy_tree
 from shutil import copy2
+from typing import TYPE_CHECKING
 
-from dataci.repo import Repo
-from .pipeline import Pipeline
+if TYPE_CHECKING:
+    from .pipeline import Pipeline
 
 
-def publish_pipeline(repo: 'Repo', pipeline: 'Pipeline'):
-    # Locate pipeline build directory
-    print(pipeline.workdir)
+def publish(pipeline: 'Pipeline' = ...):
+    repo = pipeline.repo
+    # Step 1
+    # Build pipeline
+    if not pipeline.is_built:
+        pipeline.build()
 
-    # Locate repo pipeline directory
-    print(repo.pipeline_dir)
-
+    # Step 2
     # Create this pipeline at repo
     pipeline_dir = repo.pipeline_dir / pipeline.name
     pipeline_dir.mkdir(exist_ok=True)
@@ -77,6 +79,3 @@ def publish_pipeline(repo: 'Repo', pipeline: 'Pipeline'):
         except FileNotFoundError:
             pass
     run_result_tracker.symlink_to(pipeline_workdir / pipeline.FEAT_DIR / 'dvc.lock')
-
-    # Update current pipeline to parent dataset
-    # TODO
