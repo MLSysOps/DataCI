@@ -12,7 +12,7 @@ from typing import Iterable, Union
 
 from dataci.repo import Repo
 from .stage import Stage
-from .utils import cwd
+from .utils import cwd, generate_pipeline_version_id
 
 
 class Pipeline(object):
@@ -59,6 +59,9 @@ class Pipeline(object):
                 for file_path, file_bytes in file_dict.items():
                     with open(file_path, 'wb') as f:
                         f.write(file_bytes)
+
+                # Get pipeline version
+                self.version = generate_pipeline_version_id(self.CODE_DIR)
 
                 # manage stages by dvc
                 # dvc stage add -n <stage name> -d stage.py -d input.csv -O output.csv -w self.workdir python stage.py
