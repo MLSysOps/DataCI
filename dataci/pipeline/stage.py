@@ -31,6 +31,7 @@ class DataPath(object):
         self.resolve_path()
 
     def resolve_path(self):
+
         value = self.name
         logger.debug(f'Resolving data path {value}...')
         new_type = 'local'
@@ -58,6 +59,13 @@ class DataPath(object):
             pass
         # try: input is a pipeline feat
         logger.debug(f'Try resolve data path {value} as published pipeline feat')
+        try:
+            pass
+            # feats = list_pipeline_feat(self._repo, value, tree_view=False)
+            # if len(feats) == 1:
+            #     path = feats.path
+        except ValueError:
+            pass
 
         # try: input is a local file
         logger.debug(f'Assume data path {value} as local file')

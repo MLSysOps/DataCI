@@ -72,10 +72,9 @@ class Pipeline(object):
 
     @property
     def runs(self):
-        runs = list()
+        runs = dict()
         for run_num in (self.workdir / self.RUN_DIR).glob('*'):
-            runs.append(Run(self, run_num))
-        runs.sort()
+            runs[run_num.stem] = Run(self, run_num)
         return runs
 
     def add_stage(self, stage: Stage):

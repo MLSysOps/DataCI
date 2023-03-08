@@ -6,33 +6,36 @@ Email: yuanmingleee@gmail.com
 Date: Mar 08, 2023
 """
 import re
+from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from dataci.pipeline import Pipeline
+from dataci.repo import Repo
 
 if TYPE_CHECKING:
     from dataci.repo import Repo
 
 LIST_PIPELINE_IDENTIFIER_PATTERN = re.compile(
-    r'^([\w.*[\]]+?)(?:@([\da-f]{1,40}))?(?:/([1-9.*[\]][\d.*[\]]*))?$', re.IGNORECASE
+    r'^([\w.*[\]]+?)(?:@([\da-f]{1,40}))?$', re.IGNORECASE
+)
+
+LIST_FEAT_IDENTIFIER_PATTERN = re.compile(
+    r'^([1-9.*[\]]\d*):([\w.]+?)$', re.IGNORECASE
 )
 
 
-def ls(repo: Repo, pipeline_identifier):
+def list_pipeline(repo: Repo, pipeline_identifier):
     """List pipeline with optional pipeline identifier to query.
 
     Args:
         pipeline_identifier (str): Pipeline identifier. Default to query all pipelines.
-
-    TODO: run number is not used
     """
     pipeline_identifier = pipeline_identifier or '*'
     matched = LIST_PIPELINE_IDENTIFIER_PATTERN.match(pipeline_identifier)
     if not matched:
-        raise ValueError(f'Invalid dataset identifier {pipeline_identifier}')
-    pipeline_name, version, run_num = matched.groups()
+        raise ValueError(f'Invalid pipeline identifier {pipeline_identifier}')
+    pipeline_name, version = matched.groups()
     version = (version or '').lower() + '*'
-    run_num = run_num or '*'
 
     # Check matched pipeline
     pipeline_names = list()
@@ -48,3 +51,30 @@ def ls(repo: Repo, pipeline_identifier):
                 pipeline.restore()
                 pipelines.append(pipeline)
     return pipelines
+
+
+def list_pipeline_feat(repo: 'Repo', pipeline_identifier, feat_identifier=None, tree_view=True):
+    if feat_identifier is None:
+        # feat identifier is provided with the pipeline identifier:
+        #   <pipeline_identifier>/<feat_identifier>
+        pipeline_identifier, feat_identifier = pipeline_identifier.split('/')
+
+    # Get pipeline
+    pipelines = list_pipeline(repo, pipeline_identifier)
+    # Get feat info
+    matched = LIST_FEAT_IDENTIFIER_PATTERN.match(feat_identifier)
+    if not matched:
+        raise ValueError(f'Invalid pipeline feat identifier {feat_identifier}')
+    run_num, feat_name = matched.groups()
+
+    pipeline_feats_dict = defaultdict(dict)
+    pipeline_feats_list = list()
+    for pipeline in pipelines:
+        feat = pipeline.runs[run_num].feat[feat_name]
+        pipeline_feats_dict[pipeline.name][feat_name] = feat
+        pipeline_feats_list.append(feat)
+    return pipeline_feats_dict if tree_view else pipeline_feats_list
+
+
+if __name__ == '__main__':
+    print(list_pipeline_feat(repo=Repo(), pipeline_identifier='train_text*/1:text_augmentation.csv', tree_view=False))
