@@ -56,10 +56,18 @@ class DataPath(object):
                 return
         except ValueError:
             pass
+        # try: input is a pipeline feat
+        logger.debug(f'Try resolve data path {value} as published pipeline feat')
+
         # try: input is a local file
         logger.debug(f'Assume data path {value} as local file')
         self.path = os.path.normpath(os.path.join(self.basedir, value))
         self.type = new_type
+
+    def rebase(self, basedir):
+        relpath = os.path.relpath(self.path, self.basedir)
+        self.path = os.path.join(basedir, relpath)
+        self.basedir = basedir
 
     def __str__(self):
         return self.path

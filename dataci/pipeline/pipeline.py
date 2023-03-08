@@ -13,6 +13,7 @@ from typing import Iterable, Union
 import yaml
 
 from dataci.repo import Repo
+from .run import Run
 from .stage import Stage
 from .utils import cwd, generate_pipeline_version_id
 
@@ -20,6 +21,7 @@ from .utils import cwd, generate_pipeline_version_id
 class Pipeline(object):
     CODE_DIR = 'code'
     FEAT_DIR = 'feat'
+    RUN_DIR = 'runs'
 
     from .publish import publish  # type: ignore[misc]
 
@@ -67,6 +69,14 @@ class Pipeline(object):
         for stage in self.stages:
             outputs.append(stage.outputs)
         return outputs
+
+    @property
+    def runs(self):
+        runs = list()
+        for run_num in (self.workdir / self.RUN_DIR).glob('*'):
+            runs.append(Run(self, run_num))
+        runs.sort()
+        return runs
 
     def add_stage(self, stage: Stage):
         self.stages.append(stage)
