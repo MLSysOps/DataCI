@@ -75,19 +75,19 @@ def parse_dataset_identifier(name_str: str):
 def generate_dataset_version_id(dataset_path, yield_pipeline=None, log_message=None, parent_dataset=None):
     # TODO: Change the version ID generating logic: https://www.quora.com/How-are-Git-commit-IDs-generated
     # Find .dvc traced data files
-    dataset_path = Path(dataset_path)
+    if not isinstance(dataset_path):
+        dataset_path = [dataset_path]
+    dataset_path = [Path(dataset_path) for d in dataset_path]
     yield_pipeline = yield_pipeline or list()
     log_message = log_message or ''
     parent_dataset = parent_dataset or ''
 
-    if not dataset_path.is_dir():
-        raise FileNotFoundError(f'dataset path {dataset_path} is not found.')
-    dataset_trackers = list(map(str, list(dataset_path.glob('*.dvc'))))
+    dataset_trackers = list(map(lambda x: x.with_suffix('.dvc'), dataset_path))
     dataset_trackers.sort()
 
-    if len(dataset_trackers) == 0:
+    if len(dataset_trackers) != len(dataset_path):
         raise ValueError(
-            f'No dataset trackers (*.dvc) found in the direct sub-directory of {dataset_path}. '
+            f'At least one dataset trackers (*.dvc) not found for directories {dataset_path}. '
         )
     dataset_obj = b''
     for dataset_tracker in dataset_trackers:

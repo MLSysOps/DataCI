@@ -30,20 +30,29 @@ LIST_DATASET_IDENTIFIER_PATTERN = re.compile(
 
 
 def publish_dataset(repo: Repo, dataset_name, targets, yield_pipeline=None, parent_dataset=None, log_message=None):
-    targets = Path(targets).resolve()
     yield_pipeline = yield_pipeline or list()
     parent_dataset = parent_dataset or None
     log_message = log_message or ''
 
-    # check dataset splits
-    splits = list()
-    for split_dir in os.scandir(targets):
-        if split_dir.is_dir():
-            splits.append(split_dir.name)
-    for split in splits:
-        if split not in ['train', 'val', 'test']:
-            raise ValueError(f'{split} is not a valid split name. Expected "train", "val", "test".')
-    dataset_files = {split: (targets / split).resolve() for split in splits}
+    if isinstance(targets, str):
+        targets = Path(targets).resolve()
+        # check dataset splits
+        splits = list()
+        for split_dir in os.scandir(targets):
+            if split_dir.is_dir():
+                splits.append(split_dir.name)
+        for split in splits:
+            if split not in ['train', 'val', 'test']:
+                raise ValueError(f'{split} is not a valid split name. Expected "train", "val", "test".')
+        dataset_files = {split: (targets / split).resolve() for split in splits}
+    elif isinstance(targets, dict):
+        dataset_files = dict()
+        for split, file_path in targets.values():
+            if split not in ['train', 'val', 'test']:
+                raise ValueError(f'{split} is not a valid split name. Expected "train", "val", "test".')
+            dataset_files[split] = Path(file_path).resolve()
+    else:
+        raise ValueError(f'Invalid targets: {targets}. Expected a path or a dictionary of split -> path.')
 
     # Data file version controlled by DVC
     logger.info(f'Caching dataset files: {dataset_files.values()}')
@@ -163,7 +172,13 @@ class Dataset(object):
         self.config = config
         self.repo = repo
         # Filled if the dataset is not published
-        self._dataset_files = Path(dataset_files) if dataset_files else None
+        
+        # Make dataset_files a dict, contains all dataset files at one publish (train, val, ...)
+        # The dataset_files will select only its split after build finish
+        if isinstance(dataset_files, str):
+            self._dataset_files = {self.split: Path(dataset_files)}
+        else:
+            self._dataset_files = dataset_files
         self.create_date: Optional[datetime] = None
         self.yield_pipeline = yield_pipeline
         self.parent_dataset = parent_dataset
@@ -204,12 +219,13 @@ class Dataset(object):
             'yield_pipeline': self.yield_pipeline,
             'log_message': self.log_message,
             'version': generate_dataset_version_id(
-                self._dataset_files.parent, self.yield_pipeline, self.log_message, self.parent_dataset
+                list(self._dataset_files.values()), self.yield_pipeline, self.log_message, self.parent_dataset
             )
         }
         self.version = meta['version']
         self.config = deepcopy(self.dvc_config)
         self.config['meta'] = meta
+        self._dataset_files = self._dataset_files[self.split]
 
     @property
     def dataset_files(self):
