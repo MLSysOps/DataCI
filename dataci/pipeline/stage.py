@@ -8,6 +8,7 @@ Date: Feb 20, 2023
 import inspect
 import logging
 import os
+import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Iterable
@@ -42,8 +43,14 @@ class DataPath(object):
                 path = datasets[0].dataset_files
                 sym_link_path = os.path.normpath(os.path.join(self.basedir, self.name))
                 # create a symbolic link to the basedir
-                if not os.path.exists(sym_link_path):
-                    os.symlink(path, sym_link_path, target_is_directory=True)
+                try:
+                    os.unlink(sym_link_path)
+                except FileNotFoundError:
+                    try:
+                        os.remove(sym_link_path)
+                    except FileNotFoundError:
+                        pass
+                os.symlink(path, sym_link_path, target_is_directory=True)
                 self.type = 'dataset'
                 self.path = sym_link_path
                 return
@@ -143,6 +150,16 @@ class Stage(ABC):
             """
         ).encode()
         return file_dict
+
+    @staticmethod
+    def deserialize(entry_file):
+        """Deserialize stage object from file or byte string
+        TODO: Load from code instead of pickle
+        """
+        obj_pkl = Path(entry_file).with_suffix('.pkl')
+        with open(obj_pkl, 'rb') as f:
+            stage_obj: Stage = pickle.load(f)
+            return stage_obj
 
     def output_serializer(self, outputs, dest):
         """Output serializer to save the output data/feature."""

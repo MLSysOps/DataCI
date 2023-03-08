@@ -10,6 +10,8 @@ import subprocess
 from pathlib import Path
 from typing import Iterable, Union
 
+import yaml
+
 from dataci.repo import Repo
 from .stage import Stage
 from .utils import cwd, generate_pipeline_version_id
@@ -31,9 +33,11 @@ class Pipeline(object):
     ):
         self.repo = repo or Repo()
         self.name = name
+        # Filled version if pipeline published
         self.version = version or 'latest'
         self.basedir = Path(basedir)
-        self.is_built = False
+        # latest is regard as this pipeline is not published
+        self.is_built = (version != 'latest')
 
         # prepare working directory
         self.workdir = (self.basedir / self.name / self.version).resolve()
@@ -98,6 +102,16 @@ class Pipeline(object):
                 cmd += ['python', os.path.join(self.CODE_DIR, f'{stage.name}.py')]
                 subprocess.call(cmd)
         self.is_built = True
+
+    def restore(self):
+        # Restore all stages from code dir
+        with cwd(self.workdir):
+            with open('dvc.yaml') as f:
+                pipeline_dvc_config: dict = yaml.safe_load(f)
+            stage_names = list(pipeline_dvc_config['stages'].keys())
+            for stage_name in stage_names:
+                stage = Stage.deserialize(os.path.join(self.CODE_DIR, f'{stage_name}.py'))
+                self.add_stage(stage)
 
     def __call__(self):
         # dvc repo
