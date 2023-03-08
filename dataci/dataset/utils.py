@@ -75,9 +75,9 @@ def parse_dataset_identifier(name_str: str):
 def generate_dataset_version_id(dataset_path, yield_pipeline=None, log_message=None, parent_dataset=None):
     # TODO: Change the version ID generating logic: https://www.quora.com/How-are-Git-commit-IDs-generated
     # Find .dvc traced data files
-    if not isinstance(dataset_path):
+    if not isinstance(dataset_path, list):
         dataset_path = [dataset_path]
-    dataset_path = [Path(dataset_path) for d in dataset_path]
+    dataset_path = [Path(d) for d in dataset_path]
     yield_pipeline = yield_pipeline or list()
     log_message = log_message or ''
     parent_dataset = parent_dataset or ''

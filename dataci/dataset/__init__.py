@@ -175,7 +175,7 @@ class Dataset(object):
         
         # Make dataset_files a dict, contains all dataset files at one publish (train, val, ...)
         # The dataset_files will select only its split after build finish
-        if isinstance(dataset_files, str):
+        if isinstance(dataset_files, (str, Path)):
             self._dataset_files = {self.split: Path(dataset_files)}
         else:
             self._dataset_files = dataset_files
@@ -222,10 +222,10 @@ class Dataset(object):
                 list(self._dataset_files.values()), self.yield_pipeline, self.log_message, self.parent_dataset
             )
         }
+        self._dataset_files = self._dataset_files[self.split]
         self.version = meta['version']
         self.config = deepcopy(self.dvc_config)
         self.config['meta'] = meta
-        self._dataset_files = self._dataset_files[self.split]
 
     @property
     def dataset_files(self):
