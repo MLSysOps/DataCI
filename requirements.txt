@@ -1,0 +1,7 @@
+dvc==2.10.2
+fsspec==2022.11.0
+augly[text]==1.0.0
+numpy==1.21.6
+pandas==1.3.5
+clean-text==0.6.0
+cloudpickle==2.2.1
