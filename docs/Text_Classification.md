@@ -107,12 +107,14 @@ val_data_pipeline.publish()
 ## 1.3 Publish first version of text dataset
 
 ```shell
-python dataci/dataset.py publish -n text_classification \
-  -s train=train_data_pipeline:text_aug,val=val_data_pipeline:text_clean
+python dataci/command/dataset.py publish -n text_classification \
+  --train=train_text_classification/1:text_augmentation.csv --val=val_text_classification/1:text_clean.csv
 ```
 Publish a new dataset `text_classification` using previous cached feature.  
-The new dataset train split uses the latest feature `text_aug` output by pipeline `train_data_pipeline`.  
-The new dataset val split uses the latest feature `text_aug` output by pipeline `val_data_pipeline`.
+The new dataset train split uses the latest feature `text_augmentation.csv` output by 
+pipeline `train_text_classification` run 1.  
+The new dataset val split uses the latest feature `text_augmentation.csv` output by 
+pipeline `val_text_classification` run 1.
 
 # 2. Try with New Data Augmentation Method
 
