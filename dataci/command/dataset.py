@@ -2,6 +2,7 @@ import argparse
 
 from dataci.dataset import publish_dataset, list_dataset
 from dataci.repo import Repo
+from dataci.fs.ref import DataRef
 
 
 def publish(args):
@@ -19,7 +20,17 @@ def publish(args):
             |- val
     """
     repo = Repo()
-    publish_dataset(repo=repo, dataset_name=args.name, targets=args.targets)
+    if args.targets:
+        targets = DataRef(args.targets).path
+    else:
+        targets = dict()
+        if args.train:
+            targets['train'] = DataRef(args.train).path
+        if args.val:
+            targets['val'] = DataRef(args.val).path
+        if args.test:
+            targets['test'] = DataRef(args.test).path
+    publish_dataset(repo=repo, dataset_name=args.name, targets=targets)
 
 
 def ls(args):
@@ -51,7 +62,10 @@ if __name__ == '__main__':
     publish_parser.add_argument(
         '-n', '--name', type=str, required=True, help='Dataset name'
     )
-    publish_parser.add_argument('targets', type=str, help='Path to dataset base directory.')
+    publish_parser.add_argument('targets', type=str, nargs='*', help='Path to dataset base directory.')
+    publish_parser.add_argument('--train', type=str, help='Path to the train dataset base directory')
+    publish_parser.add_argument('--val', type=str, help='Path to the val dataset base directory')
+    publish_parser.add_argument('--test', type=str, help='Path to the test dataset base directory')
     publish_parser.set_defaults(func=publish)
     list_parser = subparser.add_parser('ls', help='List dataset')
     list_parser.add_argument(

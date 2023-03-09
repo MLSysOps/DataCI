@@ -8,7 +8,7 @@ Date: Mar 09, 2023
 import logging
 import os
 from pathlib import Path
-from dataci.dataset import list_dataset
+
 
 from dataci.repo import Repo
 
@@ -25,6 +25,9 @@ class DataRef(object):
         self.resolve_path()
 
     def resolve_path(self):
+        from dataci.dataset import list_dataset
+        from dataci.pipeline.list import list_pipeline_feat
+
         value = self.name
         logger.debug(f'Resolving data path {value}...')
         new_type = 'local'
@@ -43,9 +46,11 @@ class DataRef(object):
         logger.debug(f'Try resolve data path {value} as published pipeline feat')
         try:
             pass
-            # feats = list_pipeline_feat(self._repo, value, tree_view=False)
-            # if len(feats) == 1:
-            #     path = feats.path
+            feats = list_pipeline_feat(self._repo, value, tree_view=False)
+            if len(feats) == 1:
+                self.path = feats[0].path
+                self.type = 'feat'
+                return
         except ValueError:
             pass
 

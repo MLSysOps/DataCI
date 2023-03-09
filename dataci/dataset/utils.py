@@ -82,7 +82,7 @@ def generate_dataset_version_id(dataset_path, yield_pipeline=None, log_message=N
     log_message = log_message or ''
     parent_dataset = parent_dataset or ''
 
-    dataset_trackers = list(map(lambda x: x.with_suffix('.dvc'), dataset_path))
+    dataset_trackers = list(map(lambda x: str(x) + '.dvc', dataset_path))
     dataset_trackers.sort()
 
     if len(dataset_trackers) != len(dataset_path):

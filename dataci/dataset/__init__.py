@@ -33,13 +33,8 @@ def publish_dataset(repo: Repo, dataset_name, targets, yield_pipeline=None, pare
     yield_pipeline = yield_pipeline or list()
     parent_dataset = parent_dataset or None
     log_message = log_message or ''
-    print(targets)
 
-    if isinstance(targets, (str, Path, list)):
-        if isinstance(targets, list):
-            # FIXME: multiple target files?
-            targets = targets[0]
-        targets = Path(targets).resolve()
+    if isinstance(targets, (str, Path)):
         # check dataset splits
         splits = list()
         for split_dir in os.scandir(targets):
@@ -51,10 +46,10 @@ def publish_dataset(repo: Repo, dataset_name, targets, yield_pipeline=None, pare
         dataset_files = {split: (targets / split).resolve() for split in splits}
     elif isinstance(targets, dict):
         dataset_files = dict()
-        for split, file_path in targets.values():
+        for split, file_path in targets.items():
             if split not in ['train', 'val', 'test']:
                 raise ValueError(f'{split} is not a valid split name. Expected "train", "val", "test".')
-            dataset_files[split] = Path(file_path).resolve()
+            dataset_files[split] = file_path
     else:
         raise ValueError(f'Invalid targets: {targets}. Expected a path or a dictionary of split -> path.')
 
@@ -238,7 +233,7 @@ class Dataset(object):
             return self._dataset_files
         # The dataset files need to recover from DVC
         self._dataset_files.parent.mkdir(exist_ok=True, parents=True)
-        dataset_file_tracker = self._dataset_files.with_suffix('.dvc')
+        dataset_file_tracker = self._dataset_files.parent / (self._dataset_files.name + '.dvc')
         with open(dataset_file_tracker, 'w') as f:
             yaml.safe_dump(self.dvc_config, f)
         # dvc checkout
@@ -253,7 +248,7 @@ class Dataset(object):
             dvc_config = deepcopy(self.config)
             del dvc_config['meta']
             return dvc_config
-        dvc_filename = self._dataset_files.with_suffix('.dvc')
+        dvc_filename = self._dataset_files.parent / (self._dataset_files.name + '.dvc')
         with open(dvc_filename, 'r') as f:
             dvc_config = yaml.safe_load(f)
         return dvc_config
