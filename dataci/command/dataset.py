@@ -1,8 +1,8 @@
 import argparse
 
 from dataci.dataset import publish_dataset, list_dataset
-from dataci.repo import Repo
 from dataci.fs.ref import DataRef
+from dataci.repo import Repo
 
 
 def publish(args):
@@ -21,7 +21,8 @@ def publish(args):
     """
     repo = Repo()
     if args.targets:
-        targets = DataRef(args.targets).path
+        targets = args.targets[0]
+        targets = DataRef(targets).path
     else:
         targets = dict()
         if args.train:
