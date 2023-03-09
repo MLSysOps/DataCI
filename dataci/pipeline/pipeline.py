@@ -14,7 +14,7 @@ import yaml
 
 from dataci.repo import Repo
 from .run import Run
-from .stage import Stage
+from .stage import DataPath, Stage
 from .utils import cwd, generate_pipeline_version_id
 
 
@@ -105,8 +105,11 @@ class Pipeline(object):
                 ]
                 # Add dependencies
                 for dependency in stage.dependency:
-                    dependency = Path(dependency)
-                    cmd += ['-d', str(dependency.relative_to(self.workdir) if dependency.is_absolute() else dependency)]
+                    if isinstance(dependency, DataPath) and dependency.type != 'local':
+                            dependency = str(dependency.path)
+                    else:
+                        dependency = os.path.relpath(str(dependency), str(self.workdir))
+                    cmd += ['-d', dependency]
                 # Add running command
                 cmd += ['python', os.path.join(self.CODE_DIR, f'{stage.name}.py')]
                 subprocess.call(cmd)

@@ -11,7 +11,9 @@ import os
 import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Iterable
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from typing import Iterable, List
 
 import pandas as pd
 
@@ -26,12 +28,11 @@ class DataPath(object):
         self.name = name
         self.type = None
         self.path = None
-        self.basedir = basedir
+        self.basedir = Path(basedir).resolve()
         self._repo = repo or Repo()
         self.resolve_path()
 
     def resolve_path(self):
-
         value = self.name
         logger.debug(f'Resolving data path {value}...')
         new_type = 'local'
@@ -41,19 +42,8 @@ class DataPath(object):
         try:
             datasets = list_dataset(self._repo, value, tree_view=False)
             if len(datasets) == 1:
-                path = datasets[0].dataset_files
-                sym_link_path = os.path.normpath(os.path.join(self.basedir, self.name))
-                # create a symbolic link to the basedir
-                try:
-                    os.unlink(sym_link_path)
-                except FileNotFoundError:
-                    try:
-                        os.remove(sym_link_path)
-                    except FileNotFoundError:
-                        pass
-                os.symlink(path, sym_link_path, target_is_directory=True)
+                self.path = datasets[0].dataset_files
                 self.type = 'dataset'
-                self.path = sym_link_path
                 return
         except ValueError:
             pass
@@ -69,16 +59,18 @@ class DataPath(object):
 
         # try: input is a local file
         logger.debug(f'Assume data path {value} as local file')
-        self.path = os.path.normpath(os.path.join(self.basedir, value))
+        self.path = self.basedir / value
         self.type = new_type
 
     def rebase(self, basedir):
-        relpath = os.path.relpath(self.path, self.basedir)
-        self.path = os.path.join(basedir, relpath)
+        basedir = Path(basedir)
+        if self.type == 'local':
+            relpath = self.path.relative_to(self.basedir)
+            self.path = Path(basedir) / relpath
         self.basedir = basedir
 
     def __str__(self):
-        return self.path
+        return str(self.path)
 
     def __repr__(self):
         return f'DataPath(name={self.name},type={self.type},path={self.path},basedir={self.basedir})'
@@ -129,14 +121,13 @@ class Stage(ABC):
     @property
     def dependency(self):
         # Resolve dependencies
-        # TODO: also record the original naming? instead of file path
         if self._dependency == 'auto':
-            return [str(self.inputs.path)] + [str(path) for path in self.__get_serialize_files()]
+            return [self.inputs] + self.__get_serialize_files()
         else:
             return self._dependency
 
     @abstractmethod
-    def run(self, inputs):
+    def run(self, inputs) -> 'List[Path]':
         raise NotImplementedError('Method `run` not implemented.')
 
     def __get_serialize_files(self):
