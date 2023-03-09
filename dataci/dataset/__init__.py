@@ -7,14 +7,12 @@ Date: Feb 20, 2023
 """
 import fnmatch
 import logging
-import os
 import re
 import subprocess
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
 from datetime import datetime
 from functools import lru_cache
-from pathlib import Path
 from typing import Optional
 
 import yaml
@@ -30,42 +28,29 @@ LIST_DATASET_IDENTIFIER_PATTERN = re.compile(
 
 
 def publish_dataset(repo: Repo, dataset_name, targets, yield_pipeline=None, parent_dataset=None, log_message=None):
+    if not isinstance(targets, list):
+        targets = [targets]
     yield_pipeline = yield_pipeline or list()
     parent_dataset = parent_dataset or None
     log_message = log_message or ''
 
-    if isinstance(targets, (str, Path)):
-        # check dataset splits
-        splits = list()
-        for split_dir in os.scandir(targets):
-            if split_dir.is_dir():
-                splits.append(split_dir.name)
-        for split in splits:
-            if split not in ['train', 'val', 'test']:
-                raise ValueError(f'{split} is not a valid split name. Expected "train", "val", "test".')
-        dataset_files = {split: (targets / split).resolve() for split in splits}
-    elif isinstance(targets, dict):
-        dataset_files = dict()
-        for split, file_path in targets.items():
-            if split not in ['train', 'val', 'test']:
-                raise ValueError(f'{split} is not a valid split name. Expected "train", "val", "test".')
-            dataset_files[split] = file_path
-    else:
-        raise ValueError(f'Invalid targets: {targets}. Expected a path or a dictionary of split -> path.')
-
     # Data file version controlled by DVC
-    logger.info(f'Caching dataset files: {dataset_files.values()}')
-    subprocess.run(['dvc', 'add'] + list(map(str, dataset_files.values())))
+    logger.info(f'Caching dataset files: {targets}')
+    subprocess.run(['dvc', 'add'] + list(map(str, targets)))
 
     repo_dataset_path = repo.dataset_dir / dataset_name
 
-    for split, dataset_file in dataset_files.items():
+    for dataset_file in targets:
         dataset = Dataset(
-            dataset_name=dataset_name, split=split, dataset_files=dataset_file, yield_pipeline=yield_pipeline,
+            dataset_name=dataset_name, dataset_files=dataset_file, yield_pipeline=yield_pipeline,
             parent_dataset=parent_dataset, log_message=log_message,
         )
         # Save tracked dataset with version to repo
-        dataset_config_file = (repo_dataset_path / split).with_suffix(".yaml")
+        dataset_config_file = repo_dataset_path.with_suffix(".yaml")
+        # with db_connection:
+        #     db_connection.execute(f"""
+        #     INSERT INTO dataset (name, version, yield_pipeline, log_message, timestamp, file_config, parent_dataset_name, parent_dataset_version) VALUES ({dataset.dataset_name}, {dataset.version}, {dataset.yield_pipeline}, {dataset.log_message}, {dataset.config})
+        #     """)
         logging.info(f'Adding meta data: {dataset_config_file}')
         dataset_config_file.parent.mkdir(exist_ok=True)
         with open(dataset_config_file, 'a+') as f:
@@ -155,7 +140,6 @@ class Dataset(object):
             self,
             dataset_name,
             version=None,
-            split=None,
             config=None,
             repo=None,
             dataset_files=None,
@@ -167,17 +151,10 @@ class Dataset(object):
         self.__published = False
         # Filled if the dataset is published
         self.version = version
-        self.split = split
         self.config = config
         self.repo = repo
         # Filled if the dataset is not published
-        
-        # Make dataset_files a dict, contains all dataset files at one publish (train, val, ...)
-        # The dataset_files will select only its split after build finish
-        if isinstance(dataset_files, (str, Path)):
-            self._dataset_files = {self.split: Path(dataset_files)}
-        else:
-            self._dataset_files = dataset_files
+        self._dataset_files = dataset_files
         self.create_date: Optional[datetime] = None
         self.yield_pipeline = yield_pipeline
         self.parent_dataset = parent_dataset
@@ -193,26 +170,24 @@ class Dataset(object):
             self._build_config()
 
     def __repr__(self):
-        if all((self.dataset_name, self.version, self.split)):
-            return generate_dataset_identifier(self.dataset_name, self.version[:7], split=self.split)
+        if all((self.dataset_name, self.version)):
+            return generate_dataset_identifier(self.dataset_name, self.version[:7])
         else:
             return f'{self.dataset_name} ! Unpublished'
 
     def _parse_config(self):
-        meta = self.config['meta']
-        self.create_date = datetime.fromtimestamp(meta['timestamp'])
-        self.yield_pipeline = meta['yield_pipeline']
-        self.parent_dataset = meta['parent_dataset']
-        self.log_message = meta['log_message']
-        self.shadow_version = meta['version'] if meta != self.version else None
-        self._dataset_files = self.repo.tmp_dir / self.dataset_name / self.version / self.split
+        self.create_date = datetime.fromtimestamp(self.config['timestamp'])
+        self.yield_pipeline = self.config['yield_pipeline']
+        self.parent_dataset = self.config['parent_dataset']
+        self.log_message = self.config['log_message']
+        self._dataset_files = self.repo.tmp_dir / self.dataset_name / self.version
 
     def _build_config(self):
         self.create_date = datetime.now()
         self.yield_pipeline = self.yield_pipeline or list()
         self.log_message = self.log_message or ''
 
-        meta = {
+        config = {
             'timestamp': int(self.create_date.timestamp()),
             'parent_dataset': self.parent_dataset,
             'yield_pipeline': self.yield_pipeline,
@@ -221,10 +196,9 @@ class Dataset(object):
                 list(self._dataset_files.values()), self.yield_pipeline, self.log_message, self.parent_dataset
             )
         }
-        self._dataset_files = self._dataset_files[self.split]
-        self.version = meta['version']
-        self.config = deepcopy(self.dvc_config)
-        self.config['meta'] = meta
+        self.version = config['version']
+        self.config = config
+        self.config['dvc_config'] = deepcopy(self.dvc_config)
 
     @property
     def dataset_files(self):
@@ -245,8 +219,7 @@ class Dataset(object):
     @lru_cache(maxsize=None)
     def dvc_config(self):
         if self.__published:
-            dvc_config = deepcopy(self.config)
-            del dvc_config['meta']
+            dvc_config = deepcopy(self.config['dvc_config'])
             return dvc_config
         dvc_filename = self._dataset_files.parent / (self._dataset_files.name + '.dvc')
         with open(dvc_filename, 'r') as f:
