@@ -14,7 +14,7 @@ import yaml
 
 from dataci.repo import Repo
 from .run import Run
-from .stage import DataPath, Stage
+from .stage import DataRef, Stage
 from .utils import cwd, generate_pipeline_version_id
 
 
@@ -105,7 +105,7 @@ class Pipeline(object):
                 ]
                 # Add dependencies
                 for dependency in stage.dependency:
-                    if isinstance(dependency, DataPath) and dependency.type != 'local':
+                    if isinstance(dependency, DataRef) and dependency.type != 'local':
                             dependency = str(dependency.path)
                     else:
                         dependency = os.path.relpath(str(dependency), str(self.workdir))

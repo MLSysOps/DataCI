@@ -12,74 +12,16 @@ import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from dataci.fs.ref import DataRef
 if TYPE_CHECKING:
     from typing import Iterable, List
 
 import pandas as pd
 
-from dataci.dataset import list_dataset
 from dataci.repo import Repo
 
 logger = logging.getLogger(__name__)
-
-
-class DataPath(object):
-    def __init__(self, name, repo=None, basedir: os.PathLike = os.curdir):
-        self.name = name
-        self.type = None
-        self.path = None
-        self.basedir = Path(basedir).resolve()
-        self._repo = repo or Repo()
-        self.resolve_path()
-
-    def resolve_path(self):
-        value = self.name
-        logger.debug(f'Resolving data path {value}...')
-        new_type = 'local'
-        # Resolve input: find the dataset path
-        # try: input is published dataset
-        logger.debug(f'Try resolve data path {value} as published dataset')
-        try:
-            datasets = list_dataset(self._repo, value, tree_view=False)
-            if len(datasets) == 1:
-                self.path = datasets[0].dataset_files
-                self.type = 'dataset'
-                return
-        except ValueError:
-            pass
-        # try: input is a pipeline feat
-        logger.debug(f'Try resolve data path {value} as published pipeline feat')
-        try:
-            pass
-            # feats = list_pipeline_feat(self._repo, value, tree_view=False)
-            # if len(feats) == 1:
-            #     path = feats.path
-        except ValueError:
-            pass
-
-        # try: input is a local file
-        logger.debug(f'Assume data path {value} as local file')
-        self.path = self.basedir / value
-        self.type = new_type
-
-    def rebase(self, basedir):
-        basedir = Path(basedir)
-        if self.type == 'local':
-            relpath = self.path.relative_to(self.basedir)
-            self.path = Path(basedir) / relpath
-        self.basedir = basedir
-
-    def __str__(self):
-        return str(self.path)
-
-    def __repr__(self):
-        return f'DataPath(name={self.name},type={self.type},path={self.path},basedir={self.basedir})'
-
-    def __eq__(self, other):
-        return self.path == str(other)
-
-    def __hash__(self):
-        return hash(self.path)
 
 
 class Stage(ABC):
@@ -99,21 +41,21 @@ class Stage(ABC):
             self._dependency = dependency
 
     @property
-    def inputs(self) -> DataPath:
+    def inputs(self) -> 'DataRef':
         prev_deps = getattr(self, '__inputs_deps', None)
         current_deps = (self._inputs, str(self.feat_base_dir))
         if prev_deps != current_deps:
-            inputs = DataPath(self._inputs, basedir=self.feat_base_dir)
+            inputs = DataRef(self._inputs, basedir=self.feat_base_dir)
             setattr(self, '__inputs_deps', current_deps)
             setattr(self, '__inputs_cache', inputs)
         return getattr(self, '__inputs_cache')
 
     @property
-    def outputs(self) -> DataPath:
+    def outputs(self) -> 'DataRef':
         prev_deps = getattr(self, '__outputs_deps', None)
         current_deps = (self._outputs, str(self.feat_base_dir))
         if prev_deps != current_deps:
-            outputs = DataPath(self._outputs, basedir=self.feat_base_dir)
+            outputs = DataRef(self._outputs, basedir=self.feat_base_dir)
             setattr(self, '__outputs_deps', current_deps)
             setattr(self, '__outputs_cache', outputs)
         return getattr(self, '__outputs_cache')

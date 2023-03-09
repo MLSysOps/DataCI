@@ -33,8 +33,12 @@ def publish_dataset(repo: Repo, dataset_name, targets, yield_pipeline=None, pare
     yield_pipeline = yield_pipeline or list()
     parent_dataset = parent_dataset or None
     log_message = log_message or ''
+    print(targets)
 
-    if isinstance(targets, str):
+    if isinstance(targets, (str, Path, list)):
+        if isinstance(targets, list):
+            # FIXME: multiple target files?
+            targets = targets[0]
         targets = Path(targets).resolve()
         # check dataset splits
         splits = list()
