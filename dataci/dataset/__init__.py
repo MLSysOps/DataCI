@@ -5,13 +5,10 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Feb 20, 2023
 """
-import fnmatch
 import logging
 import re
 import subprocess
-from collections import OrderedDict, defaultdict
-
-import yaml
+from collections import defaultdict
 
 from dataci.db import db_connection
 from dataci.repo import Repo
@@ -21,7 +18,7 @@ from .utils import generate_dataset_version_id, parse_dataset_identifier, genera
 logger = logging.getLogger(__name__)
 
 LIST_DATASET_IDENTIFIER_PATTERN = re.compile(
-    r'^([\w.*[\]]+?)(?:@([\da-f]{1,40}))?(?:\[(train|val|test|all)])?$', re.IGNORECASE
+    r'^([\w.*[\]]+?)(?:@([\da-f]{1,40}))?$', re.IGNORECASE
 )
 
 
@@ -66,7 +63,6 @@ def list_dataset(repo: Repo, dataset_identifier=None, tree_view=True):
             - dataset name: Support glob. Default to query for all datasets.
             - version (optional): Version ID or the starting few characters of version ID. It will search
                 all matched versions of this dataset. Default to list all versions.
-            - split (optional): In one of "train", "val", "split" or "all". Default to list all splits.
         tree_view (bool): View the queried dataset as a 3-level-tree, level 1 is dataset name, level 2 is split tag,
             and level 3 is version.
 
@@ -77,57 +73,49 @@ def list_dataset(repo: Repo, dataset_identifier=None, tree_view=True):
     Examples:
         >>> repo = Repo()
         >>> list_dataset(repo=repo)
-        {'dataset1': {'train': {'1234567a': ..., '1234567b': ...}, 'test': ...}, 'dataset12': ...}
+        {'dataset1': {'1234567a': ..., '1234567b': ...}, 'dataset12': ...}
         >>> list_dataset(repo=repo, dataset_identifier='dataset1')
-        {'dataset1': {'train': {'1234567a': ..., '1234567b': ...}, 'test': ...}}
+        {'dataset1': {'1234567a': ..., '1234567b': ...}}
         >>> list_dataset(repo=repo, dataset_identifier='data*')
-        {'dataset1': {'train': {'1234567a': ..., '1234567b': ...}, 'test': ...}, 'dataset12': ...}
+        {'dataset1': {'1234567a': ..., '1234567b': ...}, 'dataset12': ...}
         >>> list_dataset(repo=repo, dataset_identifier='dataset1@1')
-        {'dataset1': {'train': {'1234567a': ..., '1234567b': ...}, 'test': ...}}
+        {'dataset1': {'1234567a': ..., '1234567b': ...}}
         >>> list_dataset(repo=repo, dataset_identifier='dataset1@1234567a')
-        {'dataset1': {'train': {'1234567a': ...}, 'test': ...}}
-        >>> list_dataset(repo=repo, dataset_identifier='dataset1[test]')
-        {'dataset1': {'test': ...}}
-        >>> list_dataset(repo=repo, dataset_identifier='dataset1[*]')
-        ValueError: Invalid dataset identifier dataset1[*]
+        {'dataset1': {'1234567a': ...}}
     """
     dataset_identifier = dataset_identifier or '*'
     matched = LIST_DATASET_IDENTIFIER_PATTERN.match(dataset_identifier)
     if not matched:
         raise ValueError(f'Invalid dataset identifier {dataset_identifier}')
-    dataset_name, version, split = matched.groups()
-    dataset_name = dataset_name or '*'
+    name, version = matched.groups()
+    name = name or '*'
     version = (version or '').lower() + '*'
-    split = (split or '*').lower()
-    if split == 'all':
-        split = '*'
 
-    # Check matched datasets
-    datasets = list()
-    for folder in repo.dataset_dir.glob(dataset_name):
-        if folder.is_dir():
-            datasets.append(folder.name)
+    with db_connection:
+        dataset_dao_list = db_connection.execute("""
+        SELECT name,
+               version, 
+               yield_pipeline,
+               log_message,
+               timestamp,
+               file_config,
+               parent_dataset_name,
+               parent_dataset_version
+        FROM   dataset
+        WHERE  name GLOB ?
+        AND    version GLOB ?
+        """, (name, version))
+    dataset_list = list()
+    dataset_dict = defaultdict(dict)
+    for dataset_dao in dataset_dao_list:
+        name, version, yield_pipeline, log_message, timestamp, file_config, \
+        parent_dataset_name, parent_dataset_version = dataset_dao
+        dataset_obj = Dataset.from_dict({
+            'name': name, 'version': version, 'yield_pipeline': yield_pipeline, 'log_message': log_message,
+            'timestamp': timestamp, 'file_config': file_config, 'parent_dataset_name': parent_dataset_name,
+            'parent_dataset_version': parent_dataset_version,
+        })
+        dataset_list.append(dataset_obj)
+        dataset_dict[name][version] = dataset_obj
 
-    ret_dataset_dict = defaultdict(lambda: defaultdict(OrderedDict))
-    ret_dataset_list = list()
-    for dataset in datasets:
-        # Check matched splits
-        splits = list((repo.dataset_dir / dataset).glob(f'{split}.yaml'))
-
-        # Check matched version
-        for split_path in splits:
-            split = split_path.stem
-            with open(split_path) as f:
-                dataset_version_config: dict = yaml.safe_load(f)
-            versions = fnmatch.filter(dataset_version_config.keys(), version)
-            for ver in versions:
-                dataset_obj = Dataset(
-                    name=dataset, version=ver, config=dataset_version_config[ver],
-                    repo=repo,
-                )
-                if tree_view:
-                    ret_dataset_dict[dataset][split][ver] = dataset_obj
-                else:
-                    ret_dataset_list.append(dataset_obj)
-
-    return ret_dataset_dict if tree_view else ret_dataset_list
+    return dataset_dict if tree_view else dataset_list

@@ -59,6 +59,9 @@ class Dataset(object):
         dataset_obj.create_date = datetime.fromtimestamp(config['timestamp'])
         dataset_obj.__published = True
         dataset_obj._file_config = json.loads(config['file_config'])
+        # TODO: lazy load parent dataset
+        dataset_obj.parent_dataset = (config['parent_dataset_name'], config['parent_dataset_version'])
+        return dataset_obj
 
     def dict(self):
         config = {

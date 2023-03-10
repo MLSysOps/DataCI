@@ -23,24 +23,19 @@ def publish(args):
 
 def ls(args):
     repo = Repo()
-    dataset_split_version_dict = list_dataset(repo=repo, dataset_identifier=args.targets)
+    dataset_version_dict = list_dataset(repo=repo, dataset_identifier=args.targets)
 
-    for dataset_name, split_version_dict in dataset_split_version_dict.items():
+    for dataset_name, version_dict in dataset_version_dict.items():
         print(dataset_name)
-        for sec_cnt, (split, version_dict) in enumerate(split_version_dict.items()):
-            if sec_cnt != 0:
-                # print a spacing between different sections
-                print('|')
-            print(f'| [{split}]')
-            if len(version_dict) > 0:
-                print(
-                    f'|  Version\tYield pipeline\tParent dataset\tSize\tCreate time'
-                )
-            for version, dataset in version_dict.items():
-                print(
-                    f'|- {version[:7]}\t{dataset.yield_pipeline or "N.A."}\t\t{dataset.parent_dataset or "N.A."}\t\t'
-                    f'{dataset.size or "N.A."}\t{dataset.create_date.strftime("%Y-%m-%d %H:%M:%S")}'
-                )
+        if len(version_dict) > 0:
+            print(
+                f'|  Version\tYield pipeline\tParent dataset\tSize\tCreate time'
+            )
+        for version, dataset in version_dict.items():
+            print(
+                f'|- {version[:7]}\t{dataset.yield_pipeline or "N.A."}\t\t{dataset.parent_dataset or "N.A."}\t\t'
+                f'{dataset.size or "N.A."}\t{dataset.create_date.strftime("%Y-%m-%d %H:%M:%S")}'
+            )
 
 
 if __name__ == '__main__':
