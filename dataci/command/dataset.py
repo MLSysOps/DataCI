@@ -14,23 +14,10 @@ def publish(args):
     
     Command syntax:
         -n/--name: dataset name
-        targets: path to dataset base directory, contains splits as sub-directory. Example:
-            dataset
-            |- train
-            |- val
+        targets: path to dataset base directory
     """
     repo = Repo()
-    if args.targets:
-        targets = args.targets[0]
-        targets = DataRef(targets).path
-    else:
-        targets = dict()
-        if args.train:
-            targets['train'] = DataRef(args.train).path
-        if args.val:
-            targets['val'] = DataRef(args.val).path
-        if args.test:
-            targets['test'] = DataRef(args.test).path
+    targets = DataRef(args.targets).path
     publish_dataset(repo=repo, dataset_name=args.name, targets=targets)
 
 
@@ -63,10 +50,7 @@ if __name__ == '__main__':
     publish_parser.add_argument(
         '-n', '--name', type=str, required=True, help='Dataset name'
     )
-    publish_parser.add_argument('targets', type=str, nargs='*', help='Path to dataset base directory.')
-    publish_parser.add_argument('--train', type=str, help='Path to the train dataset base directory')
-    publish_parser.add_argument('--val', type=str, help='Path to the val dataset base directory')
-    publish_parser.add_argument('--test', type=str, help='Path to the test dataset base directory')
+    publish_parser.add_argument('targets', type=str, help='Path to dataset base directory.')
     publish_parser.set_defaults(func=publish)
     list_parser = subparser.add_parser('ls', help='List dataset')
     list_parser.add_argument(

@@ -16,7 +16,7 @@ DATASET_IDENTIFIER_PATTERN = re.compile(
 )
 
 
-def generate_dataset_identifier(dataset_name: str, version: str = None, split = None):
+def generate_dataset_identifier(dataset_name: str, version: str = None):
     """Generate dataset identifier string
 
     Args:
@@ -27,21 +27,17 @@ def generate_dataset_identifier(dataset_name: str, version: str = None, split = 
                 `_abc` (invalid)
                 `abc123` (valid)
         version (str): The version ID contains 7-40 hex characters (0-9, a-f).
-        split (str): The split of dataset. One of "train", "val", "test", and "all".
     """
     dataset_name = str(dataset_name)
     version = str(version).lower() or 'latest'
-    split = str(split).lower() or 'all'
     if not NAME_PATTERN.match(dataset_name):
         raise ValueError(f'Invalid dataset_name="{dataset_name}".')
     if not VERSION_PATTERN.match(version):
         raise ValueError(
             f'Invalid version="{version}": expected a hex string and with a length of 7 to 40.'
         )
-    if split not in ['train', 'val', 'test', 'all']:
-        raise ValueError(f'Invalid split="{split}": expected one of ["train", "val", "test", "all"].')
 
-    return f'{dataset_name}@{version}[{split}]'
+    return f'{dataset_name}@{version}'
 
 
 def parse_dataset_identifier(name_str: str):

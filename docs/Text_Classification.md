@@ -30,7 +30,8 @@ This dataset contains train and val splits. Each split contains a CSV file with 
 Add this dataset with two split into the data repository.
 
 ```shell
-python dataci/command/dataset.py publish -n pairwise_raw data/pairwise_raw
+python dataci/command/dataset.py publish -n pairwise_raw_train data/pairwise_raw/train.csv
+python dataci/command/dataset.py publish -n pairwise_raw_val data/pairwise_raw/val.csv
 ```
 
 ## 1.2 Build a dataset for text classification 

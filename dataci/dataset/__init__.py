@@ -10,15 +10,13 @@ import logging
 import re
 import subprocess
 from collections import OrderedDict, defaultdict
-from copy import deepcopy
-from datetime import datetime
-from functools import lru_cache
-from typing import Optional
 
 import yaml
 
-from dataci.dataset.utils import generate_dataset_version_id, parse_dataset_identifier, generate_dataset_identifier
+from dataci.db import db_connection
 from dataci.repo import Repo
+from .dataset import Dataset
+from .utils import generate_dataset_version_id, parse_dataset_identifier, generate_dataset_identifier
 
 logger = logging.getLogger(__name__)
 
@@ -30,31 +28,31 @@ LIST_DATASET_IDENTIFIER_PATTERN = re.compile(
 def publish_dataset(repo: Repo, dataset_name, targets, yield_pipeline=None, parent_dataset=None, log_message=None):
     if not isinstance(targets, list):
         targets = [targets]
-    yield_pipeline = yield_pipeline or list()
-    parent_dataset = parent_dataset or None
-    log_message = log_message or ''
 
     # Data file version controlled by DVC
     logger.info(f'Caching dataset files: {targets}')
     subprocess.run(['dvc', 'add'] + list(map(str, targets)))
 
-    repo_dataset_path = repo.dataset_dir / dataset_name
-
     for dataset_file in targets:
         dataset = Dataset(
-            dataset_name=dataset_name, dataset_files=dataset_file, yield_pipeline=yield_pipeline,
-            parent_dataset=parent_dataset, log_message=log_message,
+            name=dataset_name, dataset_files=dataset_file, yield_pipeline=yield_pipeline,
+            parent_dataset=parent_dataset, log_message=log_message, repo=repo,
         )
-        # Save tracked dataset with version to repo
-        dataset_config_file = repo_dataset_path.with_suffix(".yaml")
-        # with db_connection:
-        #     db_connection.execute(f"""
-        #     INSERT INTO dataset (name, version, yield_pipeline, log_message, timestamp, file_config, parent_dataset_name, parent_dataset_version) VALUES ({dataset.dataset_name}, {dataset.version}, {dataset.yield_pipeline}, {dataset.log_message}, {dataset.config})
-        #     """)
-        logging.info(f'Adding meta data: {dataset_config_file}')
-        dataset_config_file.parent.mkdir(exist_ok=True)
-        with open(dataset_config_file, 'a+') as f:
-            yaml.safe_dump({dataset.version: dataset.config}, f, sort_keys=False)
+        dao = dataset.dict()
+        # Save dataset with version to repo
+        with db_connection:
+            db_connection.execute(
+                """
+                INSERT INTO dataset (name, version, yield_pipeline, log_message, timestamp, file_config, 
+                parent_dataset_name, parent_dataset_version)
+                VALUES (?,?,?,?,?,?,?,?)
+                """,
+                (
+                    dao['name'], dao['version'], dao['yield_pipeline'], dao['log_message'], dao['timestamp'],
+                    dao['file_config'], dao['parent_dataset_name'], dao['parent_dataset_version'],
+                )
+            )
+        logging.info(f'Adding dataset to db: {dataset}')
 
 
 def list_dataset(repo: Repo, dataset_identifier=None, tree_view=True):
@@ -124,7 +122,7 @@ def list_dataset(repo: Repo, dataset_identifier=None, tree_view=True):
             versions = fnmatch.filter(dataset_version_config.keys(), version)
             for ver in versions:
                 dataset_obj = Dataset(
-                    dataset_name=dataset, version=ver, split=split, config=dataset_version_config[ver],
+                    name=dataset, version=ver, config=dataset_version_config[ver],
                     repo=repo,
                 )
                 if tree_view:
@@ -133,95 +131,3 @@ def list_dataset(repo: Repo, dataset_identifier=None, tree_view=True):
                     ret_dataset_list.append(dataset_obj)
 
     return ret_dataset_dict if tree_view else ret_dataset_list
-
-
-class Dataset(object):
-    def __init__(
-            self,
-            dataset_name,
-            version=None,
-            config=None,
-            repo=None,
-            dataset_files=None,
-            yield_pipeline=None,
-            parent_dataset=None,
-            log_message=None,
-    ):
-        self.dataset_name = dataset_name
-        self.__published = False
-        # Filled if the dataset is published
-        self.version = version
-        self.config = config
-        self.repo = repo
-        # Filled if the dataset is not published
-        self._dataset_files = dataset_files
-        self.create_date: Optional[datetime] = None
-        self.yield_pipeline = yield_pipeline
-        self.parent_dataset = parent_dataset
-        self.log_message = log_message
-        self.size: Optional[int] = None
-        self.shadow = False
-
-        if self.config:
-            self._parse_config()
-            self.__published = True
-        else:
-            assert self.version is None, 'The dataset is creating with an assigned version'
-            self._build_config()
-
-    def __repr__(self):
-        if all((self.dataset_name, self.version)):
-            return generate_dataset_identifier(self.dataset_name, self.version[:7])
-        else:
-            return f'{self.dataset_name} ! Unpublished'
-
-    def _parse_config(self):
-        self.create_date = datetime.fromtimestamp(self.config['timestamp'])
-        self.yield_pipeline = self.config['yield_pipeline']
-        self.parent_dataset = self.config['parent_dataset']
-        self.log_message = self.config['log_message']
-        self._dataset_files = self.repo.tmp_dir / self.dataset_name / self.version
-
-    def _build_config(self):
-        self.create_date = datetime.now()
-        self.yield_pipeline = self.yield_pipeline or list()
-        self.log_message = self.log_message or ''
-
-        config = {
-            'timestamp': int(self.create_date.timestamp()),
-            'parent_dataset': self.parent_dataset,
-            'yield_pipeline': self.yield_pipeline,
-            'log_message': self.log_message,
-            'version': generate_dataset_version_id(
-                list(self._dataset_files.values()), self.yield_pipeline, self.log_message, self.parent_dataset
-            )
-        }
-        self.version = config['version']
-        self.config = config
-        self.config['dvc_config'] = deepcopy(self.dvc_config)
-
-    @property
-    def dataset_files(self):
-        # The dataset files is already cached
-        if self._dataset_files.exists():
-            return self._dataset_files
-        # The dataset files need to recover from DVC
-        self._dataset_files.parent.mkdir(exist_ok=True, parents=True)
-        dataset_file_tracker = self._dataset_files.parent / (self._dataset_files.name + '.dvc')
-        with open(dataset_file_tracker, 'w') as f:
-            yaml.safe_dump(self.dvc_config, f)
-        # dvc checkout
-        cmd = ['dvc', 'checkout', '-f', str(dataset_file_tracker)]
-        subprocess.run(cmd)
-        return self._dataset_files
-
-    @property
-    @lru_cache(maxsize=None)
-    def dvc_config(self):
-        if self.__published:
-            dvc_config = deepcopy(self.config['dvc_config'])
-            return dvc_config
-        dvc_filename = self._dataset_files.parent / (self._dataset_files.name + '.dvc')
-        with open(dvc_filename, 'r') as f:
-            dvc_config = yaml.safe_load(f)
-        return dvc_config
