@@ -9,11 +9,14 @@ import logging
 import re
 import subprocess
 from collections import defaultdict
+from typing import TYPE_CHECKING
 
 from dataci.db import db_connection
-from dataci.repo import Repo
 from .dataset import Dataset
 from .utils import generate_dataset_version_id, parse_dataset_identifier, generate_dataset_identifier
+
+if TYPE_CHECKING:
+    from dataci.repo import Repo
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +25,9 @@ LIST_DATASET_IDENTIFIER_PATTERN = re.compile(
 )
 
 
-def publish_dataset(repo: Repo, dataset_name, targets, yield_pipeline=None, parent_dataset=None, log_message=None):
+def publish_dataset(
+        repo: 'Repo', dataset_name, targets, yield_pipeline=None, parent_dataset=None, log_message=None
+):
     if not isinstance(targets, list):
         targets = [targets]
 
@@ -52,12 +57,69 @@ def publish_dataset(repo: Repo, dataset_name, targets, yield_pipeline=None, pare
         logging.info(f'Adding dataset to db: {dataset}')
 
 
-def list_dataset(repo: Repo, dataset_identifier=None, tree_view=True):
+def get_dataset(repo: 'Repo', name, version=None):
+    name = str(name)
+    version = str(version) if version else 'latest'
+    if version != 'latest':
+        # Version hash ID should provide 7 - 40 digits
+        assert 40 >= len(version) >= 7, \
+            'You should provided the length of version ID within 7 - 40 (both included).'
+    with db_connection:
+        if version != 'latest':
+            dataset_dao_iter = db_connection.execute(
+                """
+                SELECT name,
+                       version, 
+                       yield_pipeline,
+                       log_message,
+                       timestamp,
+                       file_config,
+                       parent_dataset_name,
+                       parent_dataset_version
+                FROM   dataset
+                WHERE  name = ?
+                AND    version = ?
+                """, (name, version))
+        else:
+            dataset_dao_iter = db_connection.execute(
+                """
+                SELECT name,
+                       version, 
+                       yield_pipeline,
+                       log_message,
+                       timestamp,
+                       file_config,
+                       parent_dataset_name,
+                       parent_dataset_version
+                FROM  (
+                    SELECT *,
+                           rank() OVER (PARTITION BY name ORDER BY timestamp DESC) AS rk
+                    FROM   dataset
+                    WHERE  name = ?
+                )
+                WHERE rk = 1
+                """, (name,))
+    dataset_dao_list = list(dataset_dao_iter)
+    if len(dataset_dao_list) == 0:
+        raise ValueError(f'Dataset {name}@{version} not found.')
+    if len(dataset_dao_list) > 1:
+        raise ValueError(f'Found more than one dataset {name}@{version}.')
+    name, version, yield_pipeline, log_message, timestamp, file_config, \
+    parent_dataset_name, parent_dataset_version = dataset_dao_list[0]
+    dataset_obj = Dataset.from_dict({
+        'name': name, 'version': version, 'yield_pipeline': yield_pipeline, 'log_message': log_message,
+        'timestamp': timestamp, 'file_config': file_config, 'parent_dataset_name': parent_dataset_name,
+        'parent_dataset_version': parent_dataset_version, 'repo': repo,
+    })
+
+    return dataset_obj
+
+
+def list_dataset(repo: 'Repo', dataset_identifier=None, tree_view=True):
     """
     List dataset with optional dataset identifier to query.
 
     Args:
-        repo:
         dataset_identifier: Dataset name with optional version and optional split information to query.
             In this field, it supports three components in the format of dataset_name@version[split].
             - dataset name: Support glob. Default to query for all datasets.
@@ -92,28 +154,28 @@ def list_dataset(repo: Repo, dataset_identifier=None, tree_view=True):
     version = (version or '').lower() + '*'
 
     with db_connection:
-        dataset_dao_list = db_connection.execute("""
-        SELECT name,
-               version, 
-               yield_pipeline,
-               log_message,
-               timestamp,
-               file_config,
-               parent_dataset_name,
-               parent_dataset_version
-        FROM   dataset
-        WHERE  name GLOB ?
-        AND    version GLOB ?
-        """, (name, version))
+        dataset_dao_iter = db_connection.execute("""
+            SELECT name,
+                   version, 
+                   yield_pipeline,
+                   log_message,
+                   timestamp,
+                   file_config,
+                   parent_dataset_name,
+                   parent_dataset_version
+            FROM   dataset
+            WHERE  name GLOB ?
+            AND    version GLOB ?
+            """, (name, version))
     dataset_list = list()
     dataset_dict = defaultdict(dict)
-    for dataset_dao in dataset_dao_list:
+    for dataset_dao in dataset_dao_iter:
         name, version, yield_pipeline, log_message, timestamp, file_config, \
         parent_dataset_name, parent_dataset_version = dataset_dao
         dataset_obj = Dataset.from_dict({
             'name': name, 'version': version, 'yield_pipeline': yield_pipeline, 'log_message': log_message,
             'timestamp': timestamp, 'file_config': file_config, 'parent_dataset_name': parent_dataset_name,
-            'parent_dataset_version': parent_dataset_version,
+            'parent_dataset_version': parent_dataset_version, 'repo': repo,
         })
         dataset_list.append(dataset_obj)
         dataset_dict[name][version] = dataset_obj

@@ -12,6 +12,8 @@ from datetime import datetime
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
+from dataci.repo import Repo
+
 if TYPE_CHECKING:
     from typing import Optional
 
@@ -36,7 +38,7 @@ class Dataset(object):
         self.__published = False
         # Filled if the dataset is published
         self.version = version
-        self.repo = repo
+        self.repo = repo or Repo()
         # Filled if the dataset is not published
         self._dataset_files = dataset_files
         self.create_date: 'Optional[datetime]' = datetime.now()
@@ -82,10 +84,10 @@ class Dataset(object):
     @property
     def dataset_files(self):
         # The dataset files is already cached
-        if self._dataset_files.exists():
+        if self._dataset_files and self._dataset_files.exists():
             return self._dataset_files
         # The dataset files need to recover from DVC
-        self._dataset_files = self.repo.tmp_dir / self._dataset_files.name / self.version
+        self._dataset_files = self.repo.tmp_dir / self.name / self.version
         self._dataset_files.parent.mkdir(exist_ok=True, parents=True)
         dataset_file_tracker = self._dataset_files.parent / (self._dataset_files.name + '.dvc')
         with open(dataset_file_tracker, 'w') as f:
