@@ -1,7 +1,4 @@
-import os
-
 import augly.text as txtaugs
-import pandas as pd
 import unicodedata
 from cleantext import clean
 
@@ -18,23 +15,21 @@ def clean_func(text):
     return text
 
 
-@stage(name='text_clean', inputs='pairwise_raw[train]', outputs='text_clean.csv')
+@stage(name='text_clean', inputs='pairwise_raw_train', outputs='text_clean.csv')
 def text_clean(inputs):
-    df = pd.read_csv(os.path.join(inputs, 'train.csv'))
-    df['to_product_name'] = df['to_product_name'].map(clean_func)
-    return df
+    inputs['to_product_name'] = inputs['to_product_name'].map(clean_func)
+    return inputs
 
 
 @stage(name='text_augmentation', inputs='text_clean.csv', outputs='text_augmentation.csv')
 def text_augmentation(inputs):
-    df = pd.read_csv(inputs)
     transform = txtaugs.InsertPunctuationChars(
         granularity="all",
         cadence=5.0,
         vary_chars=True,
     )
-    df['to_product_name'] = df['to_product_name'].map(transform)
-    return df
+    inputs['to_product_name'] = inputs['to_product_name'].map(transform)
+    return inputs
 
 # Debug run
 print('Debug run')
@@ -51,4 +46,4 @@ pipeline.build()
 print('Run pipeline')
 pipeline()
 print('Publish pipeline')
-pipeline.publish()
+# pipeline.publish()

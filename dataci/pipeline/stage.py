@@ -13,7 +13,9 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from dataci.fs.ref import DataRef
+from dataci.dataset import Dataset
+from dataci.db.curd import get_one_dataset
+
 if TYPE_CHECKING:
     from typing import Iterable, List
 
@@ -41,21 +43,36 @@ class Stage(ABC):
             self._dependency = dependency
 
     @property
-    def inputs(self) -> 'DataRef':
+    def inputs(self) -> 'Dataset':
         prev_deps = getattr(self, '__inputs_deps', None)
         current_deps = (self._inputs, str(self.feat_base_dir))
         if prev_deps != current_deps:
-            inputs = DataRef(self._inputs, basedir=self.feat_base_dir)
+            try:
+                # If input is a published dataset
+                inputs = get_one_dataset(name=self._inputs, repo=self.repo)
+            except ValueError:
+                # input is an intermedia feature, pack it into a dataset object
+                inputs = Dataset(
+                    name=os.path.splitext(self._inputs)[0], repo=self.repo,
+                    dataset_files=self.feat_base_dir / self._inputs,
+                )
             setattr(self, '__inputs_deps', current_deps)
             setattr(self, '__inputs_cache', inputs)
         return getattr(self, '__inputs_cache')
 
     @property
-    def outputs(self) -> 'DataRef':
+    def outputs(self) -> 'Dataset':
         prev_deps = getattr(self, '__outputs_deps', None)
         current_deps = (self._outputs, str(self.feat_base_dir))
         if prev_deps != current_deps:
-            outputs = DataRef(self._outputs, basedir=self.feat_base_dir)
+            try:
+                # If input is a published dataset
+                outputs = get_one_dataset(name=self._outputs)
+            except ValueError:
+                # input is an intermedia feature, pack it into a dataset object
+                outputs = Dataset(
+                    name=self._inputs, repo=self.repo, dataset_files=self.feat_base_dir / self._outputs
+                )
             setattr(self, '__outputs_deps', current_deps)
             setattr(self, '__outputs_cache', outputs)
         return getattr(self, '__outputs_cache')
@@ -110,6 +127,13 @@ class Stage(ABC):
             stage_obj: Stage = pickle.load(f)
             return stage_obj
 
+    def input_deserializer(self, inputs):
+        if os.path.splitext(inputs)[-1] == '.csv':
+            logger.info(f'Load input {inputs} as pandas Dataframe')
+            return pd.read_csv(inputs)
+        else:
+            raise ValueError(f'Not support input file type: {inputs}')
+
     def output_serializer(self, outputs, dest):
         """Output serializer to save the output data/feature."""
         if outputs is None:
@@ -121,5 +145,6 @@ class Stage(ABC):
             raise ValueError(f'Not support output object type: {type(outputs)}.')
 
     def __call__(self):
-        outputs = self.run(str(self.inputs.path))
-        self.output_serializer(outputs, str(self.outputs.path))
+        inputs = self.input_deserializer(self.inputs.dataset_files)
+        outputs = self.run(inputs)
+        self.output_serializer(outputs, str(self.outputs.dataset_files))

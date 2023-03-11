@@ -12,9 +12,10 @@ from typing import Iterable, Union
 
 import yaml
 
+from dataci.dataset import Dataset
 from dataci.repo import Repo
 from .run import Run
-from .stage import DataRef, Stage
+from .stage import Stage
 from .utils import cwd, generate_pipeline_version_id
 
 
@@ -101,12 +102,12 @@ class Pipeline(object):
                 # dvc stage add -n <stage name> -d stage.py -d input.csv -O output.csv -w self.workdir python stage.py
                 cmd = [
                     'dvc', 'stage', 'add', '-f', '-n', str(stage.name),
-                    '-O', str(stage.outputs.path), '-w', str(self.workdir),
+                    '-O', str(stage.outputs.dataset_files), '-w', str(self.workdir),
                 ]
                 # Add dependencies
                 for dependency in stage.dependency:
-                    if isinstance(dependency, DataRef) and dependency.type != 'local':
-                            dependency = str(dependency.path)
+                    if isinstance(dependency, Dataset):
+                        dependency = str(dependency.dataset_files)
                     else:
                         dependency = os.path.relpath(str(dependency), str(self.workdir))
                     cmd += ['-d', dependency]
