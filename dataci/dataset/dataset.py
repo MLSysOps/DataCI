@@ -61,6 +61,8 @@ class Dataset(object):
         dataset_obj.create_date = datetime.fromtimestamp(config['timestamp'])
         dataset_obj.__published = True
         dataset_obj._file_config = json.loads(config['file_config'])
+        dataset_obj._dataset_files = (dataset_obj.repo.tmp_dir / dataset_obj.name / dataset_obj.version /
+                                      config['filename'])
         # TODO: lazy load parent dataset
         dataset_obj.parent_dataset = (config['parent_dataset_name'], config['parent_dataset_version'])
         return dataset_obj
@@ -76,6 +78,7 @@ class Dataset(object):
             'version': generate_dataset_version_id(
                 self._dataset_files, self.yield_pipeline, self.log_message, self.parent_dataset
             ) if self.version is None else self.version,
+            'filename': self._dataset_files.name,
             'file_config': json.dumps(self.file_config)
         }
         self.version = config['version']
@@ -86,15 +89,15 @@ class Dataset(object):
         # The dataset files is already cached
         if self._dataset_files and self._dataset_files.exists():
             return self._dataset_files
-        # The dataset files need to recover from DVC
-        self._dataset_files = self.repo.tmp_dir / self.name / self.version
-        self._dataset_files.parent.mkdir(exist_ok=True, parents=True)
-        dataset_file_tracker = self._dataset_files.parent / (self._dataset_files.name + '.dvc')
-        with open(dataset_file_tracker, 'w') as f:
-            yaml.safe_dump(self.file_config, f)
-        # dvc checkout
-        cmd = ['dvc', 'checkout', '-f', str(dataset_file_tracker)]
-        subprocess.run(cmd)
+        if self.__published:
+            # The dataset files need to recover from DVC
+            self._dataset_files.parent.mkdir(exist_ok=True, parents=True)
+            dataset_file_tracker = self._dataset_files.parent / (self._dataset_files.name + '.dvc')
+            with open(dataset_file_tracker, 'w') as f:
+                yaml.safe_dump(self.file_config, f)
+            # dvc checkout
+            cmd = ['dvc', 'checkout', '-f', str(dataset_file_tracker)]
+            subprocess.run(cmd)
         return self._dataset_files
 
     @property

@@ -33,6 +33,7 @@ with db_connection:
         log_message    TEXT,
         timestamp      INTEGER,
         file_config    TEXT,
+        filename       TEXT,
         parent_dataset_name TEXT,
         parent_dataset_version TEXT,
         FOREIGN KEY (yield_pipeline) REFERENCES pipeline (name),

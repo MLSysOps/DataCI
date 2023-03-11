@@ -15,7 +15,6 @@ def run(args):
     # Init dataci directory
     data_ci_folders = [
         dataci_repo_dir,
-        dataci_repo_dir / 'dataset',
         dataci_repo_dir / 'pipeline',
         dataci_repo_dir / 'tmp',
     ]
@@ -26,6 +25,8 @@ def run(args):
     if args.force:
         dvc_init_cmd.append('-f')
     subprocess.run(dvc_init_cmd)
+    # Init database
+    from dataci.db import init  # noqa
 
 
 if __name__ == '__main__':
