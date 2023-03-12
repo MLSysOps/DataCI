@@ -7,7 +7,6 @@ Date: Feb 20, 2023
 """
 import inspect
 import logging
-import os
 import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -24,6 +23,12 @@ import pandas as pd
 from dataci.repo import Repo
 
 logger = logging.getLogger(__name__)
+
+import platform
+import os
+import sys
+
+print(platform.architecture(), platform.system(), os.getcwd(), sys.executable)
 
 
 class Stage(ABC):
@@ -51,11 +56,8 @@ class Stage(ABC):
                 # If input is a published dataset
                 inputs = get_one_dataset(name=self._inputs, repo=self.repo)
             except ValueError:
-                # input is an intermedia feature, pack it into a dataset object
-                inputs = Dataset(
-                    name=os.path.splitext(self._inputs)[0], repo=self.repo,
-                    dataset_files=self.feat_base_dir / self._inputs,
-                )
+                # input is an intermedia feature
+                inputs = self.feat_base_dir / self._inputs
             setattr(self, '__inputs_deps', current_deps)
             setattr(self, '__inputs_cache', inputs)
         return getattr(self, '__inputs_cache')
@@ -70,9 +72,7 @@ class Stage(ABC):
                 outputs = get_one_dataset(name=self._outputs)
             except ValueError:
                 # input is an intermedia feature, pack it into a dataset object
-                outputs = Dataset(
-                    name=self._inputs, repo=self.repo, dataset_files=self.feat_base_dir / self._outputs
-                )
+                outputs = self.feat_base_dir / self._outputs
             setattr(self, '__outputs_deps', current_deps)
             setattr(self, '__outputs_cache', outputs)
         return getattr(self, '__outputs_cache')

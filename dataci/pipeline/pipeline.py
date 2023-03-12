@@ -44,9 +44,6 @@ class Pipeline(object):
 
         # prepare working directory
         self.workdir = (self.basedir / self.name / self.version).resolve()
-        self.workdir.mkdir(exist_ok=True, parents=True)
-        (self.workdir / self.CODE_DIR).mkdir(exist_ok=True)
-        (self.workdir / self.FEAT_DIR).mkdir(exist_ok=True)
 
         # stages
         self.stages = stages or list()
@@ -65,11 +62,13 @@ class Pipeline(object):
 
     @property
     def outputs(self):
-        # all outputs from all stages
-        outputs = list()
+        # Get all inputs and outputs
+        inputs, outputs = set(), set()
         for stage in self.stages:
-            outputs.append(stage.outputs)
-        return outputs
+            inputs.add(stage.inputs)
+            outputs.add(stage.outputs)
+        # Cancel all outputs that come from some stage's inputs
+        return list(outputs - inputs)
 
     @property
     def runs(self):
@@ -82,6 +81,10 @@ class Pipeline(object):
         self.stages.append(stage)
 
     def build(self):
+        self.workdir.mkdir(exist_ok=True, parents=True)
+        (self.workdir / self.CODE_DIR).mkdir(exist_ok=True)
+        (self.workdir / self.FEAT_DIR).mkdir(exist_ok=True)
+
         with cwd(self.workdir):
             for stage in self.stages:
                 # For each stage
@@ -130,3 +133,6 @@ class Pipeline(object):
         # dvc repo
         cmd = ['dvc', 'repro', str(self.workdir / 'dvc.yaml')]
         subprocess.run(cmd)
+
+    def dict(self):
+        return {'name': self.name, 'version': self.version}

@@ -110,3 +110,9 @@ class Dataset(object):
         with open(dvc_filename, 'r') as f:
             file_config = yaml.safe_load(f)
         return file_config
+
+    def __str__(self):
+        return f'{self.name}@{self.version}'
+
+    def __hash__(self):
+        return hash(str(self))
