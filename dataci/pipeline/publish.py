@@ -5,13 +5,17 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Mar 05, 2023
 """
-from shutil import copy2
+import logging
+import os
+from shutil import copy2, copytree
 from typing import TYPE_CHECKING
 
-from dataci.db import db_connection
+from dataci.db.pipeline import create_one_pipeline
 
 if TYPE_CHECKING:
     from .pipeline import Pipeline
+
+logger = logging.getLogger(__name__)
 
 
 def publish(pipeline: 'Pipeline' = ...):
@@ -39,10 +43,12 @@ def publish(pipeline: 'Pipeline' = ...):
     # Copy traced pipeline dvc.yaml
     copy2(pipeline.workdir / 'dvc.yaml', pipeline_workdir)
 
+    # Copy pipeline code
+    if (pipeline_workdir / pipeline.CODE_DIR).exists():
+        os.removedirs(pipeline_workdir / pipeline.CODE_DIR)
+    copytree(pipeline.workdir / pipeline.CODE_DIR, pipeline_workdir / pipeline.CODE_DIR)
+
     #####################################################################
     # Step 3: Publish pipeline object to DB
     #####################################################################
-    with db_connection:
-        db_connection.execute("""
-            INSERT INTO pipeline (name, version) VALUES (?,?)
-            """, )
+    create_one_pipeline(pipeline.dict())

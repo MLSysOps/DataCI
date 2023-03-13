@@ -15,12 +15,11 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from dataci.dataset import Dataset
-from dataci.db.curd import get_one_dataset
 from dataci.repo import Repo
 
 if TYPE_CHECKING:
     from typing import Iterable, List
+    from dataci.dataset.dataset import Dataset
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +42,8 @@ class Stage(ABC):
 
     @property
     def inputs(self) -> 'Dataset':
+        from dataci.db.dataset import get_one_dataset
+
         prev_deps = getattr(self, '__inputs_deps', None)
         current_deps = (self._inputs, str(self.feat_base_dir))
         if prev_deps != current_deps:
@@ -58,6 +59,8 @@ class Stage(ABC):
 
     @property
     def outputs(self) -> 'Dataset':
+        from dataci.db.dataset import get_one_dataset
+
         prev_deps = getattr(self, '__outputs_deps', None)
 
         current_deps = (self._outputs, str(self.feat_base_dir))

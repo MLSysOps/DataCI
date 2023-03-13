@@ -27,20 +27,21 @@ with db_connection:
     
     CREATE TABLE dataset
     (
-        name           TEXT,
-        version        TEXT,
-        yield_pipeline TEXT,
-        log_message    TEXT,
-        timestamp      INTEGER,
-        file_config    TEXT,
-        filename       TEXT,
-        parent_dataset_name TEXT,
+        name                   TEXT,
+        version                TEXT,
+        yield_pipeline_name    TEXT,
+        yield_pipeline_version TXT,
+        log_message            TEXT,
+        timestamp              INTEGER,
+        file_config            TEXT,
+        filename               TEXT,
+        parent_dataset_name    TEXT,
         parent_dataset_version TEXT,
-        FOREIGN KEY (yield_pipeline) REFERENCES pipeline (name),
-        FOREIGN KEY (parent_dataset_name, parent_dataset_version) REFERENCES dataset(name, version)
+        FOREIGN KEY (yield_pipeline_name, yield_pipeline_version) REFERENCES pipeline (name, version),
+        FOREIGN KEY (parent_dataset_name, parent_dataset_version) REFERENCES dataset (name, version),
         PRIMARY KEY (name, version)
     );
-    
+
     CREATE TABLE run
     (
         run_num INTEGER,

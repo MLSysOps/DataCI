@@ -12,7 +12,7 @@ from typing import Iterable, Union
 
 import yaml
 
-from dataci.dataset import Dataset
+from dataci.dataset.dataset import Dataset
 from dataci.repo import Repo
 from .run import Run
 from .stage import Stage
@@ -68,7 +68,17 @@ class Pipeline(object):
             inputs.add(stage.inputs)
             outputs.add(stage.outputs)
         # Cancel all outputs that come from some stage's inputs
-        return list(outputs - inputs)
+        output_list = list(outputs - inputs)
+        # Pack output to a dataset
+        output_datasets = list()
+        for outputs in output_list:
+            if not isinstance(outputs, Dataset):
+                outputs = Dataset(
+                    name=f'{self.name}:{outputs.stem}', repo=self.repo,
+                    dataset_files=outputs, yield_pipeline=self, parent_dataset=self.inputs[0],
+                )
+            output_datasets.append(outputs)
+        return output_datasets
 
     @property
     def runs(self):
@@ -139,3 +149,12 @@ class Pipeline(object):
 
     def dict(self):
         return {'name': self.name, 'version': self.version}
+
+    @classmethod
+    def from_dict(cls, config):
+        pipeline = cls(**config)
+        pipeline.restore()
+        return pipeline
+
+    def __str__(self):
+        return f'{self.name}@{self.version}'

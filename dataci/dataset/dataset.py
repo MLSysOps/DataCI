@@ -16,6 +16,7 @@ from dataci.repo import Repo
 
 if TYPE_CHECKING:
     from typing import Optional
+    from dataci.pipeline.pipeline import Pipeline
 
 import yaml
 
@@ -29,7 +30,7 @@ class Dataset(object):
             version=None,
             repo=None,
             dataset_files=None,
-            yield_pipeline=None,
+            yield_pipeline: 'Optional[Pipeline]' = None,
             parent_dataset: 'Optional[Dataset]' = None,
             log_message=None,
             **kwargs,
@@ -58,6 +59,7 @@ class Dataset(object):
     @classmethod
     def from_dict(cls, config):
         dataset_obj = cls(**config)
+        # TODO: load pipeline
         dataset_obj.create_date = datetime.fromtimestamp(config['timestamp'])
         dataset_obj.__published = True
         dataset_obj._file_config = json.loads(config['file_config'])
@@ -68,12 +70,13 @@ class Dataset(object):
         return dataset_obj
 
     def dict(self):
+        yield_pipeline_dict = self.yield_pipeline.dict() if self.yield_pipeline else {'name': None, 'version': None}
         config = {
             'name': self.name,
             'timestamp': int(self.create_date.timestamp()),
             'parent_dataset_name': self.parent_dataset.name if self.parent_dataset else None,
             'parent_dataset_version': self.parent_dataset.version if self.parent_dataset else None,
-            'yield_pipeline': self.yield_pipeline,
+            'yield_pipeline': yield_pipeline_dict,
             'log_message': self.log_message,
             'version': generate_dataset_version_id(
                 self._dataset_files, self.yield_pipeline, self.log_message, self.parent_dataset
