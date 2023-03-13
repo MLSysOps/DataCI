@@ -11,8 +11,8 @@ from . import db_connection
 
 
 def create_one_dataset(dataset: Dataset):
+    po = dataset.dict()
     with db_connection:
-        po = dataset.dict()
         db_connection.execute(
             """
             INSERT INTO dataset (name, version, yield_pipeline, log_message, timestamp, filename, file_config, 

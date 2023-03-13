@@ -11,7 +11,7 @@ import subprocess
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from dataci.db.curd import create_one_dataset, get_one_dataset, get_many_datasets
+from dataci.db.dataset import create_one_dataset, get_one_dataset, get_many_datasets
 from .dataset import Dataset
 from .utils import generate_dataset_version_id, parse_dataset_identifier, generate_dataset_identifier
 
