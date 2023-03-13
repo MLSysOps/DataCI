@@ -101,11 +101,14 @@ class Pipeline(object):
                 # Get pipeline version
                 self.version = generate_pipeline_version_id(self.CODE_DIR)
 
+                # Get output path
+                output_path = str(stage.outputs.dataset_files if isinstance(stage.outputs, Dataset) else stage.outputs)
+
                 # manage stages by dvc
                 # dvc stage add -n <stage name> -d stage.py -d input.csv -O output.csv -w self.workdir python stage.py
                 cmd = [
                     'dvc', 'stage', 'add', '-f', '-n', str(stage.name),
-                    '-O', str(stage.outputs.dataset_files), '-w', str(self.workdir),
+                    '-O', output_path, '-w', str(self.workdir),
                 ]
                 # Add dependencies
                 for dependency in stage.dependency:

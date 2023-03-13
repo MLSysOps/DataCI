@@ -7,28 +7,22 @@ Date: Feb 20, 2023
 """
 import inspect
 import logging
+import os
 import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pandas as pd
+
 from dataci.dataset import Dataset
 from dataci.db.curd import get_one_dataset
+from dataci.repo import Repo
 
 if TYPE_CHECKING:
     from typing import Iterable, List
 
-import pandas as pd
-
-from dataci.repo import Repo
-
 logger = logging.getLogger(__name__)
-
-import platform
-import os
-import sys
-
-print(platform.architecture(), platform.system(), os.getcwd(), sys.executable)
 
 
 class Stage(ABC):
@@ -65,6 +59,7 @@ class Stage(ABC):
     @property
     def outputs(self) -> 'Dataset':
         prev_deps = getattr(self, '__outputs_deps', None)
+
         current_deps = (self._outputs, str(self.feat_base_dir))
         if prev_deps != current_deps:
             try:
