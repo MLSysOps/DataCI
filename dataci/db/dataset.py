@@ -5,13 +5,10 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Mar 11, 2023
 """
-from dataci.dataset.dataset import Dataset
-
 from . import db_connection
 
 
-def create_one_dataset(dataset: Dataset):
-    dataset_dict = dataset.dict()
+def create_one_dataset(dataset_dict):
     pipeline_dict = dataset_dict['yield_pipeline']
     with db_connection:
         db_connection.execute(
@@ -76,13 +73,12 @@ def get_one_dataset(name, version='latest', repo=None):
         raise ValueError(f'Found more than one dataset {name}@{version}.')
     name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, filename, file_config, \
     parent_dataset_name, parent_dataset_version = dataset_po_list[0]
-    dataset_obj = Dataset.from_dict({
+    return {
         'name': name, 'version': version,
         'yield_pipeline': {'name': yield_pipeline_name, 'version': yield_pipeline_version}, 'log_message': log_message,
         'timestamp': timestamp, 'filename': filename, 'file_config': file_config,
         'parent_dataset_name': parent_dataset_name, 'parent_dataset_version': parent_dataset_version, 'repo': repo,
-    })
-    return dataset_obj
+    }
 
 
 def get_many_datasets(name, version=None, repo=None):
@@ -102,16 +98,16 @@ def get_many_datasets(name, version=None, repo=None):
             WHERE  name GLOB ?
             AND    version GLOB ?
             """, (name, version))
-    dataset_list = list()
+    dataset_dict_list = list()
     for dataset_po in dataset_po_iter:
         name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, filename, file_config, \
         parent_dataset_name, parent_dataset_version = dataset_po
-        dataset_obj = Dataset.from_dict({
+        dataset_dict = {
             'name': name, 'version': version,
             'yield_pipeline': {'name': yield_pipeline_name, 'version': yield_pipeline_version},
             'log_message': log_message,
             'timestamp': timestamp, 'filename': filename, 'file_config': file_config,
             'parent_dataset_name': parent_dataset_name, 'parent_dataset_version': parent_dataset_version, 'repo': repo,
-        })
-        dataset_list.append(dataset_obj)
-    return dataset_list
+        }
+        dataset_dict_list.append(dataset_dict)
+    return dataset_dict_list

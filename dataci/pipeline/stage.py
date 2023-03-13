@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
+from dataci.db.dataset import get_one_dataset
 from dataci.repo import Repo
 
 if TYPE_CHECKING:
@@ -42,14 +43,15 @@ class Stage(ABC):
 
     @property
     def inputs(self) -> 'Dataset':
-        from dataci.db.dataset import get_one_dataset
+        from dataci.dataset.dataset import Dataset
 
         prev_deps = getattr(self, '__inputs_deps', None)
         current_deps = (self._inputs, str(self.feat_base_dir))
         if prev_deps != current_deps:
             try:
                 # If input is a published dataset
-                inputs = get_one_dataset(name=self._inputs, repo=self.repo)
+                dataset_dict = get_one_dataset(name=self._inputs, repo=self.repo)
+                inputs = Dataset.from_dict(dataset_dict)
             except ValueError:
                 # input is an intermedia feature
                 inputs = self.feat_base_dir / self._inputs
@@ -59,7 +61,7 @@ class Stage(ABC):
 
     @property
     def outputs(self) -> 'Dataset':
-        from dataci.db.dataset import get_one_dataset
+        from dataci.dataset.dataset import Dataset
 
         prev_deps = getattr(self, '__outputs_deps', None)
 
@@ -67,7 +69,8 @@ class Stage(ABC):
         if prev_deps != current_deps:
             try:
                 # If input is a published dataset
-                outputs = get_one_dataset(name=self._outputs)
+                dataset_dict = get_one_dataset(name=self._outputs)
+                outputs = Dataset.from_dict(dataset_dict)
             except ValueError:
                 # input is an intermedia feature, pack it into a dataset object
                 outputs = self.feat_base_dir / self._outputs

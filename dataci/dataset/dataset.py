@@ -58,8 +58,13 @@ class Dataset(object):
 
     @classmethod
     def from_dict(cls, config):
+        from dataci.pipeline.pipeline import Pipeline
+
+        if config['yield_pipeline']['name'] is None:
+            config['yield_pipeline'] = None
+        else:
+            config['yield_pipeline'] = Pipeline(**config['yield_pipeline'])
         dataset_obj = cls(**config)
-        # TODO: load pipeline
         dataset_obj.create_date = datetime.fromtimestamp(config['timestamp'])
         dataset_obj.__published = True
         dataset_obj._file_config = json.loads(config['file_config'])

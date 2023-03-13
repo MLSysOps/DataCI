@@ -40,7 +40,7 @@ def publish_dataset(
             name=dataset_name, dataset_files=dataset_file, yield_pipeline=yield_pipeline,
             parent_dataset=parent_dataset, log_message=log_message, repo=repo,
         )
-        create_one_dataset(dataset)
+        create_one_dataset(dataset.dict())
         logging.info(f'Adding dataset to db: {dataset}')
 
 
@@ -51,7 +51,8 @@ def get_dataset(repo: 'Repo', name, version=None):
         # Version hash ID should provide 7 - 40 digits
         assert 40 >= len(version) >= 7, \
             'You should provided the length of version ID within 7 - 40 (both included).'
-    return get_one_dataset(name=name, version=version, repo=repo)
+    dataset_dict = get_one_dataset(name=name, version=version, repo=repo)
+    return Dataset.from_dict(dataset_dict)
 
 
 def list_dataset(repo: 'Repo', dataset_identifier=None, tree_view=True):
@@ -92,7 +93,8 @@ def list_dataset(repo: 'Repo', dataset_identifier=None, tree_view=True):
     name = name or '*'
     version = (version or '').lower() + '*'
 
-    dataset_list = get_many_datasets(name=name, version=version, repo=repo)
+    dataset_dict_list = get_many_datasets(name=name, version=version, repo=repo)
+    dataset_list = [Dataset.from_dict(dataset_dict) for dataset_dict in dataset_dict_list]
     if tree_view:
         dataset_dict = defaultdict(dict)
         for dataset in dataset_list:
