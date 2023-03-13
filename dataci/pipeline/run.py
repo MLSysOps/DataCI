@@ -8,10 +8,8 @@ Date: Mar 09, 2023
 Run for pipeline.
 """
 from copy import deepcopy
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from .pipeline import Pipeline
+from .pipeline import Pipeline
 
 
 class Run(object):
@@ -37,3 +35,12 @@ class Run(object):
                 f'Compare between two different pipeline {self.pipeline} and {other.pipeline} is invalid.'
             )
         return self.run_num.__cmp__(other.run_num)
+
+    def dict(self):
+        return {'run_num': self.run_num, 'pipeline': self.pipeline.dict()}
+
+    @classmethod
+    def from_dict(cls, config):
+        config['pipeline'] = Pipeline.from_dict(config['pipeline'])
+        config['pipeline'].restore()
+        return cls(**config)
