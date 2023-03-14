@@ -25,7 +25,8 @@ def get_pipeline(name, version=None, repo: 'Optional[Repo]' = None):
         assert 40 >= len(version) >= 7, \
             'You should provided the length of version ID within 7 - 40 (both included).'
     pipeline_dict = get_one_pipeline(name=name, version=version)
-    pipeline_dict['repo'] = repo
+    if repo is not None:
+        pipeline_dict['repo'] = repo
     return Pipeline.from_dict(pipeline_dict)
 
 

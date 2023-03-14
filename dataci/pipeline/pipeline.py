@@ -159,10 +159,11 @@ class Pipeline(object):
         return {'name': self.name, 'version': self.version, 'timestamp': int(self.create_date.timestamp())}
 
     @classmethod
-    def from_dict(cls, config):
+    def from_dict(cls, config: 'dict'):
+        config['repo'] = config.get('repo', Repo())
+        config['basedir'] = config['repo'].pipeline_dir
         pipeline = cls(**config)
         pipeline.create_date = datetime.fromtimestamp(config['timestamp'])
-        pipeline.basedir = pipeline.repo.pipeline_dir
         pipeline.restore()
         return pipeline
 

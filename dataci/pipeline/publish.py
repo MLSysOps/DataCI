@@ -40,6 +40,11 @@ def publish(pipeline: 'Pipeline' = ...):
     pipeline_run_dir = pipeline_workdir / 'runs'
     pipeline_run_dir.mkdir(exist_ok=True)
 
+    # Prepare common feat
+    # repo/pipeline/<pipeline_name>/feat
+    pipeline_feat_dir = pipeline_workdir / pipeline.FEAT_DIR
+    copytree(pipeline.workdir / pipeline.FEAT_DIR, pipeline_feat_dir, symlinks=True)
+
     # Copy traced pipeline dvc.yaml
     copy2(pipeline.workdir / 'dvc.yaml', pipeline_workdir)
 
