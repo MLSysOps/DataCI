@@ -9,7 +9,7 @@ import re
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from dataci.db.pipeline import get_one_pipeline, get_many_pipeline
+from dataci.db.pipeline import get_many_pipeline
 from dataci.pipeline import Pipeline
 
 if TYPE_CHECKING:
@@ -23,17 +23,6 @@ LIST_PIPELINE_IDENTIFIER_PATTERN = re.compile(
 LIST_FEAT_IDENTIFIER_PATTERN = re.compile(
     r'^([1-9.*[\]]\d*):([\w.]+?)$', re.IGNORECASE
 )
-
-
-def get_pipeline(name, version=None, repo: 'Optional[Repo]' = None):
-    version = version or 'latest'
-    if version != 'latest':
-        # Version hash ID should provide 7 - 40 digits
-        assert 40 >= len(version) >= 7, \
-            'You should provided the length of version ID within 7 - 40 (both included).'
-    pipeline_dict = get_one_pipeline(name=name, version=version)
-    pipeline_dict['repo'] = repo
-    return Pipeline.from_dict(pipeline_dict)
 
 
 def list_pipeline(pipeline_identifier, tree_view=True, repo: 'Optional[Repo]' = None):

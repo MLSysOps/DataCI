@@ -38,3 +38,12 @@ def generate_pipeline_version_id(pipeline_code_dir, log_message=None, parent_ver
 
     packed_obj = pipeline_code_obj + log_message_obj + parent_version_obj
     return hashlib.sha1(packed_obj).hexdigest()
+
+
+def symlink_force(target, link_name, target_is_directory=False):
+    """Force to create a symbolic link"""
+    try:
+        os.unlink(link_name)
+    except FileNotFoundError:
+        pass
+    os.symlink(target, link_name, target_is_directory)

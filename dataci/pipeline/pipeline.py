@@ -17,7 +17,7 @@ from dataci.dataset.dataset import Dataset
 from dataci.repo import Repo
 from .run import Run
 from .stage import Stage
-from .utils import cwd, generate_pipeline_version_id
+from .utils import cwd, generate_pipeline_version_id, symlink_force
 
 
 class Pipeline(object):
@@ -26,6 +26,7 @@ class Pipeline(object):
     RUN_DIR = 'runs'
 
     from .publish import publish  # type: ignore[misc]
+    from .get import get_next_run_num  # type: ignore[misc]
 
     def __init__(
             self,
@@ -43,16 +44,13 @@ class Pipeline(object):
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.basedir = Path(basedir).resolve()
         # latest is regard as this pipeline is not published
-        self.is_built = (version != 'latest')
+        self.is_built = (self.version != 'latest')
 
         # stages
         self.stages = stages or list()
         if not isinstance(self.stages, Iterable):
             self.stages = [self.stages]
-
-    @property
-    def workdir(self):
-        return self.basedir / self.name / self.version
+        self.workdir = self.basedir / self.name / self.version
 
     @property
     def inputs(self):
@@ -97,7 +95,6 @@ class Pipeline(object):
     def build(self):
         self.workdir.mkdir(exist_ok=True, parents=True)
         (self.workdir / self.CODE_DIR).mkdir(exist_ok=True)
-        (self.workdir / self.FEAT_DIR).mkdir(exist_ok=True)
 
         with cwd(self.workdir):
             for stage in self.stages:
@@ -112,9 +109,6 @@ class Pipeline(object):
                     with open(file_path, 'wb') as f:
                         f.write(file_bytes)
 
-                # Get pipeline version
-                self.version = generate_pipeline_version_id(self.CODE_DIR)
-
                 # Get output path
                 output_path = str(stage.outputs.dataset_files if isinstance(stage.outputs, Dataset) else stage.outputs)
 
@@ -127,13 +121,19 @@ class Pipeline(object):
                 # Add dependencies
                 for dependency in stage.dependency:
                     if isinstance(dependency, Dataset):
-                        dependency = str(dependency.dataset_files)
+                        # Link global dataset files path to local
+                        local_file_path = os.path.join(self.FEAT_DIR, dependency.name + dependency.dataset_files.suffix)
+                        symlink_force(dependency.dataset_files, local_file_path)
+                        dependency = local_file_path
+                        print(local_file_path)
                     else:
                         dependency = os.path.relpath(str(dependency), str(self.workdir))
                     cmd += ['-d', dependency]
                 # Add running command
                 cmd += ['python', os.path.join(self.CODE_DIR, f'{stage.name}.py')]
                 subprocess.call(cmd)
+            # Get pipeline version
+            self.version = generate_pipeline_version_id(self.CODE_DIR)
         self.is_built = True
 
     def restore(self):
@@ -147,9 +147,13 @@ class Pipeline(object):
                 self.add_stage(stage)
 
     def __call__(self):
-        # dvc repo
-        cmd = ['dvc', 'repro', str(self.workdir / 'dvc.yaml')]
-        subprocess.run(cmd)
+        # Create a Run
+        run = Run(pipeline=self, run_num=self.get_next_run_num())
+        run.prepare()
+        with cwd(run.workdir):
+            # dvc repo
+            cmd = ['dvc', 'repro', 'dvc.yaml']
+            subprocess.run(cmd)
 
     def dict(self):
         return {'name': self.name, 'version': self.version, 'timestamp': int(self.create_date.timestamp())}
@@ -163,4 +167,4 @@ class Pipeline(object):
         return pipeline
 
     def __str__(self):
-        return f'{self.name}@{self.version}'
+        return f'{self.name}@{self.version[:7]}'

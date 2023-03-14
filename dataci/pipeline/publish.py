@@ -6,8 +6,7 @@ Email: yuanmingleee@gmail.com
 Date: Mar 05, 2023
 """
 import logging
-import os
-from shutil import copy2, copytree
+from shutil import copy2, copytree, rmtree
 from typing import TYPE_CHECKING
 
 from dataci.db.pipeline import create_one_pipeline
@@ -46,7 +45,7 @@ def publish(pipeline: 'Pipeline' = ...):
 
     # Copy pipeline code
     if (pipeline_workdir / pipeline.CODE_DIR).exists():
-        os.removedirs(pipeline_workdir / pipeline.CODE_DIR)
+        rmtree(pipeline_workdir / pipeline.CODE_DIR)
     copytree(pipeline.workdir / pipeline.CODE_DIR, pipeline_workdir / pipeline.CODE_DIR)
 
     #####################################################################

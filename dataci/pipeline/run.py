@@ -8,6 +8,7 @@ Date: Mar 09, 2023
 Run for pipeline.
 """
 from copy import deepcopy
+from shutil import rmtree
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -18,7 +19,25 @@ class Run(object):
     def __init__(self, pipeline: 'Pipeline', run_num):
         self.pipeline = pipeline
         self.run_num = run_num
-        self.workdir = pipeline.workdir / str(self.run_num)
+
+    @property
+    def workdir(self):
+        return self.pipeline.workdir / 'runs' / str(self.run_num)
+
+    def prepare(self):
+        # Clean all for the run workdir
+        if self.workdir.exists():
+            rmtree(self.workdir)
+        # Create workdir folder
+        self.workdir.mkdir(parents=True)
+        # Link code to work directory
+        (self.workdir / self.pipeline.CODE_DIR).symlink_to(
+            self.pipeline.workdir / self.pipeline.CODE_DIR, target_is_directory=True
+        )
+        # Create feat dir
+        (self.workdir / self.pipeline.FEAT_DIR).mkdir()
+        # Link pipeline definition file to work directory
+        (self.workdir / 'dvc.yaml').symlink_to(self.pipeline.workdir / 'dvc.yaml')
 
     @property
     def feat(self):
