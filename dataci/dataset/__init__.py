@@ -17,6 +17,7 @@ from .utils import generate_dataset_version_id, parse_dataset_identifier, genera
 
 if TYPE_CHECKING:
     from dataci.repo import Repo
+    from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -44,14 +45,15 @@ def publish_dataset(
         logging.info(f'Adding dataset to db: {dataset}')
 
 
-def get_dataset(repo: 'Repo', name, version=None):
+def get_dataset(name, version=None, repo: 'Optional[Repo]' = None):
     name = str(name)
     version = str(version) if version else 'latest'
     if version != 'latest':
         # Version hash ID should provide 7 - 40 digits
         assert 40 >= len(version) >= 7, \
             'You should provided the length of version ID within 7 - 40 (both included).'
-    dataset_dict = get_one_dataset(name=name, version=version, repo=repo)
+    dataset_dict = get_one_dataset(name=name, version=version)
+    dataset_dict['repo'] = repo
     return Dataset.from_dict(dataset_dict)
 
 
@@ -93,8 +95,11 @@ def list_dataset(repo: 'Repo', dataset_identifier=None, tree_view=True):
     name = name or '*'
     version = (version or '').lower() + '*'
 
-    dataset_dict_list = get_many_datasets(name=name, version=version, repo=repo)
-    dataset_list = [Dataset.from_dict(dataset_dict) for dataset_dict in dataset_dict_list]
+    dataset_dict_list = get_many_datasets(name=name, version=version)
+    dataset_list = list()
+    for dataset_dict in dataset_dict_list:
+        dataset_dict['repo'] = repo
+        dataset_list.append(Dataset.from_dict(dataset_dict))
     if tree_view:
         dataset_dict = defaultdict(dict)
         for dataset in dataset_list:

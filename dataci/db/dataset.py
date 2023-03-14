@@ -26,7 +26,7 @@ def create_one_dataset(dataset_dict):
         )
 
 
-def get_one_dataset(name, version='latest', repo=None):
+def get_one_dataset(name, version='latest'):
     with db_connection:
         if version != 'latest':
             dataset_po_iter = db_connection.execute(
@@ -77,11 +77,11 @@ def get_one_dataset(name, version='latest', repo=None):
         'name': name, 'version': version,
         'yield_pipeline': {'name': yield_pipeline_name, 'version': yield_pipeline_version}, 'log_message': log_message,
         'timestamp': timestamp, 'filename': filename, 'file_config': file_config,
-        'parent_dataset_name': parent_dataset_name, 'parent_dataset_version': parent_dataset_version, 'repo': repo,
+        'parent_dataset_name': parent_dataset_name, 'parent_dataset_version': parent_dataset_version,
     }
 
 
-def get_many_datasets(name, version=None, repo=None):
+def get_many_datasets(name, version=None):
     with db_connection:
         dataset_po_iter = db_connection.execute("""
             SELECT name,
@@ -107,7 +107,7 @@ def get_many_datasets(name, version=None, repo=None):
             'yield_pipeline': {'name': yield_pipeline_name, 'version': yield_pipeline_version},
             'log_message': log_message,
             'timestamp': timestamp, 'filename': filename, 'file_config': file_config,
-            'parent_dataset_name': parent_dataset_name, 'parent_dataset_version': parent_dataset_version, 'repo': repo,
+            'parent_dataset_name': parent_dataset_name, 'parent_dataset_version': parent_dataset_version,
         }
         dataset_dict_list.append(dataset_dict)
     return dataset_dict_list

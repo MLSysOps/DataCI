@@ -10,6 +10,7 @@ import subprocess
 from copy import deepcopy
 from datetime import datetime
 from functools import lru_cache
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from dataci.repo import Repo
@@ -41,7 +42,7 @@ class Dataset(object):
         self.version = version
         self.repo = repo or Repo()
         # Filled if the dataset is not published
-        self._dataset_files = dataset_files
+        self._dataset_files = Path(dataset_files) if dataset_files else None
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.yield_pipeline = yield_pipeline
         self.parent_dataset = parent_dataset
