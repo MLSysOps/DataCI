@@ -8,8 +8,10 @@ Date: Mar 09, 2023
 Run for pipeline.
 """
 from copy import deepcopy
+from typing import TYPE_CHECKING
 
-from .pipeline import Pipeline
+if TYPE_CHECKING:
+    from .pipeline import Pipeline
 
 
 class Run(object):
@@ -41,6 +43,8 @@ class Run(object):
 
     @classmethod
     def from_dict(cls, config):
+        from .pipeline import Pipeline
+
         config['pipeline'] = Pipeline.from_dict(config['pipeline'])
         config['pipeline'].restore()
         return cls(**config)

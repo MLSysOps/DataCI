@@ -50,7 +50,8 @@ class Stage(ABC):
         if prev_deps != current_deps:
             try:
                 # If input is a published dataset
-                dataset_dict = get_one_dataset(name=self._inputs, repo=self.repo)
+                dataset_dict = get_one_dataset(name=self._inputs)
+                dataset_dict['repo'] = self.repo
                 inputs = Dataset.from_dict(dataset_dict)
             except ValueError:
                 # input is an intermedia feature
@@ -70,6 +71,7 @@ class Stage(ABC):
             try:
                 # If input is a published dataset
                 dataset_dict = get_one_dataset(name=self._outputs)
+                dataset_dict['repo'] = self.repo
                 outputs = Dataset.from_dict(dataset_dict)
             except ValueError:
                 # input is an intermedia feature, pack it into a dataset object

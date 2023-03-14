@@ -7,8 +7,9 @@ Date: Feb 23, 2023
 """
 import os
 import subprocess
+from datetime import datetime
 from pathlib import Path
-from typing import Iterable, Union
+from typing import Iterable, Union, Optional
 
 import yaml
 
@@ -32,23 +33,26 @@ class Pipeline(object):
             version: str = None,
             basedir: os.PathLike = os.curdir,
             repo: Repo = None,
-            stages: Union[Iterable[Stage], Stage] = None
+            stages: Union[Iterable[Stage], Stage] = None,
+            **kwargs,
     ):
         self.repo = repo or Repo()
         self.name = name
         # Filled version if pipeline published
         self.version = version or 'latest'
-        self.basedir = Path(basedir)
+        self.create_date: 'Optional[datetime]' = datetime.now()
+        self.basedir = Path(basedir).resolve()
         # latest is regard as this pipeline is not published
         self.is_built = (version != 'latest')
-
-        # prepare working directory
-        self.workdir = (self.basedir / self.name / self.version).resolve()
 
         # stages
         self.stages = stages or list()
         if not isinstance(self.stages, Iterable):
             self.stages = [self.stages]
+
+    @property
+    def workdir(self):
+        return self.basedir / self.name / self.version
 
     @property
     def inputs(self):
@@ -148,11 +152,13 @@ class Pipeline(object):
         subprocess.run(cmd)
 
     def dict(self):
-        return {'name': self.name, 'version': self.version}
+        return {'name': self.name, 'version': self.version, 'timestamp': int(self.create_date.timestamp())}
 
     @classmethod
     def from_dict(cls, config):
         pipeline = cls(**config)
+        pipeline.create_date = datetime.fromtimestamp(config['timestamp'])
+        pipeline.basedir = pipeline.repo.pipeline_dir
         pipeline.restore()
         return pipeline
 

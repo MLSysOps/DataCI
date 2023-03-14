@@ -20,8 +20,9 @@ with db_connection:
     db_connection.executescript("""
     CREATE TABLE pipeline
     (
-        name    TEXT,
-        version TEXT,
+        name      TEXT,
+        version   TEXT,
+        timestamp INTEGER,
         PRIMARY KEY (name, version)
     );
     

@@ -9,10 +9,11 @@ import re
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
+from dataci.db.pipeline import get_one_pipeline, get_many_pipeline
 from dataci.pipeline import Pipeline
-from dataci.repo import Repo
 
 if TYPE_CHECKING:
+    from typing import Optional
     from dataci.repo import Repo
 
 LIST_PIPELINE_IDENTIFIER_PATTERN = re.compile(
@@ -24,7 +25,18 @@ LIST_FEAT_IDENTIFIER_PATTERN = re.compile(
 )
 
 
-def list_pipeline(repo: Repo, pipeline_identifier):
+def get_pipeline(name, version=None, repo: 'Optional[Repo]' = None):
+    version = version or 'latest'
+    if version != 'latest':
+        # Version hash ID should provide 7 - 40 digits
+        assert 40 >= len(version) >= 7, \
+            'You should provided the length of version ID within 7 - 40 (both included).'
+    pipeline_dict = get_one_pipeline(name=name, version=version)
+    pipeline_dict['repo'] = repo
+    return Pipeline.from_dict(pipeline_dict)
+
+
+def list_pipeline(pipeline_identifier, tree_view=True, repo: 'Optional[Repo]' = None):
     """List pipeline with optional pipeline identifier to query.
 
     Args:
@@ -38,43 +50,16 @@ def list_pipeline(repo: Repo, pipeline_identifier):
     version = (version or '').lower() + '*'
 
     # Check matched pipeline
-    pipeline_names = list()
-    for folder in repo.pipeline_dir.glob(pipeline_name):
-        if folder.is_dir() and not folder.is_symlink():
-            pipeline_names.append(folder.name)
+    get_many_pipeline(name=pipeline_name, version=version)
+    pipeline_dict_list = get_many_pipeline(name=pipeline_name, version=version)
+    pipeline_list = list()
+    for pipeline_dict in pipeline_dict_list:
+        pipeline_dict['repo'] = repo
+        pipeline_list.append(Pipeline.from_dict(pipeline_dict))
+    if tree_view:
+        pipeline_dict = defaultdict(dict)
+        for pipeline in pipeline_list:
+            pipeline_dict[pipeline.name][pipeline.version] = pipeline
+        return pipeline_dict
 
-    pipelines = list()
-    for pipeline_name in pipeline_names:
-        for ver in (repo.pipeline_dir / pipeline_name).glob(version):
-            if ver.is_dir() and not ver.is_symlink():
-                pipeline = Pipeline(name=pipeline_name, version=ver, basedir=repo.pipeline_dir)
-                pipeline.restore()
-                pipelines.append(pipeline)
-    return pipelines
-
-
-def list_pipeline_feat(repo: 'Repo', pipeline_identifier, feat_identifier=None, tree_view=True):
-    if feat_identifier is None:
-        # feat identifier is provided with the pipeline identifier:
-        #   <pipeline_identifier>/<feat_identifier>
-        pipeline_identifier, feat_identifier = pipeline_identifier.split('/')
-
-    # Get pipeline
-    pipelines = list_pipeline(repo, pipeline_identifier)
-    # Get feat info
-    matched = LIST_FEAT_IDENTIFIER_PATTERN.match(feat_identifier)
-    if not matched:
-        raise ValueError(f'Invalid pipeline feat identifier {feat_identifier}')
-    run_num, feat_name = matched.groups()
-
-    pipeline_feats_dict = defaultdict(dict)
-    pipeline_feats_list = list()
-    for pipeline in pipelines:
-        feat = pipeline.runs[run_num].feat[feat_name]
-        pipeline_feats_dict[pipeline.name][feat_name] = feat
-        pipeline_feats_list.append(feat)
-    return pipeline_feats_dict if tree_view else pipeline_feats_list
-
-
-if __name__ == '__main__':
-    print(list_pipeline_feat(repo=Repo(), pipeline_identifier='train_text*/1:text_augmentation.csv', tree_view=False))
+    return pipeline_list
