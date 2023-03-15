@@ -118,9 +118,10 @@ class Dataset(object):
             file_config = deepcopy(self._file_config)
             return file_config
         dvc_filename = self._dataset_files.parent / (self._dataset_files.name + '.dvc')
-        with open(dvc_filename, 'r') as f:
-            file_config = yaml.safe_load(f)
-        return file_config
+        if dvc_filename.exists():
+            with open(dvc_filename, 'r') as f:
+                file_config = yaml.safe_load(f)
+            return file_config
 
     def __str__(self):
         return f'{self.name}@{self.version}'

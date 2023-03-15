@@ -89,9 +89,9 @@ def generate_dataset_version_id(dataset_path, yield_pipeline=None, log_message=N
     for dataset_tracker in dataset_trackers:
         with open(dataset_tracker, 'rb') as f:
             dataset_obj += f.read()
-    output_pipeline_id_obj = ','.join([str(p) for p in yield_pipeline]).encode()
+    output_pipeline_id_obj = str(yield_pipeline).encode()
     log_message_obj = log_message.encode()
-    parent_dataset = parent_dataset.encode()
+    parent_dataset = str(parent_dataset).encode()
 
     packed_obj = dataset_obj + output_pipeline_id_obj + log_message_obj + parent_dataset
     return hashlib.sha1(packed_obj).hexdigest()
