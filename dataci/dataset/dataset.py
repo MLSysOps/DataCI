@@ -25,6 +25,8 @@ from .utils import generate_dataset_version_id, generate_dataset_identifier
 
 
 class Dataset(object):
+    from .publish import publish  # type: ignore[misc]
+    
     def __init__(
             self,
             name,
