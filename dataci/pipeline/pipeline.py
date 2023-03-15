@@ -95,6 +95,7 @@ class Pipeline(object):
     def build(self):
         self.workdir.mkdir(exist_ok=True, parents=True)
         (self.workdir / self.CODE_DIR).mkdir(exist_ok=True)
+        (self.workdir / self.FEAT_DIR).mkdir(exist_ok=True)
 
         with cwd(self.workdir):
             for stage in self.stages:

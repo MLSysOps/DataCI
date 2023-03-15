@@ -148,6 +148,16 @@ class Stage(ABC):
             raise ValueError(f'Not support output object type: {type(outputs)}.')
 
     def __call__(self):
-        inputs = self.input_deserializer(self.inputs.dataset_files)
+        from dataci.dataset.dataset import Dataset
+
+        if isinstance(self.inputs, Dataset):
+            input_path = str(self.inputs.dataset_files)
+        else:
+            input_path = str(self.inputs)
+        inputs = self.input_deserializer(input_path)
         outputs = self.run(inputs)
-        self.output_serializer(outputs, str(self.outputs.dataset_files))
+        if isinstance(self.outputs, Dataset):
+            output_path = str(self.outputs.dataset_files)
+        else:
+            output_path = str(self.outputs)
+        self.output_serializer(outputs, output_path)

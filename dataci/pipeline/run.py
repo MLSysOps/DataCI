@@ -8,7 +8,7 @@ Date: Mar 09, 2023
 Run for pipeline.
 """
 from copy import deepcopy
-from shutil import rmtree
+from shutil import copytree, rmtree
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -34,8 +34,10 @@ class Run(object):
         (self.workdir / self.pipeline.CODE_DIR).symlink_to(
             self.pipeline.workdir / self.pipeline.CODE_DIR, target_is_directory=True
         )
-        # Create feat dir
-        (self.workdir / self.pipeline.FEAT_DIR).mkdir()
+        # Create feat dir and copy common feat into the feat dir
+        source = self.pipeline.workdir / self.pipeline.FEAT_DIR
+        target = self.workdir / self.pipeline.FEAT_DIR
+        copytree(self.pipeline.workdir / self.pipeline.FEAT_DIR, self.workdir / self.pipeline.FEAT_DIR)
         # Link pipeline definition file to work directory
         (self.workdir / 'dvc.yaml').symlink_to(self.pipeline.workdir / 'dvc.yaml')
 
