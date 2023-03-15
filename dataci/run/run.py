@@ -12,11 +12,11 @@ from shutil import copytree, rmtree
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .pipeline import Pipeline
+    from dataci.pipeline.pipeline import Pipeline
 
 
 class Run(object):
-    from .publish import save_run as save  # type: ignore[misc]
+    from ..pipeline.publish import save_run as save  # type: ignore[misc]
     
     def __init__(self, pipeline: 'Pipeline', run_num):
         self.pipeline = pipeline
@@ -64,7 +64,7 @@ class Run(object):
 
     @classmethod
     def from_dict(cls, config):
-        from .pipeline import Pipeline
+        from ..pipeline.pipeline import Pipeline
 
         config['pipeline'] = Pipeline.from_dict(config['pipeline'])
         config['pipeline'].restore()

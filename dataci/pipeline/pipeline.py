@@ -15,7 +15,7 @@ import yaml
 
 from dataci.dataset.dataset import Dataset
 from dataci.repo import Repo
-from .run import Run
+from dataci.run import Run
 from .stage import Stage
 from .utils import cwd, generate_pipeline_version_id, symlink_force
 

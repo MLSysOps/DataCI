@@ -13,7 +13,7 @@ from dataci.db.pipeline import create_one_pipeline
 
 if TYPE_CHECKING:
     from .pipeline import Pipeline
-    from .run import Run
+    from ..run.run import Run
 
 logger = logging.getLogger(__name__)
 
@@ -57,20 +57,3 @@ def publish(pipeline: 'Pipeline' = ...):
     # Step 3: Publish pipeline object to DB
     #####################################################################
     create_one_pipeline(pipeline.dict())
-
-
-def save_run(run: 'Run'):
-    #####################################################################
-    # Step 1:
-    # pipeline
-    #####################################################################
-
-    #####################################################################
-    # Step 2: Track pipeline output feat by DVC
-    #####################################################################
-
-    #####################################################################
-    # Step 3: Publish run object to DB
-    #####################################################################
-    # TODO
-    pass
