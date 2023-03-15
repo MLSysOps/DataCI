@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 
 
 class Run(object):
+    from .publish import save_run as save  # type: ignore[misc]
+    
     def __init__(self, pipeline: 'Pipeline', run_num):
         self.pipeline = pipeline
         self.run_num = run_num
@@ -35,9 +37,7 @@ class Run(object):
             self.pipeline.workdir / self.pipeline.CODE_DIR, target_is_directory=True
         )
         # Create feat dir and copy common feat into the feat dir
-        source = self.pipeline.workdir / self.pipeline.FEAT_DIR
-        target = self.workdir / self.pipeline.FEAT_DIR
-        copytree(self.pipeline.workdir / self.pipeline.FEAT_DIR, self.workdir / self.pipeline.FEAT_DIR)
+        copytree(self.pipeline.workdir / self.pipeline.FEAT_DIR, self.workdir / self.pipeline.FEAT_DIR, symlinks=True)
         # Link pipeline definition file to work directory
         (self.workdir / 'dvc.yaml').symlink_to(self.pipeline.workdir / 'dvc.yaml')
 

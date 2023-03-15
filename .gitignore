@@ -2,3 +2,5 @@
 .dataci
 data
 **/__pycache__
+# Local database
+dataci/mydb.db

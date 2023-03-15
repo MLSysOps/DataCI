@@ -155,6 +155,7 @@ class Pipeline(object):
             # dvc repo
             cmd = ['dvc', 'repro', 'dvc.yaml']
             subprocess.run(cmd)
+        return run
 
     def dict(self):
         return {'name': self.name, 'version': self.version, 'timestamp': int(self.create_date.timestamp())}
