@@ -1,4 +1,5 @@
-dvc==2.10.2
+dvc>=2.42.0
+unidecode==1.3.6
 fsspec==2022.11.0
 augly[text]==1.0.0
 numpy==1.21.6

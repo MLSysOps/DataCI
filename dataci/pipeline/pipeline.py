@@ -118,7 +118,7 @@ class Pipeline(object):
                 # dvc stage add -n <stage name> -d stage.py -d input.csv -O output.csv -w self.workdir python stage.py
                 cmd = [
                     'dvc', 'stage', 'add', '-f', '-n', str(stage.name),
-                    '-O', output_path, '-w', str(self.workdir),
+                    '-o', output_path, '-w', str(self.workdir),
                 ]
                 # Add dependencies
                 for dependency in stage.dependency:
@@ -154,7 +154,7 @@ class Pipeline(object):
         run.prepare()
         with cwd(run.workdir):
             # dvc repo
-            cmd = ['dvc', 'repro', 'dvc.yaml']
+            cmd = ['dvc', 'repro', str(run.workdir / 'dvc.yaml')]
             subprocess.run(cmd)
         return run
 

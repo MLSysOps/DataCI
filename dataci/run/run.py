@@ -8,7 +8,7 @@ Date: Mar 09, 2023
 Run for pipeline.
 """
 from copy import deepcopy
-from shutil import copytree, rmtree
+from shutil import copytree, rmtree, copy2
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 class Run(object):
-    from ..pipeline.publish import save_run as save  # type: ignore[misc]
+    from .save import save  # type: ignore[misc]
     
     def __init__(self, pipeline: 'Pipeline', run_num):
         self.pipeline = pipeline
@@ -38,8 +38,8 @@ class Run(object):
         )
         # Create feat dir and copy common feat into the feat dir
         copytree(self.pipeline.workdir / self.pipeline.FEAT_DIR, self.workdir / self.pipeline.FEAT_DIR, symlinks=True)
-        # Link pipeline definition file to work directory
-        (self.workdir / 'dvc.yaml').symlink_to(self.pipeline.workdir / 'dvc.yaml')
+        # Copy pipeline definition file to work directory
+        copy2(self.pipeline.workdir / 'dvc.yaml', self.workdir / 'dvc.yaml', )
 
     @property
     def feat(self):
@@ -64,7 +64,7 @@ class Run(object):
 
     @classmethod
     def from_dict(cls, config):
-        from ..pipeline.pipeline import Pipeline
+        from dataci.pipeline.pipeline import Pipeline
 
         config['pipeline'] = Pipeline.from_dict(config['pipeline'])
         config['pipeline'].restore()

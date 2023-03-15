@@ -20,3 +20,15 @@ def get_next_run_num(pipeline_name, pipeline_version):
             (pipeline_name, pipeline_version)
         )
     return next_run_id
+
+
+def create_one_run(run_dict):
+    pipeline_dict = run_dict['pipeline']
+    with db_connection:
+        db_connection.execute(
+            """
+            INSERT INTO run(run_num, pipeline_name, pipeline_version) VALUES
+            (?,?,?)
+            """,
+            (run_dict['run_num'], pipeline_dict['name'], pipeline_dict['version'])
+        )
