@@ -18,9 +18,6 @@ def test_publish_pipeline():
         # remove emoji, space, and to lower case
         text = clean(text, to_ascii=False, lower=True, normalize_whitespace=True, no_emoji=True)
 
-        # remove accent
-        text = ''.join(c for c in unicodedata.normalize('NFD', text) if unicodedata.category(c) != 'Mn')
-
         return text
 
     @stage(name='text_clean', inputs='pairwise_raw_train', outputs='text_clean.csv')
@@ -59,6 +56,41 @@ def test_get_pipeline():
     run.save()
 
 
+def test_publish_pipeline_v2():
+    def clean_func(text):
+        # remove emoji, space, and to lower case
+        text = clean(text, to_ascii=False, lower=True, normalize_whitespace=True, no_emoji=True)
+
+        # remove accent
+        text = ''.join(c for c in unicodedata.normalize('NFD', text) if unicodedata.category(c) != 'Mn')
+
+        return text
+
+    @stage(name='text_clean', inputs='pairwise_raw_train', outputs='text_clean.csv')
+    def text_clean(inputs):
+        inputs['to_product_name'] = inputs['to_product_name'].map(clean_func)
+        return inputs
+
+    @stage(name='text_augmentation', inputs='text_clean.csv', outputs='text_augmentation.csv')
+    def text_augmentation(inputs):
+        transform = txtaugs.InsertPunctuationChars(
+            granularity="all",
+            cadence=5.0,
+            vary_chars=True,
+        )
+        inputs['to_product_name'] = inputs['to_product_name'].map(transform)
+        return inputs
+
+    # Define a pipeline
+    print('Define a pipeline')
+    pipeline = Pipeline('build_text_cls_train_data', stages=[text_clean, text_augmentation])
+    pipeline.build()
+    print(pipeline.inputs)
+    pipeline.publish()
+
+
 if __name__ == '__main__':
-    test_publish_pipeline()
-    test_get_pipeline()
+    # test_publish_pipeline()
+    # test_get_pipeline()
+    # test_publish_pipeline_v2()
+    pass
