@@ -16,6 +16,7 @@ def create_one_dataset(dataset_dict):
             INSERT INTO dataset (name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, 
             filename, file_config, parent_dataset_name, parent_dataset_version)
             VALUES (?,?,?,?,?,?,?,?,?,?)
+            ;
             """,
             (
                 dataset_dict['name'], dataset_dict['version'], pipeline_dict['name'], pipeline_dict['version'],
@@ -44,6 +45,7 @@ def get_one_dataset(name, version='latest'):
                 FROM   dataset
                 WHERE  name = ?
                 AND    version = ?
+                ;
                 """, (name, version))
         else:
             dataset_po_iter = db_connection.execute(
@@ -65,6 +67,7 @@ def get_one_dataset(name, version='latest'):
                     WHERE  name = ?
                 )
                 WHERE rk = 1
+                ;
                 """, (name,))
     dataset_po_list = list(dataset_po_iter)
     if len(dataset_po_list) == 0:
@@ -97,6 +100,7 @@ def get_many_datasets(name, version=None):
             FROM   dataset
             WHERE  name GLOB ?
             AND    version GLOB ?
+            ;
             """, (name, version))
     dataset_dict_list = list()
     for dataset_po in dataset_po_iter:
@@ -111,3 +115,44 @@ def get_many_datasets(name, version=None):
         }
         dataset_dict_list.append(dataset_dict)
     return dataset_dict_list
+
+
+def get_many_new_dataset_version(dataset_name):
+    with db_connection:
+        db_connection.execute(
+            """
+            WITH base AS (SELECT version
+                   , parent_dataset_name
+                   , parent_dataset_version
+                   , yield_pipeline_name
+                   , yield_pipeline_version
+              FROM dataset
+              WHERE name = ?)
+            ,
+            dataset_list AS (SELECT name    AS dataset_name
+                               , version AS dataset_version
+                          FROM dataset
+                                   JOIN (SELECT parent_dataset_name
+                                         FROM base
+                                         WHERE version = ?) cur_dataset
+                                        ON cur_dataset.parent_dataset_name = name),
+            pipeline_list AS (SELECT name    AS pipeline_name
+                                , version AS pipeline_version
+                           FROM pipeline
+                                    JOIN (SELECT yield_pipeline_name
+                                          FROM base
+                                          WHERE version = ?)
+                                         ON yield_pipeline_name = name)
+            SELECT dataset_name, dataset_version, pipeline_name, pipeline_version
+            FROM dataset_list
+             CROSS JOIN
+            pipeline_list
+             LEFT JOIN base
+                       ON dataset_name = base.parent_dataset_name
+                           AND dataset_version = base.parent_dataset_version
+                           AND pipeline_name = yield_pipeline_name
+                           AND pipeline_version = yield_pipeline_version
+            WHERE base.version IS NULL
+            ;
+            """
+        )
