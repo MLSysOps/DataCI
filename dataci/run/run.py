@@ -58,6 +58,9 @@ class Run(object):
                 f'Compare between two different pipeline {self.pipeline} and {other.pipeline} is invalid.'
             )
         return self.run_num.__cmp__(other.run_num)
+    
+    def __str__(self):
+        return str(self.pipeline) + f'.run{self.run_num}'
 
     def dict(self):
         return {'run_num': self.run_num, 'pipeline': self.pipeline.dict()}

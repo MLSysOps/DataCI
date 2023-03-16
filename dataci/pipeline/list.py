@@ -25,7 +25,7 @@ LIST_FEAT_IDENTIFIER_PATTERN = re.compile(
 )
 
 
-def list_pipeline(pipeline_identifier, tree_view=True, repo: 'Optional[Repo]' = None):
+def list_pipeline(pipeline_identifier=None, tree_view=True, repo: 'Optional[Repo]' = None):
     """List pipeline with optional pipeline identifier to query.
 
     Args:
