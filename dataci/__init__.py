@@ -5,3 +5,6 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Feb 20, 2023
 """
+import logging
+
+logging.basicConfig(level=logging.INFO)

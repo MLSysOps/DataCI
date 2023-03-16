@@ -27,11 +27,10 @@ This dataset contains train and val splits. Each split contains a CSV file with 
 
 ## 1.1 Publish raw data
 
-Add this dataset with two split into the data repository.
+Add this dataset into the data repository.
 
 ```shell
 python dataci/command/dataset.py publish -n pairwise_raw_train data/pairwise_raw/train.csv
-python dataci/command/dataset.py publish -n pairwise_raw_val data/pairwise_raw/val.csv
 ```
 
 ## 1.2 Build a dataset for text classification 
@@ -46,14 +45,14 @@ import pandas as pd
 from dataci.pipeline import Pipeline, stage
 
 
-@stage(inputs='pairwise_raw[train]', outputs='text_clean.csv')
+@stage(inputs='pairwise_raw_train', outputs='text_clean.csv')
 def text_clean(inputs):
     df = pd.read_csv(os.path.join(inputs, 'train.csv'))
     df['to_product_name'] = df['to_product_name'].map(lambda text: text.lower())
     return df
 
 
-@stage(inputs='text_clean.csv', outputs='text_augmentation.csv')
+@stage(inputs='text_clean.csv', outputs='text_aug.csv')
 def text_augmentation(inputs):
     df = pd.read_csv(inputs)
     transform = txtaugs.InsertPunctuationChars(
@@ -68,60 +67,43 @@ def text_augmentation(inputs):
 train_data_pipeline = Pipeline(name='train_data_pipeline', stages=[text_clean, text_augmentation])
 ```
 
-Run the train data pipeline:
+Debug/test run the train data pipeline:
 ```python
-train_data_pipeline()
+train_data_pipe_run = train_data_pipeline()
 ```
-The output `text_aug.csv` will be used as train dataset.
 
-2. Build validation dataset v1
-Similarly, we build the validation pipeline and run it to generate the validation dataset:
+The output `text_augmentation.csv` will be used as train dataset.
 
-```python
-@stage(inputs='pairwise_raw[val]', outputs='text_clean.csv')
-def text_clean_val(inputs):
-    df = pd.read_csv(os.path.join(inputs, 'val.csv'))
-    df['to_product_name'] = df['to_product_name'].map(lambda text: text.lower())
-
-    return df
-
-
-val_data_pipeline = Pipeline(name='val_data_pipeline', stages=text_clean_val)
-val_data_pipeline()
-```
-The output `text_clean.csv` will be used as validation dataset. 
-
-3. Run training with the built train and val dataset v1
-Now you can simple train a pre-trained BERT on this text classification dataset v1:
+2. Run training with the built train dataset v1
+   Now you can simple train a pre-trained BERT on this text classification dataset v1:
 ```shell
-python train.py --train-dataset ./train_data_pipeline:text_aug --val-dataset ./val_data_pipeline:text_clean
+python train.py --dataset ./train_data_pipeline/text_aug.csv
 ```
 
 4. Save data pipeline
 
 You can now publish your data pipeline for a better management.
+
 ```python
 train_data_pipeline.publish()
-val_data_pipeline.publish()
 ```
 
 ## 1.3 Publish first version of text dataset
 
-```shell
-python dataci/command/dataset.py publish -n text_classification \
-  --train=train_text_classification/1:text_augmentation.csv --val=val_text_classification/1:text_clean.csv
+Run the published pipeline `train_text_classification`, its final output `text_aug.csv` will be
+automatically published as a dataset: `train_text_classification:text_aug`.
+
+```python
+train_data_pipe_run()
 ```
-Publish a new dataset `text_classification` using previous cached feature.  
-The new dataset train split uses the latest feature `text_augmentation.csv` output by 
-pipeline `train_text_classification` run 1.  
-The new dataset val split uses the latest feature `text_augmentation.csv` output by 
-pipeline `val_text_classification` run 1.
 
 # 2. Try with New Data Augmentation Method
 
-Let's create a second version of `text_dataset` with different data augmentation method to improve the model performance.
+Let's create a second version of `train_text_classification:text_aug` for text classification with
+different data augmentation method to improve the model performance.
 
 ## 2.1 Write a second version train data pipeline
+
 We design a better data augmentation method for `train_data_pipeline_v2`:
 
 ```python
@@ -163,9 +145,10 @@ dataci pipeline ls -n train_data_pipeline
 
 ## 2.3 Publish text classification dataset v2
 It is easy to update output dataset once our data pipeline have new version:
+
 ```python
-train_data_pipeline(dataset_update=True)
-# [D] pairwise_raw@v1[train] >>> train_data_pipeline@v2.run1 >>> [D] text_classification@v2[train]
+train_data_pipeline_v2()
+# [pairwise_raw@v1] >>> train_data_pipeline@v2.run1 >>> [text_classification@v2]
 ```
 You can also trigger the version update from the dataset side:
 ```shell

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def save(run: 'Run'):
+def save(run: 'Run' = ...):
     with cwd(run.workdir):
         #####################################################################
         # Step 1: Recover pipeline feat cached file (.dvc) from .lock

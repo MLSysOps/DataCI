@@ -5,6 +5,7 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Feb 23, 2023
 """
+import logging
 import os
 import subprocess
 from datetime import datetime
@@ -46,6 +47,8 @@ class Pipeline(object):
         self.basedir = Path(basedir).resolve()
         # latest is regard as this pipeline is not published
         self.is_built = (self.version != 'latest')
+        self.logger = logging.getLogger(__name__)
+        self.__published = False
 
         # stages
         self.stages = stages or list()
@@ -82,13 +85,6 @@ class Pipeline(object):
                 )
             output_datasets.append(outputs)
         return output_datasets
-
-    @property
-    def runs(self):
-        runs = dict()
-        for run_num in (self.workdir / self.RUN_DIR).glob('*'):
-            runs[run_num.stem] = Run(self, run_num)
-        return runs
 
     def add_stage(self, stage: Stage):
         self.stages.append(stage)
@@ -156,8 +152,12 @@ class Pipeline(object):
             # dvc repo
             cmd = ['dvc', 'repro', str(run.workdir / 'dvc.yaml')]
             subprocess.run(cmd)
-        if auto_save:
+        if auto_save and self.__published:
             run.save()
+        self.logger.info(
+            f'{",".join(map(str, self.inputs))} '
+            f'>>> {str(run)} '
+            f'>>> {",".join(map(str, self.outputs))}')
         return run
 
     def dict(self):
@@ -169,6 +169,7 @@ class Pipeline(object):
         config['basedir'] = config['repo'].pipeline_dir
         pipeline = cls(**config)
         pipeline.create_date = datetime.fromtimestamp(config['timestamp'])
+        pipeline.__published = True
         pipeline.restore()
         return pipeline
 

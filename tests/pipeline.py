@@ -20,12 +20,12 @@ def test_publish_pipeline():
 
         return text
 
-    @stage(name='text_clean', inputs='pairwise_raw_train', outputs='text_clean.csv')
+    @stage(inputs='pairwise_raw_train', outputs='text_clean.csv')
     def text_clean(inputs):
         inputs['to_product_name'] = inputs['to_product_name'].map(clean_func)
         return inputs
 
-    @stage(name='text_augmentation', inputs='text_clean.csv', outputs='text_augmentation.csv')
+    @stage(inputs='text_clean.csv', outputs='text_aug.csv')
     def text_augmentation(inputs):
         transform = txtaugs.InsertPunctuationChars(
             granularity="all",
@@ -37,7 +37,7 @@ def test_publish_pipeline():
 
     # Define a pipeline
     print('Define a pipeline')
-    pipeline = Pipeline('build_text_cls_train_data', stages=[text_clean, text_augmentation])
+    pipeline = Pipeline('train_data_pipeline', stages=[text_clean, text_augmentation])
     pipeline.build()
     print(pipeline.inputs)
     print(pipeline.outputs[0].dataset_files)
@@ -52,8 +52,7 @@ def test_get_pipeline():
     print('Output:')
     print(pipeline.outputs[0].dataset_files)
     print('Run pipeline...')
-    run = pipeline()
-    run.save()
+    pipeline()
 
 
 def test_publish_pipeline_v2():
@@ -66,12 +65,12 @@ def test_publish_pipeline_v2():
 
         return text
 
-    @stage(name='text_clean', inputs='pairwise_raw_train', outputs='text_clean.csv')
+    @stage(inputs='pairwise_raw_train', outputs='text_clean.csv')
     def text_clean(inputs):
         inputs['to_product_name'] = inputs['to_product_name'].map(clean_func)
         return inputs
 
-    @stage(name='text_augmentation', inputs='text_clean.csv', outputs='text_augmentation.csv')
+    @stage(inputs='text_clean.csv', outputs='text_aug.csv')
     def text_augmentation(inputs):
         transform = txtaugs.InsertPunctuationChars(
             granularity="all",
@@ -83,14 +82,13 @@ def test_publish_pipeline_v2():
 
     # Define a pipeline
     print('Define a pipeline')
-    pipeline = Pipeline('build_text_cls_train_data', stages=[text_clean, text_augmentation])
+    pipeline = Pipeline('train_data_pipeline', stages=[text_clean, text_augmentation])
     pipeline.build()
-    print(pipeline.inputs)
+    print('Input:', pipeline.inputs)
     pipeline.publish()
 
 
 if __name__ == '__main__':
-    # test_publish_pipeline()
-    # test_get_pipeline()
-    # test_publish_pipeline_v2()
-    pass
+    test_publish_pipeline()
+    test_get_pipeline()
+    test_publish_pipeline_v2()

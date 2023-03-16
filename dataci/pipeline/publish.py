@@ -13,7 +13,6 @@ from dataci.db.pipeline import create_one_pipeline
 
 if TYPE_CHECKING:
     from .pipeline import Pipeline
-    from ..run.run import Run
 
 logger = logging.getLogger(__name__)
 
@@ -57,3 +56,4 @@ def publish(pipeline: 'Pipeline' = ...):
     # Step 3: Publish pipeline object to DB
     #####################################################################
     create_one_pipeline(pipeline.dict())
+    setattr(pipeline, '__published', True)
