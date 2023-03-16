@@ -148,7 +148,7 @@ class Pipeline(object):
                 stage = Stage.deserialize(os.path.join(self.CODE_DIR, f'{stage_name}.py'))
                 self.add_stage(stage)
 
-    def __call__(self):
+    def __call__(self, auto_save=True):
         # Create a Run
         run = Run(pipeline=self, run_num=self.get_next_run_num())
         run.prepare()
@@ -156,6 +156,8 @@ class Pipeline(object):
             # dvc repo
             cmd = ['dvc', 'repro', str(run.workdir / 'dvc.yaml')]
             subprocess.run(cmd)
+        if auto_save:
+            run.save()
         return run
 
     def dict(self):
@@ -163,7 +165,7 @@ class Pipeline(object):
 
     @classmethod
     def from_dict(cls, config: 'dict'):
-        config['repo'] = config.get('repo', Repo())
+        config['repo'] = config.get('repo', None) or Repo()
         config['basedir'] = config['repo'].pipeline_dir
         pipeline = cls(**config)
         pipeline.create_date = datetime.fromtimestamp(config['timestamp'])

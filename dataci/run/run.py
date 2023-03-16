@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 class Run(object):
     from .save import save  # type: ignore[misc]
     
-    def __init__(self, pipeline: 'Pipeline', run_num):
+    def __init__(self, pipeline: 'Pipeline', run_num: int, **kwargs):
         self.pipeline = pipeline
         self.run_num = run_num
 
@@ -66,6 +66,7 @@ class Run(object):
     def from_dict(cls, config):
         from dataci.pipeline.pipeline import Pipeline
 
+        config['pipeline']['repo'] = config.get('repo', None)
         config['pipeline'] = Pipeline.from_dict(config['pipeline'])
         config['pipeline'].restore()
         return cls(**config)
