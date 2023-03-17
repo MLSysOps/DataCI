@@ -39,6 +39,12 @@ def ls(args):
             )
 
 
+def update(args):
+    repo = Repo()
+    dataset = Dataset(name=args.name, repo=repo)
+    dataset.update()
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('DataCI dataset')
     subparser = parser.add_subparsers()
@@ -54,5 +60,8 @@ if __name__ == '__main__':
         help='Dataset name with optional version and optional split information to query.'
     )
     list_parser.set_defaults(func=ls)
+    update_parser = subparser.add_parser('update', help='Update dataset')
+    update_parser.add_argument('-n', '--name', type=str, required=True, help='Dataset name.')
+    update_parser.set_defaults(func=update)
     args_ = parser.parse_args()
     args_.func(args_)

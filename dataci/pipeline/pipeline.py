@@ -175,3 +175,11 @@ class Pipeline(object):
 
     def __str__(self):
         return f'{self.name}@{self.version[:7]}'
+    
+    def __hash__(self):
+        return hash(str(self))
+    
+    def __eq__(self, __o: object) -> bool:
+        if isinstance(__o, type(self)):
+            return str(self) == str(__o)
+        return False

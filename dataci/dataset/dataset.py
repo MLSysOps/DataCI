@@ -26,6 +26,7 @@ from .utils import generate_dataset_version_id, generate_dataset_identifier
 
 class Dataset(object):
     from .publish import publish  # type: ignore[misc]
+    from .update import update  # type: ignore[misc]
     
     def __init__(
             self,
@@ -128,3 +129,8 @@ class Dataset(object):
 
     def __hash__(self):
         return hash(str(self))
+    
+    def __eq__(self, __o: object) -> bool:
+        if isinstance(__o, type(self)):
+            return str(self) == str(__o)
+        return False
