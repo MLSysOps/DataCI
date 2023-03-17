@@ -167,11 +167,12 @@ dataci dataset update -n text_classification
 Assume our parterner hand over more raw data to us, and we are working on the new dataset:
 ```shell
 # Download pairwise_raw_v2
+cp -r dataset/multimodal_pairwise_v2 data/pairwise_raw_v2/
 ```
 
 Publish raw data v2:
 ```shell
-dataci dataset publish -n pairwise_raw data/pairwise_raw_v2
+python dataci/command/dataset.py publish -n pairwise_raw_train data/pairwise_raw_v2/train.csv
 ```
 
 Recall how we trigger an update to our text classification dataset:
