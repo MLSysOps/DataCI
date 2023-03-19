@@ -50,7 +50,12 @@ class Stage(ABC):
         if prev_deps != current_deps:
             try:
                 # If input is a published dataset
-                dataset_dict = get_one_dataset(name=self._inputs)
+                split_result = self._inputs.split('@')
+                if split_result == 1:
+                    name, version = split_result[0], 'latest'
+                else:
+                    name, version = split_result
+                dataset_dict = get_one_dataset(name=name, version=version)
                 dataset_dict['repo'] = self.repo
                 inputs = Dataset.from_dict(dataset_dict)
             except ValueError:

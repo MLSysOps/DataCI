@@ -75,7 +75,8 @@ class Dataset(object):
         dataset_obj._dataset_files = (dataset_obj.repo.tmp_dir / dataset_obj.name / dataset_obj.version /
                                       config['filename'])
         # TODO: lazy load parent dataset
-        dataset_obj.parent_dataset = (config['parent_dataset_name'], config['parent_dataset_version'])
+        dataset_obj.parent_dataset = Dataset(
+            name=config['parent_dataset_name'], version=config['parent_dataset_version'])
         return dataset_obj
 
     def dict(self):

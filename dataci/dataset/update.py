@@ -7,6 +7,7 @@ Date: Mar 16, 2023
 """
 import logging
 from typing import TYPE_CHECKING
+
 from dataci.db.dataset import get_many_dataset_update_plan
 
 if TYPE_CHECKING:
@@ -16,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 
 def update(dataset: 'Dataset' = ...):
-    from dataci.dataset import Dataset
     from dataci.pipeline.pipeline import Pipeline
 
     #####################################################################
@@ -24,8 +24,8 @@ def update(dataset: 'Dataset' = ...):
     #####################################################################
     logger.info('Searching changes...')
     update_plans = get_many_dataset_update_plan(dataset.name)
-    datasets = set(map(lambda x: Dataset.from_dict({**x['parent_dataset'], 'repo': dataset.repo}), update_plans))
-    pipelines = list(set(map(lambda x: Pipeline.from_dict({**x['pipeline'], 'repo': dataset.repo}), update_plans)))
+    datasets = set(map(lambda x: (x['parent_dataset']['name'], x['parent_dataset']['version']), update_plans))
+    pipelines = set(map(lambda x: (x['pipeline']['name'], x['pipeline']['version']), update_plans))
 
     logger.info(f'Found {len(update_plans)} possible updates:')
     if len(update_plans) > 0:
@@ -41,4 +41,14 @@ def update(dataset: 'Dataset' = ...):
     #####################################################################
     # Step 2: Execute plans
     #####################################################################
-    # Create unique dataset and pipeline
+    logger.info('Executing dataset update...')
+    for i, plan in enumerate(update_plans, 1):
+        dataset_dict, pipeline_dict = plan['parent_dataset'], plan['pipeline']
+        pipeline = Pipeline.from_dict({**pipeline_dict, 'repo': dataset.repo})
+        # replace pipeline input dataset
+        for stage in pipeline.stages:
+            if stage._inputs.split('@')[0] == dataset_dict['name']:
+                stage._inputs = f'{dataset_dict["name"]}@{dataset_dict["version"]}'
+        # Run pipeline
+        pipeline()
+        logger.info(f'Finish {i}/{len(update_plans)}')
