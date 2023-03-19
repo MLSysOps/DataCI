@@ -72,10 +72,15 @@ def test_publish_pipeline_v2():
 
     @stage(inputs='text_clean.csv', outputs='text_aug.csv')
     def text_augmentation(inputs):
-        transform = txtaugs.InsertPunctuationChars(
-            granularity="all",
-            cadence=5.0,
-            vary_chars=True,
+        transform = txtaugs.Compose(
+            [
+                txtaugs.InsertWhitespaceChars(p=0.5),
+                txtaugs.InsertPunctuationChars(
+                    granularity="all",
+                    cadence=5.0,
+                    vary_chars=True,
+                )
+            ]
         )
         inputs['to_product_name'] = inputs['to_product_name'].map(transform)
         return inputs
