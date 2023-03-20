@@ -48,7 +48,7 @@ class Pipeline(object):
         # latest is regard as this pipeline is not published
         self.is_built = (self.version != 'latest')
         self.logger = logging.getLogger(__name__)
-        self.__published = False
+        self.is_published = False
 
         # stages
         self.stages = stages or list()
@@ -150,13 +150,13 @@ class Pipeline(object):
         with cwd(run.workdir):
             # dvc repo
             cmd = ['dvc', 'repro', str(run.workdir / 'dvc.yaml')]
-            subprocess.run(cmd)
-        if auto_save and self.__published:
+            subprocess.call(cmd)
+        if auto_save and self.is_published:
             run.save()
-        self.logger.info(
-            f'{",".join(map(str, self.inputs))} '
-            f'>>> {str(run)} '
-            f'>>> {",".join(map(str, self.outputs))}')
+            self.logger.info(
+                f'{",".join(map(str, self.inputs))} '
+                f'>>> {str(run)} '
+                f'>>> {",".join(map(str, self.outputs))}')
         return run
 
     def dict(self):
@@ -168,7 +168,7 @@ class Pipeline(object):
         config['basedir'] = config['repo'].pipeline_dir
         pipeline = cls(**config)
         pipeline.create_date = datetime.fromtimestamp(config['timestamp'])
-        pipeline.__published = True
+        pipeline.is_published = True
         pipeline.restore()
         return pipeline
 
