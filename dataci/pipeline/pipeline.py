@@ -123,7 +123,6 @@ class Pipeline(object):
                         local_file_path = os.path.join(self.FEAT_DIR, dependency.name + dependency.dataset_files.suffix)
                         symlink_force(dependency.dataset_files, local_file_path)
                         dependency = local_file_path
-                        print(local_file_path)
                     else:
                         dependency = os.path.relpath(str(dependency), str(self.workdir))
                     cmd += ['-d', dependency]

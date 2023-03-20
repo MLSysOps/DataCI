@@ -36,7 +36,7 @@ def stage(inputs, outputs, name=None, dependency='auto', repo=None) -> Callable[
             )
             # Initiate the stage object with configured info (e.g., inputs, outputs, etc.)
             stage_obj: Stage = stage_cls(
-                name=name, inputs=inputs, outputs=outputs, dependency=dependency, repo=repo
+                name=stage_name, inputs=inputs, outputs=outputs, dependency=dependency, repo=repo
             )
             return stage_obj
         return wrapper_stage()

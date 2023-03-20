@@ -51,7 +51,7 @@ class Stage(ABC):
             try:
                 # If input is a published dataset
                 split_result = self._inputs.split('@')
-                if split_result == 1:
+                if len(split_result) == 1:
                     name, version = split_result[0], 'latest'
                 else:
                     name, version = split_result
