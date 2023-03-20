@@ -52,19 +52,21 @@ import pandas as pd
 from dataci.pipeline import Pipeline, stage
 
 
+# Data processing: text augmentation
 @stage(inputs='pairwise_raw_train', outputs='text_aug.csv')
 def text_augmentation(inputs):
-    df = pd.read_csv(inputs)
     transform = txtaugs.InsertPunctuationChars(
         granularity="all",
         cadence=5.0,
         vary_chars=True,
     )
-    df['to_product_name'] = df['to_product_name'].map(transform)
-    return df
+    inputs['to_product_name'] = inputs['to_product_name'].map(transform)
+    return inputs
 
 
+# Define data pipeline
 train_data_pipeline = Pipeline(name='train_data_pipeline', stages=[text_augmentation])
+train_data_pipeline.build()
 ```
 
 Debug/test run the train data pipeline:
@@ -76,7 +78,7 @@ train_data_pipe_run = train_data_pipeline()
 The output `text_augmentation.csv` will be used as train dataset.
 
 2. Run training with the built train dataset v1
-   Now you can simple train a pre-trained BERT on this text classification dataset v1:
+   Now you can simply train a pre-trained BERT on this text classification dataset v1:
 
 ```shell
 python train.py --dataset ./train_data_pipeline/text_aug.csv
@@ -92,16 +94,16 @@ train_data_pipeline.publish()
 
 ## 1.3 Publish first version of text dataset
 
-Run the published pipeline `train_text_classification`, its final output `text_aug.csv` will be
-automatically published as a dataset: `train_text_classification:text_aug`.
+Run the published pipeline `train_data_pipeline`, its final output `text_aug.csv` will be
+automatically published as a dataset: `train_data_pipeline:text_aug`.
 
 ```python
-train_data_pipe_run()
+train_data_pipeline()
 ```
 
 # 2. Try with New Data Augmentation Method
 
-Let's create a second version of `train_text_classification:text_aug` for text classification with
+Let's create a second version of `train_data_pipeline:text_aug` for text classification with
 different data augmentation method to improve the model performance.
 
 ## 2.1 Write a second version train data pipeline
@@ -123,11 +125,14 @@ def text_augmentation(inputs):
     )
     inputs['to_product_name'] = inputs['to_product_name'].map(transform)
     return inputs
+
+train_data_pipeline_v2 = Pipeline(name='train_data_pipeline', stages=[text_augmentation])
 ```
 
-## 2.2 Publish train data pipeline v2
+## 2.2 Test the pipeline v2 and publish
 
 ```python
+train_data_pipeline_v2()
 train_data_pipeline_v2.publish(name='train_data_pipeline')
 ```
 
@@ -169,7 +174,7 @@ python dataci/command/dataset.py publish -n pairwise_raw_train data/pairwise_raw
 We can easily update our text classification dataset:
 
 ```shell
-dataci dataset update -n text_classification
+dataci dataset update -n train_data_pipeline:text_aug
 # Searching changes...
 # - pairwise_raw@v1 -> pairwise_raw@v2
 # - train_data_pipeline -
@@ -187,14 +192,14 @@ dataci dataset update -n text_classification
 That is a long journey! Wait, how many dataset we have and what are their performance?
 It seems quite messy after we publish many datasets and pipelines, run a lot of workflows
 and benchmarks.  
-Lickly, when we developing our data pipelines, DataCI helps in managing and auditing all of them!
+Luckily, when we're developing our data pipelines, DataCI helps in managing and auditing all of them!
 
 ## 4.1 How many datasets and their relationship?
 
 1. Check all registered dataset
 
 ```shell
-dataci dataset ls -a
+python dataci/command/dataset.py ls
 
 pairwise_raw
 |  [train] <<< Manual Upload
@@ -264,7 +269,8 @@ Total 1 benchmark, 3 records
 ## 4.3 How many pipelines are built?
 
 ```shell
-dataci pipeline ls -a
+python dataci/command/pipeline.py ls
+
 train_data_pipeline
 text_classification[train] <<< train_data_pipeline <<< pairwise_raw[train]
 version     stage   output dataset ver   input dataset ver  update time

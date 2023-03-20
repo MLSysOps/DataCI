@@ -14,7 +14,7 @@ A tool to record data-science triplets (🗂️ `dataset`, 📏 `pipeline`, 📊
 
 ## Qucik Start
 
-- [Build Text Classification Dataset](./docs/Text_Classification.md) [Jupyter Notebooks]
+- [Build Text Classification Dataset](./docs/Create_Text_Classification_Dataset.md) [Jupyter Notebooks](./docs/Create_Text_Classification_Dataset.ipynb)
 - [Data-centric Benchmark: Compare Different Dataset Versions](./docs/Data-centric_Benchmark.md)
 - [Data Analysis for Performance Checking and Debugging](./docs/Data_Analysis.md)
 
