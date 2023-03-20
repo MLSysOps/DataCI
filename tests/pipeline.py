@@ -45,7 +45,7 @@ def test_publish_pipeline():
 
 
 def test_get_pipeline():
-    pipeline = get_pipeline('build_text_cls_train_data')
+    pipeline = get_pipeline('train_data_pipeline')
     print(pipeline)
     print('Input:')
     print(pipeline.inputs)
