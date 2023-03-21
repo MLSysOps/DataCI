@@ -80,7 +80,11 @@ The output `text_aug.csv` will be used as train dataset.
    Now you can simply train a pre-trained BERT on this text classification dataset v1:
 
 ```shell
-python train.py --dataset ./train_data_pipeline/text_aug.csv
+python example/create_text_classification_dataset/train.py \
+  --train_dataset=train_data_pipeline/latest/runs/1/feat/text_aug.csv \
+  --test_dataset=../../data/text_raw/val.csv \
+  -b4 \
+  --max_steps_per_epoch=20
 ```
 
 4. Save data pipeline
