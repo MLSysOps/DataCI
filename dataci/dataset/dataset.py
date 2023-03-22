@@ -39,6 +39,7 @@ class Dataset(object):
             yield_pipeline: 'Optional[Pipeline]' = None,
             parent_dataset: 'Optional[Dataset]' = None,
             log_message=None,
+            id_column=None,
             size=None,
             **kwargs,
     ):
@@ -53,6 +54,8 @@ class Dataset(object):
         self.yield_pipeline = yield_pipeline
         self.parent_dataset = parent_dataset
         self.log_message = log_message or ''
+        # TODO: create a dataset schema and verify
+        self.id_column = id_column
         # TODO: improve this get size of dataset
         if size is not None:
             self.size = size
@@ -103,6 +106,7 @@ class Dataset(object):
             'filename': self._dataset_files.name,
             'file_config': json.dumps(self.file_config),
             'size': self.size,
+            'id_column': self.id_column,
         }
         self.version = config['version']
         return config

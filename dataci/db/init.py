@@ -34,6 +34,7 @@ with db_connection:
         yield_pipeline_version TEXT,
         log_message            TEXT,
         timestamp              INTEGER,
+        id_column              TEXT,
         size                   INTEGER,
         file_config            TEXT,
         filename               TEXT,
