@@ -64,15 +64,17 @@ def parse_args():
                         help='Name of text column in dataset')
     parser.add_argument('--label_col', type=str, default='category_lv0',
                         help='Name of label column in dataset')
-    parser.add_argument('--max_steps_per_epoch', type=int, default=1e38,
-                        help='Name of label column in dataset')
+    parser.add_argument('--max_train_steps_per_epoch', type=int, default=1e38,
+                        help='Max number of train steps for each epoch. For debug/demo purpose.')
+    parser.add_argument('--max_val_steps_per_epoch', type=int, default=1e38,
+                        help='Max number of val and test steps for each epoch. For debug/demo purpose.')
     parser.add_argument('-b', '--bs', '--batch_size', type=int, default=32, dest='batch_size',
                         help='Batch size for data loader')
     parser.add_argument('--model_name', type=str, default='bert-base-uncased',
                         help='Name of Hugging Face transformer model to use')
     parser.add_argument('--learning_rate', type=float, default=1e-5,
                         help='Learning rate for optimizer')
-    parser.add_argument('--print_freq', type=int, default=10,
+    parser.add_argument('--print_freq', type=int, default=100,
                         help='Printing frequency during training')
     parser.add_argument('--output_path', type=str,
                         help='Path to save trained model and results')
@@ -170,7 +172,7 @@ def main(args):
             total_train_acc += acc
             total_train_steps += 1
 
-            if idx > args.max_steps_per_epoch:
+            if idx > args.max_train_steps_per_epoch:
                 # Reach the max steps for this epoch, skip to next epoch
                 break
             if idx % args.print_freq == 0:
@@ -213,6 +215,10 @@ def main(args):
                 acc = accuracy_score(labels.cpu().numpy(), predictions.cpu().numpy())
                 total_train_acc += acc
 
+            if idx > args.max_val_steps_per_epoch:
+                # Reach the max steps for this epoch, skip to next epoch
+                break
+
             if idx % args.print_freq == 0:
                 print(f'[Epoch{epoch}][Step {idx}] val_loss={loss.item()}, val_acc={acc}')
 
@@ -250,6 +256,10 @@ def main(args):
             acc = accuracy_score(labels.cpu().numpy(), predictions.cpu().numpy())
             total_test_acc += acc
             total_test_steps += 1
+
+            if idx > args.max_val_steps_per_epoch:
+                # Reach the max steps for this epoch, skip to next epoch
+                break
 
             if idx % args.print_freq == 0:
                 print(f'[Step {idx}] test_loss={loss.item()}, test_acc={acc}')
