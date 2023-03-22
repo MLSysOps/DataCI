@@ -14,13 +14,13 @@ def create_one_dataset(dataset_dict):
         db_connection.execute(
             """
             INSERT INTO dataset (name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, 
-            filename, file_config, parent_dataset_name, parent_dataset_version)
-            VALUES (?,?,?,?,?,?,?,?,?,?)
+            size, filename, file_config, parent_dataset_name, parent_dataset_version)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
             ;
             """,
             (
                 dataset_dict['name'], dataset_dict['version'], pipeline_dict['name'], pipeline_dict['version'],
-                dataset_dict['log_message'], dataset_dict['timestamp'], dataset_dict['filename'],
+                dataset_dict['log_message'], dataset_dict['timestamp'], dataset_dict['size'], dataset_dict['filename'],
                 dataset_dict['file_config'], dataset_dict['parent_dataset_name'],
                 dataset_dict['parent_dataset_version'],
             )
@@ -38,6 +38,7 @@ def get_one_dataset(name, version='latest'):
                        yield_pipeline_version,
                        log_message,
                        timestamp,
+                       size,
                        filename,
                        file_config,
                        parent_dataset_name,
@@ -56,6 +57,7 @@ def get_one_dataset(name, version='latest'):
                        yield_pipeline_version,
                        log_message,
                        timestamp,
+                       size,
                        filename,
                        file_config,
                        parent_dataset_name,
@@ -74,12 +76,12 @@ def get_one_dataset(name, version='latest'):
         raise ValueError(f'Dataset {name}@{version} not found.')
     if len(dataset_po_list) > 1:
         raise ValueError(f'Found more than one dataset {name}@{version}.')
-    name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, filename, file_config, \
-        parent_dataset_name, parent_dataset_version = dataset_po_list[0]
+    name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, size, filename, file_config, \
+    parent_dataset_name, parent_dataset_version = dataset_po_list[0]
     return {
         'name': name, 'version': version,
         'yield_pipeline': {'name': yield_pipeline_name, 'version': yield_pipeline_version}, 'log_message': log_message,
-        'timestamp': timestamp, 'filename': filename, 'file_config': file_config,
+        'timestamp': timestamp, 'size': size, 'filename': filename, 'file_config': file_config,
         'parent_dataset_name': parent_dataset_name, 'parent_dataset_version': parent_dataset_version,
     }
 
@@ -93,6 +95,7 @@ def get_many_datasets(name, version=None):
                    yield_pipeline_version,
                    log_message,
                    timestamp,
+                   size,
                    filename,
                    file_config,
                    parent_dataset_name,
@@ -104,13 +107,13 @@ def get_many_datasets(name, version=None):
             """, (name, version))
     dataset_dict_list = list()
     for dataset_po in dataset_po_iter:
-        name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, filename, file_config, \
-            parent_dataset_name, parent_dataset_version = dataset_po
+        name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, size, filename, file_config, \
+        parent_dataset_name, parent_dataset_version = dataset_po
         dataset_dict = {
             'name': name, 'version': version,
             'yield_pipeline': {'name': yield_pipeline_name, 'version': yield_pipeline_version},
             'log_message': log_message,
-            'timestamp': timestamp, 'filename': filename, 'file_config': file_config,
+            'timestamp': timestamp, 'size': size, 'filename': filename, 'file_config': file_config,
             'parent_dataset_name': parent_dataset_name, 'parent_dataset_version': parent_dataset_version,
         }
         dataset_dict_list.append(dataset_dict)
@@ -160,6 +163,7 @@ def get_many_dataset_update_plan(name):
                     ,dataset_list.yield_pipeline_version
                     ,dataset_list.log_message
                     ,dataset_list.timestamp
+                    ,dataset_list.size
                     ,dataset_list.file_config
                     ,dataset_list.filename
                     ,dataset_list.parent_dataset_name
@@ -183,13 +187,13 @@ def get_many_dataset_update_plan(name):
 
     update_plans = list()
     for result in result_iter:
-        name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, file_config, filename, \
-            parent_dataset_name, parent_dataset_version = result[:10]
+        name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, size, file_config, \
+        filename, parent_dataset_name, parent_dataset_version = result[:10]
         dataset_dict = {
             'name': name, 'version': version,
             'yield_pipeline': {'name': yield_pipeline_name, 'version': yield_pipeline_version},
             'log_message': log_message,
-            'timestamp': timestamp, 'filename': filename, 'file_config': file_config,
+            'timestamp': timestamp, 'size': size, 'filename': filename, 'file_config': file_config,
             'parent_dataset_name': parent_dataset_name, 'parent_dataset_version': parent_dataset_version,
         }
         name, version, timestamp = result[10:]

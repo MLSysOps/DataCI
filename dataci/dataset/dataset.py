@@ -13,6 +13,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pandas as pd
+
 from dataci.repo import Repo
 
 if TYPE_CHECKING:
@@ -37,6 +39,7 @@ class Dataset(object):
             yield_pipeline: 'Optional[Pipeline]' = None,
             parent_dataset: 'Optional[Dataset]' = None,
             log_message=None,
+            size=None,
             **kwargs,
     ):
         self.name = name
@@ -50,7 +53,13 @@ class Dataset(object):
         self.yield_pipeline = yield_pipeline
         self.parent_dataset = parent_dataset
         self.log_message = log_message or ''
-        self.size: 'Optional[int]' = None
+        # TODO: improve this get size of dataset
+        if size is not None:
+            self.size = size
+        elif self._dataset_files and self._dataset_files.suffix == '.csv':
+            self.size = len(pd.read_csv(dataset_files))
+        else:
+            self.size = None
 
         self._file_config: 'Optional[dict]' = None
 
@@ -92,7 +101,8 @@ class Dataset(object):
                 self._dataset_files, self.yield_pipeline, self.log_message, self.parent_dataset
             ) if self.version is None else self.version,
             'filename': self._dataset_files.name,
-            'file_config': json.dumps(self.file_config)
+            'file_config': json.dumps(self.file_config),
+            'size': self.size,
         }
         self.version = config['version']
         return config
