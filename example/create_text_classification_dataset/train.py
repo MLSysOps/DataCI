@@ -166,7 +166,6 @@ def main(args):
 
             # Calculate train accuracy
             logits = outputs.logits
-            probabilities = torch.softmax(logits, dim=-1)
             predictions = torch.argmax(logits, dim=-1)
             acc = accuracy_score(labels.cpu().numpy(), predictions.cpu().numpy())
             total_train_acc += acc
@@ -177,18 +176,6 @@ def main(args):
                 break
             if idx % args.print_freq == 0:
                 print(f'[Epoch{epoch}][Step {idx}] train_loss={loss.item()}, train_acc={acc}')
-
-            # Store data ID, label and probability prediction
-            labels = labels.detach().cpu().numpy()
-            probabilities = probabilities.detach().cpu().numpy()
-
-            for id_, label, pred, prob in zip(ids, labels, predictions.cpu().numpy(), probabilities):
-                train_result.append({
-                    'id': id_,
-                    'label': label,
-                    'prediction': pred,
-                    'probability': prob,
-                })
 
         avg_train_loss = total_train_loss / total_train_steps
         avg_train_acc = total_train_acc / total_train_steps
@@ -210,10 +197,9 @@ def main(args):
 
                 # Calculate train accuracy
                 logits = outputs.logits
-                probabilities = torch.softmax(logits, dim=-1)
                 predictions = torch.argmax(logits, dim=-1)
                 acc = accuracy_score(labels.cpu().numpy(), predictions.cpu().numpy())
-                total_train_acc += acc
+                total_val_acc += acc
 
             if idx > args.max_val_steps_per_epoch:
                 # Reach the max steps for this epoch, skip to next epoch
@@ -221,18 +207,6 @@ def main(args):
 
             if idx % args.print_freq == 0:
                 print(f'[Epoch{epoch}][Step {idx}] val_loss={loss.item()}, val_acc={acc}')
-
-            # Store data ID, label and probability prediction
-            labels = labels.cpu().numpy()
-            probabilities = probabilities.cpu().numpy()
-
-            for id_, label, pred, prob in zip(ids, labels, predictions.cpu().numpy(), probabilities):
-                val_result.append({
-                    'id': id_,
-                    'label': label,
-                    'prediction': pred,
-                    'probability': prob,
-                })
 
         avg_val_loss = total_val_loss / total_val_steps
         avg_val_acc = total_val_acc / total_val_steps
@@ -251,7 +225,6 @@ def main(args):
             logits = outputs.logits
             loss = outputs.loss
             total_test_loss += loss.item()
-            probabilities = torch.softmax(logits, dim=-1)
             predictions = torch.argmax(logits, dim=-1)
             acc = accuracy_score(labels.cpu().numpy(), predictions.cpu().numpy())
             total_test_acc += acc
@@ -264,28 +237,9 @@ def main(args):
             if idx % args.print_freq == 0:
                 print(f'[Step {idx}] test_loss={loss.item()}, test_acc={acc}')
 
-            # Store data ID, label and probability prediction
-            labels = labels.cpu().numpy()
-            probabilities = probabilities.cpu().numpy()
-
-            for id_, label, pred, prob in zip(ids, labels, predictions.cpu().numpy(), probabilities):
-                test_result.append({
-                    'id': id_,
-                    'label': label,
-                    'prediction': pred,
-                    'probability': prob,
-                })
     avg_test_loss = total_test_loss / total_test_steps
     avg_test_acc = total_test_acc / total_test_steps
     print(f"test_loss_epoch={avg_test_loss}, val_test_epoch={avg_test_acc}")
-
-    # Save results to CSV files
-    train_df = pd.DataFrame(train_result)
-    train_df.to_csv('train_results.csv', index=False)
-    val_df = pd.DataFrame(val_result)
-    val_df.to_csv('val_results.csv', index=False)
-    test_df = pd.DataFrame(test_result)
-    test_df.to_csv('test_results.csv', index=False)
 
 
 if __name__ == '__main__':
