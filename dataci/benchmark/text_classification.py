@@ -111,8 +111,7 @@ def collate_fn(batch):
     return new_batch
 
 
-def setup_dataloader(args, tokenizer):
-    label_encoder = LabelEncoder()
+def setup_dataloader(args, tokenizer, label_encoder):
     train_dataset = TextDataset(
         args.train_dataset, id_column=args.id_col, text_column=args.text_col, label_column=args.label_col,
         tokenizer=tokenizer, label_encoder=label_encoder,
@@ -137,7 +136,7 @@ def setup_dataloader(args, tokenizer):
     return train_dataloader, val_dataloader, test_dataloader
 
 
-def train_one_epoch(args, model, dataloader, optimizer, epoch_num):
+def train_one_epoch(args, model, dataloader, optimizer, epoch_num, label_encoder):
     train_loss_list, train_acc_list, batch_time_list = list(), list(), list()
     train_pred_results = list()
     model.train()
@@ -158,22 +157,30 @@ def train_one_epoch(args, model, dataloader, optimizer, epoch_num):
 
         # Calculate train accuracy
         logits = outputs.logits
-        probabilities = torch.softmax(logits, dim=-1)
-        predictions = torch.argmax(logits, dim=-1)
-        acc = accuracy_score(labels.cpu().numpy(), predictions.cpu().numpy())
+        probabilities = torch.softmax(logits, dim=-1).detach().cpu().numpy()
+        predictions = torch.argmax(logits, dim=-1).cpu().numpy()
+        labels = labels.cpu().numpy()
+        acc = accuracy_score(labels, predictions)
         train_acc_list.append(acc)
 
-        # Store data ID, label and probability prediction
-        labels = labels.detach().cpu().numpy()
-        probabilities = probabilities.detach().cpu().numpy()
+        # Post-process labels and predictions
+        # 1. label id to label name
+        # 2. probabilities to list of label name -> probability
+        labels = label_encoder.inverse_transform(labels)
+        predictions = label_encoder.inverse_transform(predictions)
+        probabilities = [
+            dict(zip(label_encoder.classes_, prob))
+            for prob in probabilities
+        ]
 
-        for id_, label, pred, prob in zip(ids, labels, predictions.cpu().numpy(), probabilities):
+        for id_, label, pred, prob_dict in zip(ids, labels, predictions, probabilities):
             train_pred_results.append({
                 'id': id_,
                 'label': label,
                 'prediction': pred,
-                'probability': prob,
+                **{f'{k}_probability': v for k, v in prob_dict.items()},
             })
+            print(train_pred_results[-1])
 
         if idx > args.max_train_steps_per_epoch:
             # Reach the max steps for this epoch, skip to next epoch
@@ -196,7 +203,7 @@ def train_one_epoch(args, model, dataloader, optimizer, epoch_num):
 
 
 @torch.no_grad()
-def val_one_epoch(args, model, dataloader, epoch_num):
+def val_one_epoch(args, model, dataloader, epoch_num, label_encoder):
     val_loss_list, val_acc_list, batch_time_list = list(), list(), list()
     val_pred_results = list()
     model.eval()
@@ -213,22 +220,29 @@ def val_one_epoch(args, model, dataloader, epoch_num):
 
         # Calculate train accuracy
         logits = outputs.logits
-        probabilities = torch.softmax(logits, dim=-1)
-        predictions = torch.argmax(logits, dim=-1)
-        acc = accuracy_score(labels.cpu().numpy(), predictions.cpu().numpy())
+        probabilities = torch.softmax(logits, dim=-1).detach().cpu().numpy()
+        predictions = torch.argmax(logits, dim=-1).cpu().numpy()
+        labels = labels.cpu().numpy()
+        acc = accuracy_score(labels, predictions)
         val_acc_list.append(acc)
         batch_time_list.append(batch_end_time - batch_start_time)
 
-        # Store data ID, label and probability prediction
-        labels = labels.cpu().numpy()
-        probabilities = probabilities.cpu().numpy()
+        # Post-process labels and predictions
+        # 1. label id to label name
+        # 2. probabilities to list of label name -> probability
+        labels = label_encoder.inverse_transform(labels)
+        predictions = label_encoder.inverse_transform(predictions)
+        probabilities = [
+            dict(zip(label_encoder.classes_, prob))
+            for prob in probabilities
+        ]
 
-        for id_, label, pred, prob in zip(ids, labels, predictions.cpu().numpy(), probabilities):
+        for id_, label, pred, prob_dict in zip(ids, labels, predictions, probabilities):
             val_pred_results.append({
                 'id': id_,
                 'label': label,
                 'prediction': pred,
-                'probability': prob,
+                **{f'{k}_probability': v for k, v in prob_dict.items()},
             })
 
         if idx > args.max_val_steps_per_epoch:
@@ -256,8 +270,9 @@ def val_one_epoch(args, model, dataloader, epoch_num):
 def main(args):
     # Load the tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    label_encoder = LabelEncoder()
     # Load dataset
-    train_dataloader, val_dataloader, test_dataloader = setup_dataloader(args, tokenizer)
+    train_dataloader, val_dataloader, test_dataloader = setup_dataloader(args, tokenizer, label_encoder)
     # Load model
     model = AutoModelForSequenceClassification.from_pretrained(args.model_name, num_labels=args.num_classes)
     model = model.to(args.device)
@@ -268,9 +283,12 @@ def main(args):
     # Train the model
     for epoch in range(args.epoch):
         # train loop
-        train_metrics_dict, train_pred_result = train_one_epoch(args, model, train_dataloader, optimizer, epoch)
+        train_metrics_dict, train_pred_result = train_one_epoch(
+            args, model, train_dataloader, optimizer, epoch,
+            label_encoder
+        )
         # Validation loop
-        val_metrics_dict, val_pred_result = val_one_epoch(args, model, val_dataloader, epoch)
+        val_metrics_dict, val_pred_result = val_one_epoch(args, model, val_dataloader, epoch, label_encoder)
 
     test_metrics_dict, test_pred_result = val_one_epoch(args, model, test_dataloader, epoch_num=None)
 
