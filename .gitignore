@@ -4,3 +4,5 @@ data
 **/__pycache__
 # Local database
 dataci/mydb.db
+# example running result
+train_data_pipeline

@@ -48,7 +48,7 @@ class Pipeline(object):
         # latest is regard as this pipeline is not published
         self.is_built = (self.version != 'latest')
         self.logger = logging.getLogger(__name__)
-        self.__published = False
+        self.is_published = False
 
         # stages
         self.stages = stages or list()
@@ -150,13 +150,13 @@ class Pipeline(object):
         with cwd(run.workdir):
             # dvc repo
             cmd = ['dvc', 'repro', str(run.workdir / 'dvc.yaml')]
-            subprocess.run(cmd)
-        if auto_save and self.__published:
-            run.save()
-        self.logger.info(
-            f'{",".join(map(str, self.inputs))} '
-            f'>>> {str(run)} '
-            f'>>> {",".join(map(str, self.outputs))}')
+            subprocess.call(cmd)
+            if auto_save and self.is_published:
+                run.save()
+                self.logger.info(
+                    f'{",".join(map(str, self.inputs))} '
+                    f'>>> {str(run)} '
+                    f'>>> {",".join(map(str, self.outputs))}')
         return run
 
     def dict(self):
@@ -168,17 +168,36 @@ class Pipeline(object):
         config['basedir'] = config['repo'].pipeline_dir
         pipeline = cls(**config)
         pipeline.create_date = datetime.fromtimestamp(config['timestamp'])
-        pipeline.__published = True
+        pipeline.is_published = True
         pipeline.restore()
         return pipeline
 
     def __str__(self):
         return f'{self.name}@{self.version[:7]}'
-    
+
     def __hash__(self):
         return hash(str(self))
-    
+
     def __eq__(self, __o: object) -> bool:
         if isinstance(__o, type(self)):
             return str(self) == str(__o)
         return False
+
+
+def check_pipeline_type(pipeline: 'Pipeline'):
+    """Check data processing type of a pipeline.
+    Pipeline types:
+        data_augmentation:
+            Pipeline input and output data are augmented without removing any of the data.
+            Therefore, all data ID in the input dataset will be in the output dataset.
+        data_selection:
+            Part of the pipeline input data are output, without any modification on these
+            data records (i.e., all fields for those selected data are identical to the
+            input dataset.
+        others:
+            The input and output data of the pipeline does not belong to any of the above cases.
+    Returns:
+        data processing type. One of "data_augmentation", "data_selection", and "others".
+    """
+    # TODO
+    raise NotImplementedError()

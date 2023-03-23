@@ -56,4 +56,5 @@ def publish(pipeline: 'Pipeline' = ...):
     # Step 3: Publish pipeline object to DB
     #####################################################################
     create_one_pipeline(pipeline.dict())
-    setattr(pipeline, '__published', True)
+    pipeline.is_published = True
+    pipeline.workdir = pipeline_workdir
