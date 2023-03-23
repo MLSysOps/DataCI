@@ -13,38 +13,10 @@ def create_one_pipeline(pipeline_dict):
         # Publish pipeline
         db_connection.execute(
             """
-            INSERT INTO pipeline (name, version, timestamp) VALUES (?,?,?)
+            INSERT INTO pipeline (name, version, timestamp) VALUES (?,?,?);
             """,
             (pipeline_dict['name'], pipeline_dict['version'], pipeline_dict['timestamp']),
         )
-
-
-def create_one_pipeline_run(run_dict, outputs_dict):
-    with db_connection:
-        pipeline_dict = run_dict['pipeline']
-        # Publish run
-        db_connection.execute(
-            """
-            INSERT INTO run(run_num, pipeline_name, pipeline_version) VALUES(?,?,?)
-            """
-            , (run_dict['run_num'], pipeline_dict['name'], pipeline_dict['version'])
-        )
-
-        # Publish pipeline output dataset
-        for output_dataset in outputs_dict:
-            db_connection.execute(
-                """
-                INSERT INTO dataset (name, version, yield_pipeline_name, yield_pipeline_version, log_message, 
-                timestamp, filename, file_config, parent_dataset_name, parent_dataset_version)
-                VALUES (?,?,?,?,?,?,?,?,?,?)
-                """,
-                (
-                    output_dataset['name'], output_dataset['version'], pipeline_dict['name'], pipeline_dict['version'],
-                    output_dataset['log_message'], output_dataset['timestamp'], output_dataset['filename'],
-                    output_dataset['file_config'], output_dataset['parent_dataset_name'],
-                    output_dataset['parent_dataset_version'],
-                )
-            )
 
 
 def get_one_pipeline(name, version='latest'):
@@ -58,6 +30,7 @@ def get_one_pipeline(name, version='latest'):
                 FROM   pipeline
                 WHERE  name = ?
                 AND    version = ?
+                ;
                 """, (name, version))
         else:
             pipeline_dict_iter = db_connection.execute(
@@ -72,6 +45,7 @@ def get_one_pipeline(name, version='latest'):
                     WHERE  name = ?
                 )
                 WHERE rk = 1
+                ;
                 """, (name,))
     pipeline_dict_list = list(pipeline_dict_iter)
     if len(pipeline_dict_list) == 0:
@@ -94,6 +68,7 @@ def get_many_pipeline(name, version):
             FROM   pipeline
             WHERE  name GLOB ?
             AND    version GLOB ?
+            ;
             """,
             (name, version),
         )
