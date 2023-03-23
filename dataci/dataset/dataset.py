@@ -7,6 +7,7 @@ Date: Mar 10, 2023
 """
 import json
 import subprocess
+import urllib.parse
 from copy import deepcopy
 from datetime import datetime
 from functools import lru_cache
@@ -18,7 +19,7 @@ import pandas as pd
 from dataci.repo import Repo
 
 if TYPE_CHECKING:
-    from typing import Optional
+    from typing import Optional, Union
     from dataci.pipeline.pipeline import Pipeline
 
 import yaml
@@ -29,7 +30,7 @@ from .utils import generate_dataset_version_id, generate_dataset_identifier
 class Dataset(object):
     from .publish import publish  # type: ignore[misc]
     from .update import update  # type: ignore[misc]
-    
+
     def __init__(
             self,
             name,
@@ -37,9 +38,9 @@ class Dataset(object):
             repo=None,
             dataset_files=None,
             yield_pipeline: 'Optional[Pipeline]' = None,
-            parent_dataset: 'Optional[Dataset]' = None,
+            parent_dataset: 'Optional[Union[Dataset, dict]]' = None,
             log_message=None,
-            id_column=None,
+            id_column='id',
             size=None,
             **kwargs,
     ):
@@ -52,7 +53,7 @@ class Dataset(object):
         self._dataset_files = Path(dataset_files) if dataset_files else None
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.yield_pipeline = yield_pipeline
-        self.parent_dataset = parent_dataset
+        self._parent_dataset = parent_dataset
         self.log_message = log_message or ''
         # TODO: create a dataset schema and verify
         self.id_column = id_column
@@ -80,15 +81,24 @@ class Dataset(object):
             config['yield_pipeline'] = None
         else:
             config['yield_pipeline'] = Pipeline(**config['yield_pipeline'])
+        # Build parent_dataset
+        if config['parent_dataset_name'] is not None and config['parent_dataset_version'] is not None:
+            config['parent_dataset'] = {
+                'name': config['parent_dataset_name'], 'version': config['parent_dataset_version']
+            }
+        else:
+            config['parent_dataset'] = None
         dataset_obj = cls(**config)
         dataset_obj.create_date = datetime.fromtimestamp(config['timestamp'])
         dataset_obj.__published = True
         dataset_obj._file_config = json.loads(config['file_config'])
-        dataset_obj._dataset_files = (dataset_obj.repo.tmp_dir / dataset_obj.name / dataset_obj.version /
-                                      config['filename'])
-        # TODO: lazy load parent dataset
-        dataset_obj.parent_dataset = Dataset(
-            name=config['parent_dataset_name'], version=config['parent_dataset_version'])
+        # TODO: since there will be ':' in output dataset, we need a better mechanism to escape these filename
+        #   otherwise, the mkdir will fail
+        # Escape the ':' in the filename
+        dataset_obj._dataset_files = (
+                dataset_obj.repo.tmp_dir / urllib.parse.quote(dataset_obj.name) / dataset_obj.version /
+                config['filename']
+        )
         return dataset_obj
 
     def dict(self):
@@ -110,6 +120,23 @@ class Dataset(object):
         }
         self.version = config['version']
         return config
+
+    @property
+    def parent_dataset(self):
+        # The parent dataset is None or already loaded
+        if self._parent_dataset is None or isinstance(self._parent_dataset, Dataset):
+            return self._parent_dataset
+        # Load the parent dataset using `list_dataset` API
+        from dataci.dataset import list_dataset
+        datasets = list_dataset(
+            self.repo, f'{self._parent_dataset["name"]}@{self._parent_dataset["version"]}',
+            tree_view=False,
+        )
+        if len(datasets) == 0:
+            self._parent_dataset = None
+        else:
+            self._parent_dataset = datasets[0]
+        return self._parent_dataset
 
     @property
     def dataset_files(self):
@@ -144,7 +171,7 @@ class Dataset(object):
 
     def __hash__(self):
         return hash(str(self))
-    
+
     def __eq__(self, __o: object) -> bool:
         if isinstance(__o, type(self)):
             return str(self) == str(__o)
