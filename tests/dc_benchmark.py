@@ -14,13 +14,14 @@ def test_text_classification_benchmark():
     train_dataset = get_dataset('train_data_pipeline:text_aug')
     test_dataset = get_dataset('text_raw_val')
 
-    Benchmark(
+    benchmark = Benchmark(
         type='data_augmentation',
         ml_task='text_classification',
         model='bert-base-cased',
         train_dataset=train_dataset,
         test_dataset=test_dataset,
     )
+    benchmark.run()
 
 
 if __name__ == '__main__':

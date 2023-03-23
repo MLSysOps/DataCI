@@ -82,7 +82,6 @@ def text_selection_checker(dataset: 'Dataset'):
 def verify_bench_type(bench_type: str, train_dataset: 'Dataset', test_dataset: 'Dataset'):
     """Check if provided benchmark type is available for train and val dataset.
     """
-    print(train_dataset.dataset_files)
     if bench_type == 'data_augmentation':
         return text_augmentation_checker(train_dataset) and (
                 text_augmentation_checker(test_dataset) or standalone_checker(test_dataset)

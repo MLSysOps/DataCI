@@ -55,8 +55,8 @@ class Benchmark(object):
             from .text_classification import main, parse_args
             args = [
                        f'--train_dataset={self.train_dataset.dataset_files}',
-                       f'--val_dataset={self.test_dataset.dataset_files}',
-                       f'--model={self.model}', f'--id_column={self.train_dataset.id_column}'
+                       f'--test_dataset={self.test_dataset.dataset_files}',
+                       f'--model={self.model}', f'--id_col={self.train_dataset.id_column}'
                    ] + [f'--{k}={v}' for k, v in self.train_kwargs.items()]
         else:
             raise ValueError(f'Invalid ml_task {self.ml_task}')
