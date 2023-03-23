@@ -50,7 +50,7 @@ class TextDataset(Dataset):
         }
 
 
-def parse_args():
+def parse_args(args=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--split_ratio', type=float, default=0.95,
                         help='Ratio of training data to total data')
@@ -87,7 +87,7 @@ def parse_args():
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu',
                         help='Device to use for training (cuda or cpu)')
 
-    args = parser.parse_args()
+    args = parser.parse_args(args)
     return args
 
 
