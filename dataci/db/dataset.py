@@ -201,7 +201,7 @@ def get_many_dataset_update_plan(name):
             'filename': filename, 'file_config': file_config,
             'parent_dataset_name': parent_dataset_name, 'parent_dataset_version': parent_dataset_version,
         }
-        name, version, timestamp = result[10:]
+        name, version, timestamp = result[12:]
         pipeline_dict = {
             'name': name, 'version': version, 'timestamp': timestamp,
         }
