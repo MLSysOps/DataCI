@@ -6,16 +6,27 @@ Email: yuanmingleee@gmail.com
 Date: Mar 22, 2023
 """
 import argparse
+import json
+import logging
+from pathlib import Path
+import random
 import time
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
 import torch
+import transformers
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import LabelEncoder
 from torch.optim import AdamW
+from torch.utils.collect_env import get_pretty_env_info
 from torch.utils.data import Dataset, DataLoader, random_split
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+
+logger = None
+LOG_FILE_NAME = 'out.log'
 
 
 class TextDataset(Dataset):
@@ -78,10 +89,14 @@ def parse_args(args=None):
                         help='Name of Hugging Face transformer model to use')
     parser.add_argument('--learning_rate', type=float, default=1e-5,
                         help='Learning rate for optimizer')
+    parser.add_argument('--preprocessing_num_workers', type=int, default=4, 
+                        help='Num of workers used for preprocessing')
     parser.add_argument('--print_freq', type=int, default=100,
                         help='Printing frequency during training')
-    parser.add_argument('--output_path', type=str,
-                        help='Path to save trained model and results')
+    parser.add_argument('--exp_root', type=Path, default='output',
+                        help='Path to save experiment results')
+    parser.add_argument('--seed', type=int, default=42, 
+                        help='Random seed for reproducibility')
 
     # Add device argument
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu',
@@ -89,6 +104,14 @@ def parse_args(args=None):
 
     args = parser.parse_args(args)
     return args
+
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def collate_fn(batch):
@@ -127,12 +150,21 @@ def setup_dataloader(args, tokenizer, label_encoder):
     val_size = len(train_dataset) - train_size
     train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
 
-    print(f'Train split size: {train_size}, Val split size: {val_size}')
-    print(f'Test dataset size: {len(test_dataset)}')
+    logger.info(f'Train split size: {train_size}, Val split size: {val_size}')
+    logger.info(f'Test dataset size: {len(test_dataset)}')
 
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=collate_fn)
-    val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, collate_fn=collate_fn)
-    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=collate_fn)
+    train_dataloader = DataLoader(
+        train_dataset, batch_size=args.batch_size, collate_fn=collate_fn,
+        num_workers=args.preprocessing_num_workers,
+    )
+    val_dataloader = DataLoader(
+        val_dataset, batch_size=args.batch_size, collate_fn=collate_fn,
+        num_workers=args.preprocessing_num_workers,
+    )
+    test_dataloader = DataLoader(
+        test_dataset, batch_size=args.batch_size, collate_fn=collate_fn,
+        num_workers=args.preprocessing_num_workers,
+    )
     return train_dataloader, val_dataloader, test_dataloader
 
 
@@ -180,17 +212,16 @@ def train_one_epoch(args, model, dataloader, optimizer, epoch_num, label_encoder
                 'prediction': pred,
                 **{f'{k}_probability': v for k, v in prob_dict.items()},
             })
-            print(train_pred_results[-1])
 
         if idx > args.max_train_steps_per_epoch:
             # Reach the max steps for this epoch, skip to next epoch
             break
         if idx % args.print_freq == 0:
-            print(f'[Epoch{epoch_num}][Step {idx}] train_loss={loss.item()}, train_acc={acc}')
+            logger.info(f'[Epoch{epoch_num}][Step {idx}] train_loss={loss.item()}, train_acc={acc}')
 
     train_loss_epoch = np.average(train_loss_list).item()
     train_acc_epoch = np.average(train_acc_list).item()
-    print(f"[Epoch {epoch_num}] train_loss_epoch={train_loss_epoch}, train_acc_epoch={train_acc_epoch}")
+    logger.info(f"[Epoch {epoch_num}] train_loss_epoch={train_loss_epoch}, train_acc_epoch={train_acc_epoch}")
     train_metrics_dict = {
         'train_loss_epoch': train_loss_epoch,
         'train_acc_epoch': train_acc_epoch,
@@ -250,11 +281,11 @@ def val_one_epoch(args, model, dataloader, epoch_num, label_encoder):
             break
 
         if idx % args.print_freq == 0:
-            print(f'[Epoch{epoch_num}][Step {idx}] val_loss={loss.item()}, val_acc={acc}')
+            logger.info(f'[Epoch{epoch_num}][Step {idx}] val_loss={loss.item()}, val_acc={acc}')
 
     val_loss_epoch = np.average(val_loss_list).item()
     val_acc_epoch = np.average(val_acc_list).item()
-    print(f"[Epoch: {epoch_num}] val_loss_epoch={val_loss_epoch}, val_acc_epoch={val_acc_epoch}")
+    logger.info(f"[Epoch: {epoch_num}] val_loss_epoch={val_loss_epoch}, val_acc_epoch={val_acc_epoch}")
 
     val_metrics_dict = {
         'val_loss_epoch': val_loss_epoch,
@@ -268,6 +299,45 @@ def val_one_epoch(args, model, dataloader, epoch_num, label_encoder):
 
 
 def main(args):
+    global logger
+
+    # Prepare exp directory
+    args.exp_root = args.exp_root / '_'.join([
+        f'{datetime.now().strftime("%Y%m%d-%H%M%S")}'
+        f"task=text_classification"
+        f"model={args.model_name}",
+        f"lr={args.learning_rate}:.2E",
+        f"b={args.batch_size}",
+        f"j={args.preprocessing_num_workers}",
+    ])
+    args.exp_root.mkdir(exist_ok=True, parents=True)
+    args.log_path = args.exp_root / LOG_FILE_NAME
+    args.checkpoint_dir = args.exp_root / 'checkpoint'
+    args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    args.metrics_dir = args.exp_root / 'metrics'
+    args.metrics_dir.mkdir(parents=True, exist_ok=True)
+    args.pred_dir = args.exp_root / 'pred'
+    args.pred_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.seed:
+        set_seed(args.seed)
+
+    # Set up logging
+    # 1. Make one log on every process with the configuration for debugging.
+    transformers.utils.logging.set_verbosity_info()
+    logging.basicConfig(
+        format=f'%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+        datefmt="%m/%d/%Y %H:%M:%S",
+        level=logging.INFO,
+    )
+    logger = logging.getLogger(__name__)
+    # 2. Setup logging to file
+    logger.addHandler(logging.FileHandler(args.log_path))
+    
+    # Collect environment information
+    logger.info(get_pretty_env_info())
+    
+    
     # Load the tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     label_encoder = LabelEncoder()
@@ -289,19 +359,40 @@ def main(args):
         )
         # Validation loop
         val_metrics_dict, val_pred_result = val_one_epoch(args, model, val_dataloader, epoch, label_encoder)
+        
+        # Save loggings and results
+        logger.info(f"Saving model checkpoint, metrics, and predictions to {args.exp_root}")
+        # 1. Save model checkpoint
+        checkpoint_dict = {
+            'epoch': epoch,
+            'name': args.model_name,
+            'state_dict': model.state_dict(),
+            'optimizer': optimizer.state_dict(),
+        }
+        torch.save(checkpoint_dict, args.checkpoint_dir / f"epoch={epoch}.pt")
+        # 2. Save metrics to JSON file
+        metrics_dict = {
+            **train_metrics_dict,
+            **val_metrics_dict,
+        }
+        with open(args.metrics_dir / f'train_val_metrics_epoch={epoch}.json', 'w') as f:
+            json.dump(metrics_dict, f)
+        # 3. Save prediction to CSV file
+        pd.DataFrame(train_pred_result).to_csv(args.pred_dir / f'train_preds_epoch={epoch}.csv', index=False)
+        pd.DataFrame(val_pred_result).to_csv(args.pred_dir / f'val_preds_epoch={epoch}.csv', index=False)
 
-    test_metrics_dict, test_pred_result = val_one_epoch(args, model, test_dataloader, epoch_num=None)
-
-    # Save results to CSV files
-    train_df = pd.DataFrame(train_pred_result)
-    train_df.to_csv('train_results.csv', index=False)
-    val_df = pd.DataFrame(val_pred_result)
-    val_df.to_csv('val_results.csv', index=False)
-    test_df = pd.DataFrame(test_pred_result)
-    test_df.to_csv('test_results.csv', index=False)
+    test_metrics_dict, test_pred_result = val_one_epoch(
+        args, model, test_dataloader, epoch_num=None, label_encoder=label_encoder
+    )
+    # Save test results and metrics
+    logger.info(f"Saving test metrics and predictions to {args.exp_root}")
+    # 1. Save test metrics to JSON file
+    with open(args.metrics_dir / 'test_metrics.json', 'w') as f:
+        json.dump(test_metrics_dict, f)
+    # 2. Save test prediction to CSV file
+    pd.DataFrame(test_pred_result).to_csv(args.pred_dir / 'test_preds.csv', index=False)
 
 
 if __name__ == '__main__':
-    # CUDA device
     args_ = parse_args()
     main(args_)
