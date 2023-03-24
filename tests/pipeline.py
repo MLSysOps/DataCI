@@ -50,6 +50,15 @@ def test_get_pipeline():
     print('Input:')
     print(pipeline.inputs)
     print('Output:')
+    print(pipeline.outputs)
+
+
+def test_run_pipeline():
+    pipeline = get_pipeline('train_data_pipeline')
+    print(pipeline)
+    print('Input:')
+    print(pipeline.inputs)
+    print('Output:')
     print(pipeline.outputs[0].dataset_files)
     print('Run pipeline...')
     pipeline()
@@ -96,4 +105,5 @@ def test_publish_pipeline_v2():
 if __name__ == '__main__':
     test_publish_pipeline()
     test_get_pipeline()
+    test_run_pipeline()
     test_publish_pipeline_v2()

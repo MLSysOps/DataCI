@@ -36,7 +36,7 @@ def save(run: 'Run' = ...):
                             'outs': [
                                 {
                                     'md5': out['md5'],
-                                    'path': os.path.splitext(out['path'])[0],
+                                    'path': os.path.basename(out['path']),
                                     'size': out['size']
                                 }
                             ]
