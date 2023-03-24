@@ -8,6 +8,7 @@ Date: Mar 15, 2023
 import logging
 import os
 from typing import TYPE_CHECKING
+from pathlib import Path
 
 import yaml
 
@@ -51,3 +52,9 @@ def save(run: 'Run' = ...):
         # Step 3: Publish run object to DB
         #####################################################################
         create_one_run(run.dict())
+        
+        #####################################################################
+        # Step 4: Remove feat cached file (.dvc)
+        #####################################################################
+        for dvc_file in Path(run.pipeline.FEAT_DIR).glob('**/*.dvc'):
+            dvc_file.unlink()

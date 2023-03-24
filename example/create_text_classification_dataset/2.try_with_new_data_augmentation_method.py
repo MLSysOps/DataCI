@@ -36,12 +36,14 @@ def text_augmentation(inputs):
 
 
 train_data_pipeline_v2 = Pipeline(name='train_data_pipeline', stages=[text_augmentation])
+train_data_pipeline_v2.build()
 
 print('=' * 80)
 print('Step 2: Test the pipeline v2 and publish')
 print('=' * 80)
 print('Run train data pipeline v2')
 train_data_pipeline_v2()
+print(train_data_pipeline_v2.version)
 print('Save train data pipeline v2')
 train_data_pipeline_v2.publish()
 
@@ -53,4 +55,5 @@ subprocess.call(cmd)
 print('=' * 80)
 print('Step 3: Publish text classification  dataset v2 (train_data_pipeline:text_aug v2)')
 print('=' * 80)
+print(train_data_pipeline_v2.version)
 train_data_pipeline_v2()

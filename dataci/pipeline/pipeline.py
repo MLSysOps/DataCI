@@ -144,6 +144,10 @@ class Pipeline(object):
                 self.add_stage(stage)
 
     def __call__(self, auto_save=True):
+        # Raise error if pipeline not built
+        if not self.is_built:
+            raise RuntimeError('Pipeline not built yet, please call `build` method first.')
+
         # Create a Run
         run = Run(pipeline=self, run_num=self.get_next_run_num())
         run.prepare()
