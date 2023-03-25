@@ -17,6 +17,6 @@ def tag(dataset: 'Dataset', tag_name: str, tag_version: str):
     """
     Tag dataset with a version.
     """
-    if not dataset.__published:
+    if not getattr(dataset, f'_{dataset.__class__.__name__}__published'):
         raise RuntimeError('Not able to tag a Dataset that is not published.')
     create_dataset_tag(dataset.name, dataset.version, tag_name, tag_version)

@@ -40,6 +40,12 @@ def ls(args):
             )
 
 
+def tag(args):
+    tag_name, tag_version = args.tag.split('@')
+    dataset = get_dataset(name=args.dataset)
+    dataset.tag(tag_name, tag_version)
+
+
 def update(args):
     repo = Repo()
     dataset = Dataset(name=args.name, repo=repo)
@@ -61,6 +67,18 @@ if __name__ == '__main__':
         help='Dataset name with optional version and optional split information to query.'
     )
     list_parser.set_defaults(func=ls)
+
+    tag_parser = subparser.add_parser('tag', help='Tag dataset')
+    tag_parser.add_argument(
+        'dataset', type=str,
+        help='Dataset in format of <dataset_name>@<dataset_version>. Dataset version is optional, default to "latest".'
+    )
+    tag_parser.add_argument(
+        'tag', type=str,
+        help='Tag in format of <tag_name>@<tag_version>.'
+    )
+    tag_parser.set_defaults(func=tag)
+
     update_parser = subparser.add_parser('update', help='Update dataset')
     update_parser.add_argument('-n', '--name', type=str, required=True, help='Dataset name.')
     update_parser.set_defaults(func=update)
