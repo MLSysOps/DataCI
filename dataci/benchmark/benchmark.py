@@ -32,6 +32,7 @@ class Benchmark(object):
             model_name: str,
             train_kwargs: dict = None,
             repo: 'Repo' = None,
+            **kwargs,
     ):
         self.repo = repo or Repo()
         self.type = type
@@ -112,4 +113,5 @@ class Benchmark(object):
         config['test_dataset'] = get_dataset(**config['test_dataset'])
         config['train_kwargs'] = json.loads(config['train_kwargs'])
         self = cls(**config)
-        self.create_date = datetime.fromisoformat(config['timestamp'])
+        self.create_date = datetime.fromtimestamp(config['timestamp'])
+        return self
