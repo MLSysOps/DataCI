@@ -28,28 +28,56 @@ def create_one_dataset(dataset_dict):
         )
 
 
+def create_dataset_tag(dataset_name, dataset_version, tag_name, tag_version):
+    with db_connection:
+        db_connection.execute(
+            """
+            INSERT INTO dataset_tag (dataset_name, dataset_version, tag_name, tag_version)
+            VALUES (?,?,?,?)
+            ;
+            """,
+            (dataset_name, dataset_version, tag_name, tag_version)
+        )
+
+
 def get_one_dataset(name, version='latest'):
     with db_connection:
         if version != 'latest':
             dataset_po_iter = db_connection.execute(
                 """
-                SELECT name,
-                       version, 
-                       yield_pipeline_name,
-                       yield_pipeline_version,
-                       log_message,
-                       timestamp,
-                       id_column,
-                       size,
-                       filename,
-                       file_config,
-                       parent_dataset_name,
-                       parent_dataset_version
-                FROM   dataset
-                WHERE  name = ?
-                AND    version = ?
+                --beginsql
+                WITH selected_dataset AS (
+                    SELECT dataset_name    AS name,                      
+                           dataset_version AS version
+                    FROM  dataset_tag
+                    WHERE tag_name = ?
+                    AND   tag_version = ?
+                    UNION ALL
+                    SELECT name
+                         , version
+                    FROM   dataset
+                    WHERE  name = ?
+                    AND    version = ?
+                )
+                SELECT d.name
+                     , d.version
+                     , yield_pipeline_name
+                     , yield_pipeline_version
+                     , log_message
+                     , timestamp
+                     , id_column
+                     , size
+                     , filename
+                     , file_config
+                     , parent_dataset_name
+                     , parent_dataset_version
+                FROM dataset d
+                JOIN selected_dataset sd 
+                ON   d.name = sd.name 
+                AND  d.version = sd.version
                 ;
-                """, (name, version))
+                --endsql
+                """, (name, version, name, version))
         else:
             dataset_po_iter = db_connection.execute(
                 """
@@ -92,8 +120,22 @@ def get_one_dataset(name, version='latest'):
 def get_many_datasets(name, version=None):
     with db_connection:
         dataset_po_iter = db_connection.execute("""
-            SELECT name,
-                   version, 
+            --beginsql
+            WITH selected_dataset AS (
+                SELECT dataset_name    AS name,                      
+                       dataset_version AS version
+                FROM  dataset_tag
+                WHERE tag_name GLOB ?
+                AND   tag_version GLOB ?
+                UNION ALL
+                SELECT name
+                     , version
+                FROM   dataset
+                WHERE  name GLOB ?
+                AND    version GLOB ?
+            )
+            SELECT d.name,
+                   d.version, 
                    yield_pipeline_name,
                    yield_pipeline_version,
                    log_message,
@@ -104,11 +146,13 @@ def get_many_datasets(name, version=None):
                    file_config,
                    parent_dataset_name,
                    parent_dataset_version
-            FROM   dataset
-            WHERE  name GLOB ?
-            AND    version GLOB ?
+            FROM   dataset d
+            JOIN  selected_dataset sd
+            ON    d.name = sd.name
+            AND   d.version = sd.version
             ;
-            """, (name, version))
+            --endsql
+            """, (name, version, name, version))
     dataset_dict_list = list()
     for dataset_po in dataset_po_iter:
         name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, id_column, size, \
@@ -129,15 +173,31 @@ def get_many_dataset_update_plan(name):
         result_iter = db_connection.execute(
             """
             --- beginsql
-            WITH base AS 
+            WITH selected_dataset AS (
+                SELECT dataset_name    AS name,                      
+                       dataset_version AS version
+                FROM  dataset_tag
+                WHERE tag_name GLOB ?
+                AND   tag_version GLOB ?
+                UNION ALL
+                SELECT name
+                     , version
+                FROM   dataset
+                WHERE  name GLOB ?
+                AND    version GLOB ?
+            ) 
+            ,base AS 
             (
-                SELECT  version
+
+                SELECT  d.version
                         ,parent_dataset_name
                         ,parent_dataset_version
                         ,yield_pipeline_name
                         ,yield_pipeline_version
-                FROM    dataset
-                WHERE   name = ?
+                FROM    dataset d
+                JOIN    selected_dataset sd
+                ON      d.name = sd.name
+                AND     d.version = sd.version
             )
             ,dataset_list AS 
             (

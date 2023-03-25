@@ -30,6 +30,7 @@ from .utils import generate_dataset_version_id, generate_dataset_identifier
 class Dataset(object):
     from .publish import publish  # type: ignore[misc]
     from .update import update  # type: ignore[misc]
+    from .tag import tag  # type: ignore[misc]
 
     def __init__(
             self,
@@ -129,8 +130,8 @@ class Dataset(object):
         # Load the parent dataset using `list_dataset` API
         from dataci.dataset import list_dataset
         datasets = list_dataset(
-            self.repo, f'{self._parent_dataset["name"]}@{self._parent_dataset["version"]}',
-            tree_view=False,
+            f'{self._parent_dataset["name"]}@{self._parent_dataset["version"]}',
+            tree_view=False, repo=self.repo,
         )
         if len(datasets) == 0:
             self._parent_dataset = None

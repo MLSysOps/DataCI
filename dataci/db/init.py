@@ -11,6 +11,7 @@ from dataci.db import db_connection
 with db_connection:
     db_connection.executescript("""
     DROP TABLE IF EXISTS run;
+    DROP TABLE IF EXISTS dataset_tag;
     DROP TABLE IF EXISTS dataset;
     DROP TABLE IF EXISTS pipeline;
     """)
@@ -43,6 +44,16 @@ with db_connection:
         FOREIGN KEY (yield_pipeline_name, yield_pipeline_version) REFERENCES pipeline (name, version),
         FOREIGN KEY (parent_dataset_name, parent_dataset_version) REFERENCES dataset (name, version),
         PRIMARY KEY (name, version)
+    );
+    
+    CREATE TABLE dataset_tag
+    (
+        dataset_name    TEXT,
+        dataset_version TEXT,
+        tag_name        TEXT,
+        tag_version     TEXT,
+        FOREIGN KEY (dataset_name, dataset_version) REFERENCES dataset (name, version),
+        PRIMARY KEY (tag_name, tag_version)
     );
 
     CREATE TABLE run
