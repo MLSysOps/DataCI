@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from dataci.db.dataset import get_one_dataset, get_many_datasets
 from .dataset import Dataset
+from .utils import DATASET_IDENTIFIER_PATTERN
 
 if TYPE_CHECKING:
     from dataci.repo import Repo
@@ -25,8 +26,20 @@ LIST_DATASET_IDENTIFIER_PATTERN = re.compile(
 
 
 def get_dataset(name, version=None, repo: 'Optional[Repo]' = None):
-    name = str(name)
-    version = str(version) if version else 'latest'
+    # If version is provided along with name
+    matched = DATASET_IDENTIFIER_PATTERN.match(str(name))
+    if not matched:
+        raise ValueError(f'Invalid dataset identifier {name}')
+    # Parse name and version
+    name, version_ = matched.groups()
+    # Only one version is allowed to be provided, either in name or in version
+    if version and version_:
+        raise ValueError('Only one version is allowed to be provided by name or version.')
+
+    version = version or version_
+    version = str(version).lower() if version else 'latest'
+
+    # Check version
     if version != 'latest':
         # Version hash ID should provide 7 - 40 digits
         assert 40 >= len(version) >= 7, \
