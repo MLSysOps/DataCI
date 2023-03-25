@@ -36,7 +36,7 @@ def get_dataset(name, version=None, repo: 'Optional[Repo]' = None):
     return Dataset.from_dict(dataset_dict)
 
 
-def list_dataset(repo: 'Repo', dataset_identifier=None, tree_view=True):
+def list_dataset(dataset_identifier=None, tree_view=True, repo: 'Repo' = None):
     """
     List dataset with optional dataset identifier to query.
 
@@ -66,6 +66,7 @@ def list_dataset(repo: 'Repo', dataset_identifier=None, tree_view=True):
         >>> list_dataset(repo=repo, dataset_identifier='dataset1@1234567a')
         {'dataset1': {'1234567a': ...}}
     """
+    repo = repo or Repo()
     dataset_identifier = dataset_identifier or '*'
     matched = LIST_DATASET_IDENTIFIER_PATTERN.match(dataset_identifier)
     if not matched:
