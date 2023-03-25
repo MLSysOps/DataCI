@@ -32,7 +32,7 @@ Get text classification dataset v1 as train dataset
 from dataci.dataset import list_dataset
 
 # Get all versions of the text classification dataset
-text_classification_datasets = list_dataset('text_classification')
+text_classification_datasets = list_dataset('train_data_pipeline:text_aug', tree_view=False)
 # Sort by created date
 text_classification_datasets.sort(key=lambda x: x.create_date)
 train_dataset = text_classification_datasets[0]
@@ -53,6 +53,7 @@ test_dataset = text_raw_val_datasets[0]
 Since the text classification dataset v1 are built with the data augmentation pipeline `train_data_pipeline`,
 we will perform `data_augmentation` data-centric benchmark, with `text_classification` ML task.
 
+We will use `bert-base-cased` as the model name, and only train for 3 epochs with 10 steps per epoch for demo purpose.
 ```python
 from dataci.benchmark import Benchmark
 
@@ -64,9 +65,18 @@ test_dataset = ...
 benchmark = Benchmark(
     type='data_augmentation',
     ml_task='text_classification',
-    model='bert-base-cased',
+    model_name='bert-base-cased',
     train_dataset=train_dataset,
     test_dataset=test_dataset,
+    train_kwargs=dict(
+        epochs=3,
+        batch_size=4,
+        learning_rate=1e-5,
+        logging_steps=1,
+        max_train_steps_per_epoch=10,
+        max_val_steps_per_epoch=10,
+        seed=42,
+    ),
 )
 # Run benchmark
 benchmark.run()
@@ -74,12 +84,18 @@ benchmark.run()
 
 ## 1.2 Benchmark all text classification datasets (v2 - v4)
 
-```shell
-python dataci/command/benchmark.py run --type=data_augmentation --ml_task=text_classification --model=bert-base-cased --train_dataset=text_classification@v2 --test_dataset=text_raw_val@v1
+```python
 
-python dataci/command/benchmark.py run --type=data_augmentation --ml_task=text_classification --model=bert-base-cased --train_dataset=text_classification@v3 --test_dataset=text_raw_val@v2
-
-python dataci/command/benchmark.py run --type=data_augmentation --ml_task=text_classification --model=bert-base-cased --train_dataset=text_classification@v4 --test_dataset=text_raw_val@v2
+for text_classification_dataset in text_classification_datasets[1:]:
+    benchmark = Benchmark(
+        type='data_augmentation',
+        ml_task='text_classification',
+        model_name='bert-base-cased',
+        train_dataset=text_classification_dataset,
+        test_dataset=test_dataset,
+    )
+    # Run benchmark
+    benchmark.run()
 ```
 
 # 2. Summary
