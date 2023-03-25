@@ -17,6 +17,7 @@ def run(args):
         dataci_repo_dir,
         dataci_repo_dir / 'pipeline',
         dataci_repo_dir / 'tmp',
+        dataci_repo_dir / 'benchmark',
     ]
     for folder in data_ci_folders:
         folder.mkdir(exist_ok=True)

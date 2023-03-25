@@ -8,10 +8,10 @@ Date: Mar 22, 2023
 import argparse
 import json
 import logging
-from pathlib import Path
 import random
 import time
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -23,7 +23,6 @@ from torch.optim import AdamW
 from torch.utils.collect_env import get_pretty_env_info
 from torch.utils.data import Dataset, DataLoader, random_split
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-
 
 logger = None
 LOG_FILE_NAME = 'out.log'
@@ -83,15 +82,15 @@ def parse_args(args=None):
                         help='Max number of val and test steps for each epoch. For debug/demo purpose.')
     parser.add_argument('-b', '--bs', '--batch_size', type=int, default=32, dest='batch_size',
                         help='Batch size for data loader')
-    parser.add_argument('-e', '--epoch', type=int, default=3,
+    parser.add_argument('-e', '--epochs', type=int, default=3,
                         help='Number of epochs for training')
     parser.add_argument('--model_name', type=str, default='bert-base-uncased',
                         help='Name of Hugging Face transformer model to use')
     parser.add_argument('--learning_rate', type=float, default=1e-5,
                         help='Learning rate for optimizer')
-    parser.add_argument('--preprocessing_num_workers', type=int, default=4, 
+    parser.add_argument('--preprocessing_num_workers', type=int, default=4,
                         help='Num of workers used for preprocessing')
-    parser.add_argument('--print_freq', type=int, default=100,
+    parser.add_argument('--logging_steps', type=int, default=100,
                         help='Printing frequency during training')
     parser.add_argument('--exp_root', type=Path, default='output',
                         help='Path to save experiment results')
@@ -216,7 +215,7 @@ def train_one_epoch(args, model, dataloader, optimizer, epoch_num, label_encoder
         if idx > args.max_train_steps_per_epoch:
             # Reach the max steps for this epoch, skip to next epoch
             break
-        if idx % args.print_freq == 0:
+        if idx % args.logging_steps == 0:
             logger.info(f'[Epoch{epoch_num}][Step {idx}] train_loss={loss.item()}, train_acc={acc}')
 
     train_loss_epoch = np.average(train_loss_list).item()
@@ -280,7 +279,7 @@ def val_one_epoch(args, model, dataloader, epoch_num, label_encoder):
             # Reach the max steps for this epoch, skip to next epoch
             break
 
-        if idx % args.print_freq == 0:
+        if idx % args.logging_steps == 0:
             logger.info(f'[Epoch{epoch_num}][Step {idx}] val_loss={loss.item()}, val_acc={acc}')
 
     val_loss_epoch = np.average(val_loss_list).item()
@@ -303,10 +302,10 @@ def main(args):
 
     # Prepare exp directory
     args.exp_root = args.exp_root / '_'.join([
-        f'{datetime.now().strftime("%Y%m%d-%H%M%S")}'
-        f"task=text_classification"
+        f'{datetime.now().strftime("%Y%m%d-%H%M%S")}',
+        f"task=text_classification",
         f"model={args.model_name}",
-        f"lr={args.learning_rate}:.2E",
+        f"lr={args.learning_rate:.2E}",
         f"b={args.batch_size}",
         f"j={args.preprocessing_num_workers}",
     ])
@@ -351,7 +350,7 @@ def main(args):
     optimizer = AdamW(model.parameters(), lr=5e-5)
 
     # Train the model
-    for epoch in range(args.epoch):
+    for epoch in range(args.epochs):
         # train loop
         train_metrics_dict, train_pred_result = train_one_epoch(
             args, model, train_dataloader, optimizer, epoch,
@@ -359,7 +358,7 @@ def main(args):
         )
         # Validation loop
         val_metrics_dict, val_pred_result = val_one_epoch(args, model, val_dataloader, epoch, label_encoder)
-        
+
         # Save loggings and results
         logger.info(f"Saving model checkpoint, metrics, and predictions to {args.exp_root}")
         # 1. Save model checkpoint
@@ -391,6 +390,8 @@ def main(args):
         json.dump(test_metrics_dict, f)
     # 2. Save test prediction to CSV file
     pd.DataFrame(test_pred_result).to_csv(args.pred_dir / 'test_preds.csv', index=False)
+
+    return args.exp_root
 
 
 if __name__ == '__main__':

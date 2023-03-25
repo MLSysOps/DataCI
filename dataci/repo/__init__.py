@@ -19,8 +19,8 @@ class Repo(object):
         self.dataci_dir = self.root_dir / self.DATACI_DIR
 
     @property
-    def dataset_dir(self):
-        return self.dataci_dir / 'dataset'
+    def benchmark_dir(self):
+        return self.dataci_dir / 'benchmark'
 
     @property
     def pipeline_dir(self):

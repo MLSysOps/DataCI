@@ -12,7 +12,7 @@ from pathlib import Path
 NAME_PATTERN = re.compile(r'^[a-z]\w*$', flags=re.IGNORECASE)
 VERSION_PATTERN = re.compile(r'latest|[a-f\d]{7,40}', flags=re.IGNORECASE)
 DATASET_IDENTIFIER_PATTERN = re.compile(
-    r'^([a-z]\w*)(?:@(latest|[a-z\d]{7,40}))?$', flags=re.IGNORECASE
+    r'^([a-z][\w:]*)(?:@(latest|[a-z\d]{7,40}))?$', flags=re.IGNORECASE
 )
 
 

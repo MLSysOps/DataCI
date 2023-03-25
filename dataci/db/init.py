@@ -10,6 +10,7 @@ from dataci.db import db_connection
 # Drop all tables
 with db_connection:
     db_connection.executescript("""
+    DROP TABLE IF EXISTS benchmark;
     DROP TABLE IF EXISTS run;
     DROP TABLE IF EXISTS dataset_tag;
     DROP TABLE IF EXISTS dataset;
@@ -63,5 +64,21 @@ with db_connection:
         pipeline_version TEXT,
         FOREIGN KEY (pipeline_name, pipeline_version) REFERENCES pipeline (name, version),
         PRIMARY KEY (pipeline_name, pipeline_version, run_num)
+    );
+    
+    CREATE TABLE benchmark
+    (
+        type                  TEXT,
+        ml_task               TEXT,
+        train_dataset_name    TEXT,
+        train_dataset_version TEXT,
+        test_dataset_name     TEXT,
+        test_dataset_version  TEXT,
+        model_name            TEXT,
+        train_kwargs          TEXT,
+        result_dir            TEXT,
+        timestamp             INTEGER,
+        FOREIGN KEY (train_dataset_name, train_dataset_version) REFERENCES dataset (name, version),
+        FOREIGN KEY (test_dataset_name, test_dataset_version) REFERENCES dataset (name, version)
     );
     """)
