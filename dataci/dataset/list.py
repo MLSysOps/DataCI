@@ -11,17 +11,17 @@ from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from dataci.db.dataset import get_one_dataset, get_many_datasets
+from dataci.repo import Repo
 from .dataset import Dataset
 from .utils import DATASET_IDENTIFIER_PATTERN
 
 if TYPE_CHECKING:
-    from dataci.repo import Repo
     from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 LIST_DATASET_IDENTIFIER_PATTERN = re.compile(
-    r'^([\w.*[\]]+?)(?:@([\da-f]{1,40}))?$', re.IGNORECASE
+    r'^([\w:.*[\]]+?)(?:@([\da-f]{1,40}))?$', re.IGNORECASE
 )
 
 

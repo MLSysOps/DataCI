@@ -173,20 +173,7 @@ def get_many_dataset_update_plan(name):
         result_iter = db_connection.execute(
             """
             --- beginsql
-            WITH selected_dataset AS (
-                SELECT dataset_name    AS name,                      
-                       dataset_version AS version
-                FROM  dataset_tag
-                WHERE tag_name GLOB ?
-                AND   tag_version GLOB ?
-                UNION ALL
-                SELECT name
-                     , version
-                FROM   dataset
-                WHERE  name GLOB ?
-                AND    version GLOB ?
-            ) 
-            ,base AS 
+            WITH base AS 
             (
 
                 SELECT  d.version
@@ -195,9 +182,7 @@ def get_many_dataset_update_plan(name):
                         ,yield_pipeline_name
                         ,yield_pipeline_version
                 FROM    dataset d
-                JOIN    selected_dataset sd
-                ON      d.name = sd.name
-                AND     d.version = sd.version
+                WHERE   d.name GLOB ?
             )
             ,dataset_list AS 
             (
