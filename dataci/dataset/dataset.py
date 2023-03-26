@@ -104,6 +104,9 @@ class Dataset(object):
 
     def dict(self):
         yield_pipeline_dict = self.yield_pipeline.dict() if self.yield_pipeline else {'name': None, 'version': None}
+        self.version = generate_dataset_version_id(
+            self._dataset_files, self.yield_pipeline, self.log_message, self.parent_dataset
+        ) if self.version is None else self.version
         config = {
             'name': self.name,
             'timestamp': int(self.create_date.timestamp()),
@@ -111,15 +114,12 @@ class Dataset(object):
             'parent_dataset_version': self.parent_dataset.version if self.parent_dataset else None,
             'yield_pipeline': yield_pipeline_dict,
             'log_message': self.log_message,
-            'version': generate_dataset_version_id(
-                self._dataset_files, self.yield_pipeline, self.log_message, self.parent_dataset
-            ) if self.version is None else self.version,
+            'version': self.version,
             'filename': self._dataset_files.name,
             'file_config': json.dumps(self.file_config),
             'size': self.size,
             'id_column': self.id_column,
         }
-        self.version = config['version']
         return config
 
     @property
@@ -168,7 +168,7 @@ class Dataset(object):
             return file_config
 
     def __str__(self):
-        return f'{self.name}@{self.version[:7]}'
+        return f'{self.name}@{self.version[:7]}' if self.version else f'{self.name} ! Unpublished'
 
     def __hash__(self):
         return hash(str(self))

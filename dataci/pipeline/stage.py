@@ -74,7 +74,9 @@ class Stage(ABC):
         current_deps = (self._outputs, str(self.feat_base_dir))
         if prev_deps != current_deps:
             try:
-                # If input is a published dataset
+                # If output is a published dataset
+                # FIXME: this will cause a bug when pipeline is updated, bind pipeline stage to some dataset version
+                #   is not a good idea
                 dataset_dict = get_one_dataset(name=self._outputs)
                 dataset_dict['repo'] = self.repo
                 outputs = Dataset.from_dict(dataset_dict)
