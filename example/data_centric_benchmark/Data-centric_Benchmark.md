@@ -44,7 +44,7 @@ Get validation split of the raw text dataset v1 as test dataset
 from dataci.dataset import list_dataset
 
 # Get all versions of the raw text dataset val split
-text_raw_val_datasets = list_dataset('text_raw_val')
+text_raw_val_datasets = list_dataset('text_raw_val', tree_view=False)
 # Sort by created date
 text_raw_val_datasets.sort(key=lambda x: x.create_date)
 test_dataset = text_raw_val_datasets[0]
@@ -80,6 +80,9 @@ benchmark = Benchmark(
 )
 # Run benchmark
 benchmark.run()
+
+# Check benchmark results
+print(benchmark.metrics)
 ```
 
 ## 1.2 Benchmark all text classification datasets (v2 - v4)
@@ -93,6 +96,15 @@ for text_classification_dataset in text_classification_datasets[1:]:
         model_name='bert-base-cased',
         train_dataset=text_classification_dataset,
         test_dataset=test_dataset,
+        train_kwargs=dict(
+            epochs=3,
+            batch_size=4,
+            learning_rate=1e-5,
+            logging_steps=1,
+            max_train_steps_per_epoch=10,
+            max_val_steps_per_epoch=10,
+            seed=42,
+        ),
     )
     # Run benchmark
     benchmark.run()
