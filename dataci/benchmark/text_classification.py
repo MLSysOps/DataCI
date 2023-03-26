@@ -220,20 +220,23 @@ def train_one_epoch(args, model, dataloader, optimizer, epoch_num, label_encoder
 
     train_loss_epoch = np.average(train_loss_list).item()
     train_acc_epoch = np.average(train_acc_list).item()
+    batch_time_epoch = np.average(batch_time_list).item()
     logger.info(f"[Epoch {epoch_num}] train_loss_epoch={train_loss_epoch}, train_acc_epoch={train_acc_epoch}")
     train_metrics_dict = {
-        'train_loss_epoch': train_loss_epoch,
-        'train_acc_epoch': train_acc_epoch,
-        'train_losses': train_loss_list,
-        'train_accs': train_acc_list,
-        'train_batch_times': batch_time_list,
+        'loss': train_loss_epoch,
+        'acc': train_acc_epoch,
+        'batch_time': batch_time_epoch,
+        'losses': train_loss_list,
+        'accs': train_acc_list,
+        'batch_times': batch_time_list,
     }
 
     return train_metrics_dict, train_pred_results
 
 
 @torch.no_grad()
-def val_one_epoch(args, model, dataloader, epoch_num, label_encoder):
+def val_one_epoch(args, model, dataloader, epoch_num, label_encoder, test=False):
+    stage_name = 'test' if test else 'val'
     val_loss_list, val_acc_list, batch_time_list = list(), list(), list()
     val_pred_results = list()
     model.eval()
@@ -280,18 +283,22 @@ def val_one_epoch(args, model, dataloader, epoch_num, label_encoder):
             break
 
         if idx % args.logging_steps == 0:
-            logger.info(f'[Epoch{epoch_num}][Step {idx}] val_loss={loss.item()}, val_acc={acc}')
+            logger.info(f'[Epoch{epoch_num}][Step {idx}] {stage_name}_loss={loss.item()}, {stage_name}_acc={acc}')
 
     val_loss_epoch = np.average(val_loss_list).item()
     val_acc_epoch = np.average(val_acc_list).item()
-    logger.info(f"[Epoch: {epoch_num}] val_loss_epoch={val_loss_epoch}, val_acc_epoch={val_acc_epoch}")
+    val_batch_time_epoch = np.average(batch_time_list).item()
+    logger.info(
+        f"[Epoch: {epoch_num}] {stage_name}_loss_epoch={val_loss_epoch}, {stage_name}_acc_epoch={val_acc_epoch}, {stage_name}_batch_time_epoch={val_batch_time_epoch}"
+    )
 
     val_metrics_dict = {
-        'val_loss_epoch': val_loss_epoch,
-        'val_acc_epoch': val_acc_epoch,
-        'val_losses': val_loss_list,
-        'val_accs': val_acc_list,
-        'val_batch_times': batch_time_list,
+        f'loss': val_loss_epoch,
+        f'acc': val_acc_epoch,
+        f'batch_time': val_batch_time_epoch,
+        f'losses': val_loss_list,
+        f'accs': val_acc_list,
+        f'batch_times': batch_time_list,
     }
 
     return val_metrics_dict, val_pred_results
@@ -357,7 +364,9 @@ def main(args):
             label_encoder
         )
         # Validation loop
-        val_metrics_dict, val_pred_result = val_one_epoch(args, model, val_dataloader, epoch, label_encoder)
+        val_metrics_dict, val_pred_result = val_one_epoch(
+            args, model, val_dataloader, epoch, label_encoder, test=False
+        )
 
         # Save loggings and results
         logger.info(f"Saving model checkpoint, metrics, and predictions to {args.exp_root}")
@@ -370,18 +379,16 @@ def main(args):
         }
         torch.save(checkpoint_dict, args.checkpoint_dir / f"epoch={epoch}.pt")
         # 2. Save metrics to JSON file
-        metrics_dict = {
-            **train_metrics_dict,
-            **val_metrics_dict,
-        }
-        with open(args.metrics_dir / f'train_val_metrics_epoch={epoch}.json', 'w') as f:
-            json.dump(metrics_dict, f)
+        with open(args.metrics_dir / f'train_metrics_epoch={epoch}.json', 'w') as f:
+            json.dump(train_metrics_dict, f)
+        with open(args.metrics_dir / f'val_metrics_epoch={epoch}.json', 'w') as f:
+            json.dump(val_metrics_dict, f)
         # 3. Save prediction to CSV file
         pd.DataFrame(train_pred_result).to_csv(args.pred_dir / f'train_preds_epoch={epoch}.csv', index=False)
         pd.DataFrame(val_pred_result).to_csv(args.pred_dir / f'val_preds_epoch={epoch}.csv', index=False)
 
     test_metrics_dict, test_pred_result = val_one_epoch(
-        args, model, test_dataloader, epoch_num=None, label_encoder=label_encoder
+        args, model, test_dataloader, epoch_num=None, label_encoder=label_encoder, test=True,
     )
     # Save test results and metrics
     logger.info(f"Saving test metrics and predictions to {args.exp_root}")
