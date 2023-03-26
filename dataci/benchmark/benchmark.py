@@ -17,6 +17,7 @@ from dataci.benchmark.bench_type import verify_bench_type
 from dataci.repo import Repo
 
 if TYPE_CHECKING:
+    import os
     from dataci.dataset.dataset import Dataset
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class Benchmark(object):
             test_dataset: 'Dataset',
             model_name: str,
             train_kwargs: dict = None,
+            result_dir: 'Optional[os.PathLike]' = None,
             repo: 'Repo' = None,
             **kwargs,
     ):
@@ -42,7 +44,7 @@ class Benchmark(object):
         self.model_name = model_name
         self.train_kwargs = train_kwargs or dict()
         self.create_date: 'Optional[datetime]' = datetime.now()
-        self.result_dir = None
+        self.result_dir = Path(result_dir) if result_dir else None
 
         self._verify()
 
@@ -61,7 +63,7 @@ class Benchmark(object):
         """
 
         if self.ml_task == 'text_classification':
-            from .text_classification import parse_args
+            from .text_classification import parse_args, main
             args = [
                        f'--train_dataset={self.train_dataset.dataset_files}',
                        f'--test_dataset={self.test_dataset.dataset_files}',
@@ -76,8 +78,9 @@ class Benchmark(object):
             'args: ' + ' '.join(args))
         args = parse_args(args)
         # TODO: better way to convert none json serializable to str
-        self.train_kwargs = {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()}
-        # self.result_dir = str(main(args))
+        self.train_kwargs = vars(args)
+        result_dir = main(args)
+        self.result_dir = Path(result_dir)
 
         if auto_save:
             # Save benchmark result to DB
@@ -91,6 +94,31 @@ class Benchmark(object):
         create_one_benchmark(self.dict())
         logger.info(f'Save benchmark to db: {self}')
 
+    @property
+    def metrics(self):
+        """Get benchmark metrics
+        """
+        if not self.result_dir:
+            raise ValueError('Benchmark not run yet')
+
+        metrics = {'train': dict(), 'val': dict(), 'test': None}
+        # Load metrics from metrics dir
+        # 1. Load test metrics
+        with open(self.result_dir / 'metrics' / 'test_metrics.json') as f:
+            metrics['test'] = json.load(f)
+        # 2. Load train metrics
+        for train_metrics_path in (self.result_dir / 'metrics').glob('train_metrics_epoch=[0-9]*.json'):
+            epoch = int(train_metrics_path.stem.split('=')[-1])
+            with open(train_metrics_path) as f:
+                metrics['train'][epoch] = json.load(f)
+        # 3. Load val metrics
+        for val_metrics_path in (self.result_dir / 'metrics').glob('val_metrics_epoch=[0-9]*.json'):
+            epoch = int(val_metrics_path.stem.split('=')[-1])
+            with open(val_metrics_path) as f:
+                metrics['val'][epoch] = json.load(f)
+
+        return metrics
+
     def dict(self):
         return {
             'type': self.type,
@@ -100,8 +128,9 @@ class Benchmark(object):
             'test_dataset_name': self.test_dataset.name,
             'test_dataset_version': self.test_dataset.version,
             'model_name': self.model_name,
-            'train_kwargs': json.dumps(self.train_kwargs),
-            'result_dir': self.result_dir,
+            'train_kwargs': json.dumps({
+                k: str(v) if isinstance(v, Path) else v for k, v in self.train_kwargs.items()}),
+            'result_dir': str(self.result_dir),
             'timestamp': int(self.create_date.timestamp()),
         }
 
