@@ -47,7 +47,7 @@ def ls(args):
             print(' '.join(
                 [f'{benchmark.train_dataset.version[:7]:15}'] +
                 [f'{benchmark.metrics[stage][metrics]:10f}' for stage,
-                    metrics in metrics_names]
+                                                                metrics in metrics_names]
             ))
 
 
@@ -77,30 +77,35 @@ def ls_pipeline(args):
         print(f'Type: {type_}, ML task: {ml_task}, Model name: {model_name}')
         pipeline_dict = dict()
         for train_pipeline, pipeline_groups in \
-            table_groupby(list(groups), ['train_pipeline']):
-            pipeline_dict[repr(train_pipeline)] = {
+                table_groupby(list(groups), ['train_pipeline']):
+            pipeline_dict[str(train_pipeline)] = {
                 str(benchmark.train_dataset.parent_dataset): benchmark for benchmark in pipeline_groups
             }
-        
+
         dataset_set = set()
         for dataset_dict in pipeline_dict.values():
             dataset_set.update(dataset_dict.keys())
-        
-        #           Dataset
-        # <null>    dataset1    dataset2    dataset3    ...
+
+        # Pipeline  Dataset
+        # <null>    dataset1                            dataset2                ...
+        # <null>    metrics1    metrics2    metrics3    metrics1    metrics2    ...
+        print(f'{"Pipeline":30} {"Dataset":{20 * len(metrics_names) * len(dataset_set)}}')
+        print(' '.join([f'{" ":30}'] + [f'{dataset:{20 * len(metrics_names)}}' for dataset in dataset_set]))
+        print(' '.join(
+            [f'{" ":30}'] +
+            [f'{(stage + " " + metrics).capitalize():20}' for stage, metrics in metrics_names] * len(dataset_set)
+        ))
         for pipeline, benchmark_dict in pipeline_dict.items():
-            print(f'Pipeline: {pipeline}')
-            # Dataset version, metrics name1, metrics name2, ...
-            print(' '.join(
-                [f'{"Dataset version":15}'] +
-                [f'{(stage + " " + metrics).capitalize():10}' for stage, metrics in metrics_names])
-            )
-            for train_dataset, benchmark in benchmark_dict.items():
-                print(' '.join(
-                    [f'{train_dataset:15}'] +
-                    [f'{benchmark.metrics[stage][metrics]:10f}' for stage,
-                        metrics in metrics_names]
-                ))
+            print(f'{pipeline:30}', end=' ')
+            for dataset in dataset_set:
+                benchmark = benchmark_dict.get(dataset, None)
+                if benchmark:
+                    print(' '.join(
+                        [f'{benchmark.metrics[stage][metrics]:<20f}' for stage, metrics in metrics_names]
+                    ), end=' ')
+                else:
+                    print(f'{" ":20}' * len(metrics_names), end=' ')
+            print()
 
 
 if __name__ == '__main__':
@@ -115,8 +120,10 @@ if __name__ == '__main__':
     list_parser.set_defaults(func=ls)
 
     list_pipeline_parser = subparser.add_parser('lsp')
-    list_pipeline_parser.add_argument('-me', '--metrics', type=str,
-                                      help='Metrics to show. Use comma to separate multiple metrics. (e.g., test/acc,train/loss)')
+    list_pipeline_parser.add_argument(
+        '-me', '--metrics', type=str,
+        help='Metrics to show. Use comma to separate multiple metrics. (e.g., test/acc,train/loss)'
+    )
     list_pipeline_parser.add_argument('pipeline_name', type=str, nargs='?', default=None,
                                       help='Pipeline name')
     list_pipeline_parser.set_defaults(func=ls_pipeline)

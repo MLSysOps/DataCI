@@ -7,8 +7,8 @@ Date: Mar 15, 2023
 """
 import logging
 import os
-from typing import TYPE_CHECKING
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 
@@ -25,6 +25,7 @@ def save(run: 'Run' = ...):
     with cwd(run.workdir):
         #####################################################################
         # Step 1: Recover pipeline feat cached file (.dvc) from .lock
+        # TODO: The reason due to https://github.com/iterative/dvc/issues/4428
         #####################################################################
         if os.path.exists('dvc.lock'):
             with open('dvc.lock', 'r') as f:

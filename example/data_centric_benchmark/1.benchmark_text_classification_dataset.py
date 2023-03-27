@@ -81,7 +81,7 @@ if __name__ == '__main__':
     print('Benchmark metrics:')
     print(benchmark.metrics)
 
-    # enchmark all text classification datasets (v2 - v4)
+    # benchmark all text classification datasets (v2 - v4)
     print('=' * 80)
     print('Step 2: Benchmark all text classification datasets (v2 - v4)')
     print('=' * 80)

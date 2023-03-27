@@ -124,7 +124,19 @@ python dataci/command/benchmark.py ls -me=val/loss,val/acc,test/acc,test/batch_t
 # 7720705           0.938506   0.641615   0.760938   0.011533
 # 085beda           0.706578   0.756588   0.751563   0.011555
 # 
-# Total 1 benchmark, 3 records
+# Total 1 benchmark, 4 records
 ```
 
 ## 2.2 What is the best data augmentation pipeline for text classification?
+
+```shell
+python dataci/command/benchmark.py lsp -me=val/acc,test/acc train_data_pipeline
+# Type: data_augmentation, ML task: text_classification, Model name: bert-base-cased
+# Pipeline                       Dataset                                                                         
+#                                text_raw_train@f3a821d                    text_raw_train@09d026c
+#                                Val acc              Test acc             Val acc              Test acc
+# train_data_pipeline@6a552e1    0.598159             0.710417             0.641615             0.760938
+# train_data_pipeline@df63fb1    0.778219             0.741667             0.756588             0.751563
+# 
+# Total 1 benchmark, 4 records, 2 pipelines
+```
