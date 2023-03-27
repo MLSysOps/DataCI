@@ -14,7 +14,18 @@ from dataci.command.utils import table_groupby
 def ls(args):
     """List all benchmarks
     """
+    # Get benchmarks by query
     benchmarks = list_benchmarks(args.train_dataset_name)
+
+    # Parse metrics
+    metrics_names = list()
+    for metric in args.metrics.split(',') if args.metrics else list():
+        metrics_name = metric.split('/')
+        assert len(metrics_name) == 2, \
+            f'Invalid metric name: {metric}. You should specify the stage name and metric name, e.g., test/acc.'
+        metrics_names.append(metrics_name)
+
+    # Display benchmarks
     cur_train_dataset, cur_test_dataset = None, None
     for (train_dataset, test_dataset, type_, ml_task, model_name), groups in \
             table_groupby(benchmarks, ['train_dataset.name', 'test_dataset', 'type', 'ml_task', 'model_name']):
@@ -22,11 +33,21 @@ def ls(args):
         if cur_train_dataset != train_dataset or cur_test_dataset != test_dataset:
             cur_train_dataset = train_dataset
             cur_test_dataset = test_dataset
-            print(f'Train dataset: {train_dataset}, Test dataset: {test_dataset}')
+            print(
+                f'Train dataset: {train_dataset}, Test dataset: {test_dataset}')
         print(f'Type: {type_}, ML task: {ml_task}, Model name: {model_name}')
-        print('Dataset version, Test Acc')
+        # Dataset version, metrics name1, metrics name2, ...
+        print(' '.join(
+            [f'{"Dataset version":15}'] +
+            [f'{(stage + " " + metrics).capitalize():10}' for stage, metrics in metrics_names])
+        )
+
         for benchmark in groups:
-            print(f'  {benchmark.train_dataset} {benchmark.metrics["test"]["acc"]}')
+            print(' '.join(
+                [f'{benchmark.train_dataset.version[:7]:15}'] +
+                [f'{benchmark.metrics[stage][metrics]:10f}' for stage,
+                    metrics in metrics_names]
+            ))
 
 
 if __name__ == '__main__':
@@ -34,7 +55,10 @@ if __name__ == '__main__':
     subparser = parser.add_subparsers()
 
     list_parser = subparser.add_parser('ls')
-    list_parser.add_argument('train_dataset_name', type=str, nargs='?', default=None, help='Train dataset name')
+    list_parser.add_argument('-me', '--metrics', type=str,
+                             help='Metrics to show. Use comma to separate multiple metrics. (e.g., test/acc,train/loss)')
+    list_parser.add_argument('train_dataset_name', type=str,
+                             nargs='?', default=None, help='Train dataset name')
     list_parser.set_defaults(func=ls)
 
     args_ = parser.parse_args()

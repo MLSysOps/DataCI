@@ -115,15 +115,16 @@ for text_classification_dataset in text_classification_datasets[1:]:
 ## 2.1 What is the best dataset for text classification?
 
 ```shell
-dataci benchmark ls -desc=val/auc -n text_classification
-
-Data Augmentation + Text Classification + Finetune + SentenceBERT
-ID      dataset ver     train/auc   train/acc   val/auc     val/acc
-bench3  v3              0.88        0.90        0.75        0.80              
-bench2  v2              0.82        0.85        0.70        0.78
-bench1  v1              0.75        0.86        0.70        0.72
-
-Total 1 benchmark, 3 records
+python dataci/command/benchmark.py ls -me=val/acc,test/acc train_data_pipeline:text_aug
+# Train dataset: train_data_pipeline:text_aug, Test dataset: text_raw_val@641a430
+# Type: data_augmentation, ML task: text_classification, Model name: bert-base-cased
+# Dataset version Val loss   Val acc    Test acc  
+# 9052571           0.741362   0.778219   0.741667
+# 05fdad4           1.030018   0.598159   0.710417
+# 7720705           0.938506   0.641615   0.760938
+# 085beda           0.706578   0.756588   0.751563
+# 
+# Total 1 benchmark, 3 records
 ```
 
 ## 2.2 What is the best data augmentation pipeline for text classification?

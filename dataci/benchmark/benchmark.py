@@ -116,6 +116,11 @@ class Benchmark(object):
             epoch = int(val_metrics_path.stem.split('=')[-1])
             with open(val_metrics_path) as f:
                 metrics['val'][epoch] = json.load(f)
+        # 4. Use last epoch as train metrics and val metrics
+        for stage in ['train', 'val']:
+            last_epoch = max(metrics[stage].keys())
+            for k, v in metrics[stage][last_epoch].items():
+                metrics[stage][k] = v
 
         return metrics
 
