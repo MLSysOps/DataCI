@@ -5,10 +5,16 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Mar 26, 2023
 """
+from typing import TYPE_CHECKING
+
 from dataci.db.benchmark import get_many_benchmarks
 
+if TYPE_CHECKING:
+    from typing import List
+    from dataci.benchmark.benchmark import Benchmark
 
-def list_benchmarks(train_dataset_name: str = None):
+
+def list_benchmarks(train_dataset_name: str = None) -> 'List[Benchmark]':
     """List all benchmarks
     """
     from dataci.benchmark.benchmark import Benchmark

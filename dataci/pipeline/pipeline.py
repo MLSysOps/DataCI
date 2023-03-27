@@ -176,6 +176,9 @@ class Pipeline(object):
         pipeline.is_published = True
         pipeline.restore()
         return pipeline
+    
+    def __repr__(self) -> str:
+        return f'{self.name}@{self.version}'
 
     def __str__(self):
         return f'{self.name}@{self.version[:7]}'
@@ -185,5 +188,5 @@ class Pipeline(object):
 
     def __eq__(self, __o: object) -> bool:
         if isinstance(__o, type(self)):
-            return str(self) == str(__o)
+            return repr(self) == repr(__o)
         return False

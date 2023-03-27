@@ -93,6 +93,14 @@ class Benchmark(object):
 
         create_one_benchmark(self.dict())
         logger.info(f'Save benchmark to db: {self}')
+    
+    @property
+    def train_pipeline(self):
+        return self.train_dataset.yield_pipeline
+    
+    @property
+    def test_pipeline(self):
+        return self.test_dataset.yield_pipeline
 
     @property
     def metrics(self):
