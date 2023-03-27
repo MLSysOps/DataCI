@@ -45,9 +45,10 @@ def create_one_benchmark(benchmark_dict: dict):
         return cursor.lastrowid
 
 
-def get_many_benchmarks(train_dataset_name: str):
+def get_many_benchmarks(train_dataset_name: str, train_dataset_version: str = None) -> list:
     """List all benchmarks
     """
+    train_dataset_version = train_dataset_version or '*'
     with db_connection:
         cursor = db_connection.cursor()
         cursor.execute(
@@ -64,9 +65,10 @@ def get_many_benchmarks(train_dataset_name: str):
                  , timestamp 
             FROM benchmark
             WHERE train_dataset_name GLOB ?
+            AND   train_dataset_version GLOB ?
             ;
             """,
-            (train_dataset_name,),
+            (train_dataset_name, train_dataset_version),
         )
         benchmark_lists = cursor.fetchall()
 

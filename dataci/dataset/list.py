@@ -6,23 +6,18 @@ Email: yuanmingleee@gmail.com
 Date: Feb 20, 2023
 """
 import logging
-import re
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from dataci.db.dataset import get_one_dataset, get_many_datasets
 from dataci.repo import Repo
 from .dataset import Dataset
-from .utils import DATASET_IDENTIFIER_PATTERN
+from .utils import DATASET_IDENTIFIER_PATTERN, LIST_DATASET_IDENTIFIER_PATTERN
 
 if TYPE_CHECKING:
     from typing import Optional
 
 logger = logging.getLogger(__name__)
-
-LIST_DATASET_IDENTIFIER_PATTERN = re.compile(
-    r'^([\w:.*[\]]+?)(?:@([\da-f]{1,40}))?$', re.IGNORECASE
-)
 
 
 def get_dataset(name, version=None, repo: 'Optional[Repo]' = None):
