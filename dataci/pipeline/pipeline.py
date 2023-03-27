@@ -51,9 +51,10 @@ class Pipeline(object):
         self.is_published = False
 
         # stages
-        self.stages = stages or list()
-        if not isinstance(self.stages, Iterable):
-            self.stages = [self.stages]
+        stages = stages or list()
+        if not isinstance(stages, Iterable):
+            stages = [stages]
+        self.stages = stages
         self.workdir = self.basedir / self.name / self.version
 
     @property

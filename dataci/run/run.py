@@ -8,8 +8,11 @@ Date: Mar 09, 2023
 Run for pipeline.
 """
 from copy import deepcopy
+import os
 from shutil import copytree, rmtree, copy2
 from typing import TYPE_CHECKING
+
+from dataci.utils import symlink_force
 
 if TYPE_CHECKING:
     from dataci.pipeline.pipeline import Pipeline
@@ -27,6 +30,8 @@ class Run(object):
         return self.pipeline.workdir / 'runs' / str(self.run_num)
 
     def prepare(self):
+        from dataci.dataset import Dataset
+        
         # Clean all for the run workdir
         if self.workdir.exists():
             rmtree(self.workdir)
@@ -36,8 +41,18 @@ class Run(object):
         (self.workdir / self.pipeline.CODE_DIR).symlink_to(
             self.pipeline.workdir / self.pipeline.CODE_DIR, target_is_directory=True
         )
-        # Create feat dir and copy common feat into the feat dir
-        copytree(self.pipeline.workdir / self.pipeline.FEAT_DIR, self.workdir / self.pipeline.FEAT_DIR, symlinks=True)
+        # TODO: better way to prepare input feat
+        # Create feat dir and link feat into the feat dir
+        (self.workdir / self.pipeline.FEAT_DIR).mkdir(parents=True)
+        for stage in self.pipeline.stages:
+            for dependency in stage.dependency:
+                if isinstance(dependency, Dataset):
+                    # Link global dataset files path to local
+                    local_file_path = os.path.join(
+                        self.workdir / self.pipeline.FEAT_DIR, dependency.name + dependency.dataset_files.suffix)
+                    symlink_force(dependency.dataset_files, local_file_path)
+                    dependency = local_file_path
+
         # Copy pipeline definition file to work directory
         copy2(self.pipeline.workdir / 'dvc.yaml', self.workdir / 'dvc.yaml', )
 
