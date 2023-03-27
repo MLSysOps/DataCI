@@ -115,14 +115,14 @@ for text_classification_dataset in text_classification_datasets[1:]:
 ## 2.1 What is the best dataset for text classification?
 
 ```shell
-python dataci/command/benchmark.py ls -me=val/acc,test/acc train_data_pipeline:text_aug
+python dataci/command/benchmark.py ls -me=val/loss,val/acc,test/acc,test/batch_time train_data_pipeline:text_aug
 # Train dataset: train_data_pipeline:text_aug, Test dataset: text_raw_val@641a430
 # Type: data_augmentation, ML task: text_classification, Model name: bert-base-cased
-# Dataset version Val loss   Val acc    Test acc  
-# 9052571           0.741362   0.778219   0.741667
-# 05fdad4           1.030018   0.598159   0.710417
-# 7720705           0.938506   0.641615   0.760938
-# 085beda           0.706578   0.756588   0.751563
+# Dataset version Val loss   Val acc    Test acc   Test batch_time
+# 9052571           0.741362   0.778219   0.741667   0.011514
+# 05fdad4           1.030018   0.598159   0.710417   0.011522
+# 7720705           0.938506   0.641615   0.760938   0.011533
+# 085beda           0.706578   0.756588   0.751563   0.011555
 # 
 # Total 1 benchmark, 3 records
 ```
