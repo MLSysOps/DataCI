@@ -57,7 +57,7 @@ def get_one_dataset(name, version='latest'):
                          , version
                     FROM   dataset
                     WHERE  name = ?
-                    AND    version = ?
+                    AND    version GLOB ?
                 )
                 SELECT d.name
                      , d.version

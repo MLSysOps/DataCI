@@ -32,12 +32,13 @@ def get_dataset(name, version=None, repo: 'Optional[Repo]' = None):
         raise ValueError('Only one version is allowed to be provided by name or version.')
 
     version = version or version_
-    version = str(version).lower() if version else 'latest'
+    version = str(version).lower() + '*' if version else 'latest'
 
     # Check version
     if version != 'latest':
         # Version hash ID should provide 7 - 40 digits
-        assert 40 >= len(version) >= 7, \
+        # -1 because the version is already appended with '*' in the end
+        assert 7 <= len(version) - 1 <= 40, \
             'You should provided the length of version ID within 7 - 40 (both included).'
     dataset_dict = get_one_dataset(name=name, version=version)
     dataset_dict['repo'] = repo

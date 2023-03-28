@@ -13,6 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
+import pandas as pd
+
 from dataci.benchmark.bench_type import verify_bench_type
 from dataci.repo import Repo
 
@@ -93,14 +95,47 @@ class Benchmark(object):
 
         create_one_benchmark(self.dict())
         logger.info(f'Save benchmark to db: {self}')
-    
+
     @property
     def train_pipeline(self):
         return self.train_dataset.yield_pipeline
-    
+
     @property
     def test_pipeline(self):
         return self.test_dataset.yield_pipeline
+
+    def get_prediction(self, split: str, epoch: int = None):
+        """Get benchmark prediction
+
+        Args:
+            split: train, val, or test
+            epoch: epoch number, if None, use last epoch
+        """
+        if not self.result_dir:
+            raise ValueError('Benchmark not run yet')
+        if split not in ['train', 'val', 'test']:
+            raise ValueError(f'Invalid split {split}, expected train, val, or test')
+
+        # Get last epoch number
+        if epoch is None and split != 'test':
+            # Test split does not have epoch number
+            epoch = max(
+                [int(x.stem.split('=')[-1]) for x in
+                 (self.result_dir / 'metrics').glob(f'{split}_metrics_epoch=[0-9]*.json')]
+            )
+        # Get epoch suffix and id column configuration
+        if split == 'test':
+            epoch_suffix = ''
+            df_dtype = {self.test_dataset.id_column: str}
+        else:
+            epoch_suffix = f'_epoch={epoch}'
+            df_dtype = {self.train_dataset.id_column: str}
+
+        # Get prediction CSV file path
+        pred_path = self.result_dir / 'pred' / f'{split}_preds{epoch_suffix}.csv'
+
+        # Load prediction
+        return pd.read_csv(pred_path, dtype=df_dtype)
 
     @property
     def metrics(self):
