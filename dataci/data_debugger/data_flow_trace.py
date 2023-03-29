@@ -62,6 +62,26 @@ def random_select_rows(df: pd.DataFrame, n: int):
     st.session_state.selected_data = selected_data.index.tolist()
 
 
+def random_select_multiclass_tp_rows(df: pd.DataFrame, label: str, n: int):
+    selected_data = df[(df['label'] == label) & (df['pred'] == label)].sample(n=n)
+    st.session_state.selected_data = selected_data.index.tolist()
+
+
+def random_select_multiclass_fp_rows(df: pd.DataFrame, label: str, n: int):
+    selected_data = df[(df['label'] != label) & (df['pred'] == label)].sample(n=n)
+    st.session_state.selected_data = selected_data.index.tolist()
+
+
+def random_select_multiclass_fn_rows(df: pd.DataFrame, label: str, n: int):
+    selected_data = df[(df['label'] == label) & (df['pred'] != label)].sample(n=n)
+    st.session_state.selected_data = selected_data.index.tolist()
+
+
+def random_select_multiclass_tn_rows(df: pd.DataFrame, label: str, n: int):
+    selected_data = df[(df['label'] != label) & (df['pred'] != label)].sample(n=n)
+    st.session_state.selected_data = selected_data.index.tolist()
+
+
 # Init state
 if 'selected_data' not in st.session_state:
     st.session_state.selected_data = []
@@ -85,9 +105,14 @@ traced_df = fetch_traced_data(
     config_dataset_name, config_dataset_version
 )[(config_benchmark_type, config_ml_task)]
 
-input_df = traced_df['train_input']
-output_df = traced_df['train_output']
-train_benchmark_pred_df = traced_df['train_benchmark_pred']
+if config_view_split == 'train':
+    input_df = traced_df['train_input']
+    output_df = traced_df['train_output']
+    benchmark_pred_df = traced_df['train_benchmark_pred']
+else:
+    input_df = traced_df['test_input']
+    output_df = traced_df['test_output']
+    benchmark_pred_df = traced_df['test_benchmark_pred']
 
 gb = GridOptionsBuilder.from_dataframe(input_df)
 gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
@@ -100,15 +125,27 @@ gb.configure_selection(
 
 st.subheader('Select Data to Trace')
 with st.container():
-    button_texts = [
-        'Random Select 10 Data', 'Select 10 True Positive Data',
-        'Select 10 False Positive Data', 'Select 10 True Negative Data', 'Select 10 False Negative Data'
-    ]
-    draw_data_button_groups = st.columns(len(button_texts))
-    for button, button_text in zip(draw_data_button_groups, button_texts):
-        with button:
-            # random select 10 data in input df
-            st.button(button_text, on_click=lambda: random_select_rows(input_df, 10))
+    col1, col2 = st.columns(2)
+    with col1:
+        selection_method = st.selectbox(
+            'Selection Method',
+            ['Random Select', 'Select By Ground Truth Label'],
+        )
+    with col2:
+        num_sampled_data = st.number_input('Number of Data to sample', min_value=1, max_value=20, value=5, step=1)
+
+    if selection_method == 'Select By Ground Truth Label':
+        # Select data by ground truth label
+        col1, col2 = st.columns(2)
+        with col1:
+            # - Input: label appeared in benchmark prediction ground truth
+            st.selectbox('Label', benchmark_pred_df['label'].unique().tolist())
+        with col2:
+            # - Input: confusion matrix type
+            confusion_matrix_type = st.selectbox(
+                'Confusion Matrix Type', ['True Positive', 'False Positive', 'False Negative', 'True Negative'],
+            )
+    submit_button = st.button(label='Sample Data')
 
 response = AgGrid(
     input_df,
@@ -128,4 +165,4 @@ st.text('Output Data')
 st.dataframe(output_df[output_df['id'].isin(ids)])
 st.text('>>> Model Training >>>')
 st.text('Train Prediction')
-st.dataframe(train_benchmark_pred_df[train_benchmark_pred_df['id'].isin(ids)])
+st.dataframe(benchmark_pred_df[benchmark_pred_df['id'].isin(ids)])
