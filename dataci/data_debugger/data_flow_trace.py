@@ -7,7 +7,7 @@ Date: Mar 27, 2023
 """
 import pandas as pd
 import streamlit as st
-from st_aggrid import GridOptionsBuilder, AgGrid, GridUpdateMode, ColumnsAutoSizeMode
+from st_aggrid import GridOptionsBuilder, AgGrid, ColumnsAutoSizeMode, JsCode
 
 from dataci.benchmark import list_benchmarks
 
@@ -59,27 +59,44 @@ def fetch_traced_data(dataset_name: str, dataset_version: str):
 
 def random_select_rows(df: pd.DataFrame, n: int):
     selected_data = df.sample(n=n)
-    st.session_state.selected_data = selected_data.index.tolist()
+    st.session_state.selected_data = selected_data.id.tolist()
 
 
 def random_select_multiclass_tp_rows(df: pd.DataFrame, label: str, n: int):
-    selected_data = df[(df['label'] == label) & (df['pred'] == label)].sample(n=n)
-    st.session_state.selected_data = selected_data.index.tolist()
+    df = df[(df['label'] == label) & (df['prediction'] == label)]
+    selected_data = df.sample(n=min(n, len(df)))
+    st.session_state.selected_data = selected_data.id.tolist()
 
 
 def random_select_multiclass_fp_rows(df: pd.DataFrame, label: str, n: int):
-    selected_data = df[(df['label'] != label) & (df['pred'] == label)].sample(n=n)
-    st.session_state.selected_data = selected_data.index.tolist()
+    df = df[(df['label'] != label) & (df['prediction'] == label)]
+    selected_data = df.sample(n=min(n, len(df)))
+    st.session_state.selected_data = selected_data.id.tolist()
 
 
 def random_select_multiclass_fn_rows(df: pd.DataFrame, label: str, n: int):
-    selected_data = df[(df['label'] == label) & (df['pred'] != label)].sample(n=n)
-    st.session_state.selected_data = selected_data.index.tolist()
+    df = df[(df['label'] == label) & (df['prediction'] != label)]
+    selected_data = df.sample(n=min(n, len(df)))
+    st.session_state.selected_data = selected_data.id.tolist()
 
 
 def random_select_multiclass_tn_rows(df: pd.DataFrame, label: str, n: int):
-    selected_data = df[(df['label'] != label) & (df['pred'] != label)].sample(n=n)
-    st.session_state.selected_data = selected_data.index.tolist()
+    df = df[(df['label'] != label) & (df['prediction'] != label)]
+    selected_data = df.sample(n=min(n, len(df)))
+    st.session_state.selected_data = selected_data.id.tolist()
+
+
+def on_click_sample_data_btn():
+    if selection_method == 'Random Select':
+        random_select_rows(input_df, num_sampled_data)
+    elif selection_method == 'Select By Ground Truth Label':
+        handler_fn_mapper = {
+            'True Positive': random_select_multiclass_tp_rows,
+            'False Positive': random_select_multiclass_fp_rows,
+            'False Negative': random_select_multiclass_fn_rows,
+            'True Negative': random_select_multiclass_tn_rows,
+        }
+        handler_fn_mapper[confusion_matrix_type](benchmark_pred_df, data_sample_label, num_sampled_data)
 
 
 # Init state
@@ -114,13 +131,26 @@ else:
     output_df = traced_df['test_output']
     benchmark_pred_df = traced_df['test_benchmark_pred']
 
+# Set column __sel as flag for data selection
+view_df = input_df.copy()
+view_df['__sel'] = view_df['id'].isin(st.session_state.selected_data)
+# Sort selected data to the top
+view_df.sort_values(by=['__sel'], ascending=False, inplace=True)
 gb = GridOptionsBuilder.from_dataframe(input_df)
 gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
 gb.configure_default_column(
     groupable=True, value=True, enableRowGroup=True, autoHeight=True, wrapText=True,
 )
+cellstyle_jscode = JsCode("""
+function(params) {
+   if (params.data.__sel) {
+       params.node.setSelected(true);
+   }
+};
+""")
+gb.configure_column('id', cellStyle=cellstyle_jscode)
 gb.configure_selection(
-    'multiple', use_checkbox=True, groupSelectsChildren=True, pre_selected_rows=st.session_state.selected_data,
+    'multiple', use_checkbox=True, groupSelectsChildren=True, header_checkbox=True,
 )
 
 st.subheader('Select Data to Trace')
@@ -139,30 +169,30 @@ with st.container():
         col1, col2 = st.columns(2)
         with col1:
             # - Input: label appeared in benchmark prediction ground truth
-            st.selectbox('Label', benchmark_pred_df['label'].unique().tolist())
+            data_sample_label = st.selectbox('Label', benchmark_pred_df['label'].unique().tolist())
         with col2:
             # - Input: confusion matrix type
             confusion_matrix_type = st.selectbox(
                 'Confusion Matrix Type', ['True Positive', 'False Positive', 'False Negative', 'True Negative'],
             )
-    submit_button = st.button(label='Sample Data')
+    submit_button = st.button(label='Sample Data', on_click=on_click_sample_data_btn)
 
 response = AgGrid(
-    input_df,
+    view_df,
     theme="streamlit",
     gridOptions=gb.build(),
-    update_mode=GridUpdateMode.NO_UPDATE,
     try_to_convert_back_to_original_types=False,
+    allow_unsafe_jscode=True,
     columns_auto_size_mode=ColumnsAutoSizeMode.FIT_CONTENTS,
 )
 
 ids = [row['id'] for row in response['selected_rows']]
 
 st.text('Input Data')
-st.dataframe(input_df[input_df['id'].isin(ids)])
+st.dataframe(input_df[input_df['id'].isin(ids)].sort_values('id'))
 st.text('>>> Data Augmentation Pipeline >>>')
 st.text('Output Data')
-st.dataframe(output_df[output_df['id'].isin(ids)])
+st.dataframe(output_df[output_df['id'].isin(ids)].sort_values('id'))
 st.text('>>> Model Training >>>')
 st.text('Train Prediction')
-st.dataframe(benchmark_pred_df[benchmark_pred_df['id'].isin(ids)])
+st.dataframe(benchmark_pred_df[benchmark_pred_df['id'].isin(ids)].sort_values('id'))
