@@ -161,7 +161,7 @@ gb.configure_selection(
     'multiple', use_checkbox=True, groupSelectsChildren=True, header_checkbox=True,
 )
 
-st.subheader('Select Data to Trace')
+st.header('Select Data to Trace')
 with st.container():
     col1, col2 = st.columns(2)
     with col1:
@@ -196,32 +196,33 @@ response = AgGrid(
 
 ids = [row['id'] for row in response['selected_rows']]
 
+st.header('View Data Flow')
 # Traced result
 # - Column 1: Traced result display of each stage
 # - Column 2: DAG of the data flow
-traced_result_col, dag_col = st.columns([18, 6])
+traced_result_col, dag_col = st.columns([16, 8])
 with traced_result_col:
-    with st.expander('Input Data', expanded=True):
+    with st.expander('🗂️ Dataset', expanded=True):
         st.dataframe(input_df[input_df['id'].isin(ids)].sort_values('id'))
 
-    with st.expander('Output Data', expanded=True):
+    with st.expander('🗂️ Dataset', expanded=True):
         st.dataframe(output_df[output_df['id'].isin(ids)].sort_values('id'))
 
-    with st.expander('Train Prediction', expanded=True):
+    with st.expander('⚛️ Prediction', expanded=True):
         st.dataframe(benchmark_pred_df[benchmark_pred_df['id'].isin(ids)].sort_values('id'))
 with dag_col:
     st.graphviz_chart("""
 digraph L {
-  node [shape=record style="rounded,filled" fontname=Arial fixedsize=true width=1.5 height=0.5]
-  center=true
+  node [shape=record style="rounded" color=gray80 fontname="Helvetica,Arial,sans-serif" ixedsize=true width=2.5 height=0.7]
+  edge [fontname="Helvetica,Arial,sans-serif" color=royalblue1 arrowsize=0.5 tailclip=true fontsize=8 labeldistance=2]
 
-  n1  [label="Input data"]
-  n2  [label="Output data"]
-  n3  [label="Train prediction"]
+  n1  [label=<🗂️ | <FONT POINT-SIZE="10.0">DATASET</FONT><BR ALIGN="LEFT"/>text_raw_train@v1>]
+  n2  [label=<🗂️ | <FONT POINT-SIZE="10.0">DATASET</FONT><BR ALIGN="LEFT"/>text_classification@v1>]
+  n3  [label=<⚛️ | <FONT POINT-SIZE="10.0">PREDICTION</FONT><BR ALIGN="LEFT"/>benchmark@v1>]
 
-  n1 -> n2 [nojustify=true label="Data Augmentation Pipeline\ntrain_data_pipeline@ca95b9f\c"]
-  n2 -> n3 [nojustify=true label="Data-centric Benchmark\c"]
-
+  n1 -> n2  [headlabel="📏 Pipeline"]
+  n2 -> n3 [headlabel="📊 Data-centric Benchmark"]
 }
-"""
-    )
+""",
+                      use_container_width=True,
+                      )
