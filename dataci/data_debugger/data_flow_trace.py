@@ -10,6 +10,7 @@ import streamlit as st
 from st_aggrid import GridOptionsBuilder, AgGrid, ColumnsAutoSizeMode, JsCode
 
 from dataci.benchmark import list_benchmarks
+from dataci.dataset import list_dataset
 
 
 @st.cache_data
@@ -55,6 +56,13 @@ def fetch_traced_data(dataset_name: str, dataset_version: str):
             'test_benchmark_pred': test_benchmark_pred,
         }
     return traced_data_dict
+
+
+@st.cache_data
+def fetch_dataset_versions(dataset_name: str):
+    datasets = list_dataset(dataset_name, tree_view=False)
+    datasets.sort(key=lambda x: x.create_date, reverse=True)
+    return [dataset.version[:7] for dataset in datasets]
 
 
 def random_select_rows(df: pd.DataFrame, n: int):
@@ -110,7 +118,7 @@ st.set_page_config(layout='wide')
 st.sidebar.title('Data Flow Trace')
 # Benchmark dataset options (dataset name, dataset version)
 config_dataset_name = st.sidebar.selectbox('Dataset Name', ['train_data_pipeline:text_aug'])
-config_dataset_version = st.sidebar.selectbox('Dataset Version', ['de785bdae', '473f3bc', '02e2df9', 'fb3d5e4'])
+config_dataset_version = st.sidebar.selectbox('Dataset Version', fetch_dataset_versions(config_dataset_name))
 
 # Benchmark type and ML task options
 config_benchmark_type = st.sidebar.selectbox('Benchmark Type', ['data_augmentation'])
@@ -188,11 +196,32 @@ response = AgGrid(
 
 ids = [row['id'] for row in response['selected_rows']]
 
-st.text('Input Data')
-st.dataframe(input_df[input_df['id'].isin(ids)].sort_values('id'))
-st.text('>>> Data Augmentation Pipeline >>>')
-st.text('Output Data')
-st.dataframe(output_df[output_df['id'].isin(ids)].sort_values('id'))
-st.text('>>> Model Training >>>')
-st.text('Train Prediction')
-st.dataframe(benchmark_pred_df[benchmark_pred_df['id'].isin(ids)].sort_values('id'))
+# Traced result
+# - Column 1: Traced result display of each stage
+# - Column 2: DAG of the data flow
+traced_result_col, dag_col = st.columns([18, 6])
+with traced_result_col:
+    with st.expander('Input Data', expanded=True):
+        st.dataframe(input_df[input_df['id'].isin(ids)].sort_values('id'))
+
+    with st.expander('Output Data', expanded=True):
+        st.dataframe(output_df[output_df['id'].isin(ids)].sort_values('id'))
+
+    with st.expander('Train Prediction', expanded=True):
+        st.dataframe(benchmark_pred_df[benchmark_pred_df['id'].isin(ids)].sort_values('id'))
+with dag_col:
+    st.graphviz_chart("""
+digraph L {
+  node [shape=record style="rounded,filled" fontname=Arial fixedsize=true width=1.5 height=0.5]
+  center=true
+
+  n1  [label="Input data"]
+  n2  [label="Output data"]
+  n3  [label="Train prediction"]
+
+  n1 -> n2 [nojustify=true label="Data Augmentation Pipeline\ntrain_data_pipeline@ca95b9f\c"]
+  n2 -> n3 [nojustify=true label="Data-centric Benchmark\c"]
+
+}
+"""
+    )
