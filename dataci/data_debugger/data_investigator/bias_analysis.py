@@ -3,5 +3,14 @@
 """
 Author: Li Yuanming
 Email: yuanmingleee@gmail.com
-Date: Mar 27, 2023
+Date: Apr 04, 2023
 """
+
+
+def hate_bias():
+    """Hate bias"""
+    pass
+
+
+def gender_bias():
+    pass
