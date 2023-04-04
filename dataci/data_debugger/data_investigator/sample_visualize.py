@@ -11,44 +11,79 @@ import emoji
 import pandas as pd
 import unicodedata
 
+RED_BACKGROUND_COLOR = '#fff1f0'
+RED_COLOR = '#cf1322'
+RED_BORDER_COLOR = '#ffa39e'
+ORANGE_BACKGROUND_COLOR = '#fff7e6'
+ORANGE_COLOR = '#d46b08'
+ORANGE_BORDER_COLOR = '#ffd591'
+GREEN_BACKGROUND_COLOR = '#f6ffed'
+GREEN_COLOR = '#389e0d'
+GREEN_BORDER_COLOR = '#b7eb8f'
+BLUE_BACKGROUND_COLOR = '#e6f7ff'
+BLUE_COLOR = '#096dd9'
+BLUE_BORDER_COLOR = '#91d5ff'
+MEGENTA_BACKGROUND_COLOR = '#fff0f6'
+MEGENTA_COLOR = '#531dab'
+MEGENTA_BORDER_COLOR = '#f759ab'
+PURPLE_BACKGROUND_COLOR = '#f9f0ff'
+PURPLE_COLOR = '#c41d7f'
+PURPLE_BORDER_COLOR = '#ffadd2'
+VOLCANO_BACKGROUND_COLOR = '#fff2e8'
+VOLCANO_COLOR = '#d4380d'
+VOLCANO_BORDER_COLOR = '#ffbb96'
+GOLD_BACKGROUND_COLOR = '#fffbe6'
+GOLD_COLOR = '#d48806'
+GOLD_BORDER_COLOR = '#ffe58f'
+LIME_BACKGROUND_COLOR = '#fcffe6'
+LIME_COLOR = '#7cb305'
+LIME_BORDER_COLOR = '#eaff8f'
+CYAN_BACKGROUND_COLOR = '#e6fffb'
+CYAN_COLOR = '#08979c'
+CYAN_BORDER_COLOR = '#87e8de'
+GEEKBLUE_BACKGROUND_COLOR = '#e6f7ff'
+GEEKBLUE_COLOR = '#1d39c4'
+GEEKBLUE_BORDER_COLOR = '#adc6ff'
+
 DEFAULT_BACKGROUND_COLOR_SEQUENCE = [
-    '#fff1f0',  # red
-    '#fff7e6',  # orange
-    '#f6ffed',  # green
-    '#e6f7ff',  # blue
-    '#fff0f6',  # megenta
-    '#f9f0ff',  # purple
-    '#fff2e8',  # volcano
-    '#fffbe6',  # gold
-    '#fcffe6',  # lime
-    '#e6fffb',  # cyan
-    '#e6f7ff',  # geekblue
+    RED_BACKGROUND_COLOR,
+    ORANGE_BACKGROUND_COLOR,
+    GREEN_BACKGROUND_COLOR,
+    BLUE_BACKGROUND_COLOR,
+    MEGENTA_BACKGROUND_COLOR,
+    PURPLE_BACKGROUND_COLOR,
+    VOLCANO_BACKGROUND_COLOR,
+    GOLD_BACKGROUND_COLOR,
+    LIME_BACKGROUND_COLOR,
+    CYAN_BACKGROUND_COLOR,
+    GEEKBLUE_BACKGROUND_COLOR,
 ]
 DEFAULT_COLOR_SEQUENCE = [
-    '#cf1322',  # red
-    '#d46b08',  # orange
-    '#389e0d',  # green
-    '#096dd9',  # blue
-    '#531dab',  # purple
-    '#c41d7f',  # megenta
-    '#d4380d',  # volcano
-    '#d48806',  # gold
-    '#7cb305',  # lime
-    '#08979c',  # cyan
-    '#1d39c4',  # geekblue
+    RED_COLOR,
+    ORANGE_COLOR,
+    GREEN_COLOR,
+    BLUE_COLOR,
+    MEGENTA_COLOR,
+    PURPLE_COLOR,
+    VOLCANO_COLOR,
+    GOLD_COLOR,
+    LIME_COLOR,
+    CYAN_COLOR,
+    GEEKBLUE_COLOR,
 ]
+
 DEFAULT_BORDER_COLOR_SEQUENCE = [
-    '#ffa39e',  # red
-    '#ffd591',  # orange
-    '#b7eb8f',  # green
-    '#91d5ff',  # blue
-    '#f759ab',  # purple
-    '#ffadd2',  # megenta
-    '#ffbb96',  # volcano
-    '#ffe58f',  # gold
-    '#eaff8f',  # lime
-    '#87e8de',  # cyan
-    '#adc6ff',  # geekblue
+    RED_BORDER_COLOR,
+    ORANGE_BORDER_COLOR,
+    GREEN_BORDER_COLOR,
+    BLUE_BORDER_COLOR,
+    MEGENTA_BORDER_COLOR,
+    PURPLE_BORDER_COLOR,
+    VOLCANO_BORDER_COLOR,
+    GOLD_BORDER_COLOR,
+    LIME_BORDER_COLOR,
+    CYAN_BORDER_COLOR,
+    GEEKBLUE_BORDER_COLOR,
 ]
 
 
@@ -72,38 +107,38 @@ def visualize_text(texts: pd.Series):
             if char in string.punctuation:
                 # punctuation
                 text_styled += text_format_template.format(
-                    color=DEFAULT_COLOR_SEQUENCE[0], background_color=DEFAULT_BACKGROUND_COLOR_SEQUENCE[0],
+                    color=ORANGE_COLOR, background_color=ORANGE_BACKGROUND_COLOR,
                     text=char
                 )
             elif char in string.digits:
                 # digits
                 text_styled += text_format_template.format(
-                    color=DEFAULT_COLOR_SEQUENCE[1], background_color=DEFAULT_BACKGROUND_COLOR_SEQUENCE[1],
+                    color=MEGENTA_COLOR, background_color=MEGENTA_BACKGROUND_COLOR,
                     text=char
                 )
             elif char in string.whitespace:
                 # white space
                 text_styled += text_format_template.format(
-                    background_color=DEFAULT_BACKGROUND_COLOR_SEQUENCE[2],
+                    color=BLUE_COLOR, background_color=BLUE_BACKGROUND_COLOR,
                     text=char
                 )
             elif char in emoji.UNICODE_EMOJI:
                 # emoji
                 text_styled += text_format_template.format(
-                    color=DEFAULT_COLOR_SEQUENCE[3], background_color=DEFAULT_BACKGROUND_COLOR_SEQUENCE[3],
+                    color=PURPLE_COLOR, background_color=PURPLE_BACKGROUND_COLOR,
                     text=char
                 )
             elif not unicodedata.is_normalized('NFKD', char):
                 # dialectics
                 text_styled += text_format_template.format(
-                    color=DEFAULT_COLOR_SEQUENCE[4], background_color=DEFAULT_BACKGROUND_COLOR_SEQUENCE[4],
+                    color=VOLCANO_COLOR, background_color=VOLCANO_BACKGROUND_COLOR,
                     text=char
                 )
             elif char in string.ascii_letters:
                 text_styled += char
             else:
                 text_styled += text_format_template.format(
-                    color=DEFAULT_COLOR_SEQUENCE[5], background_color=DEFAULT_BACKGROUND_COLOR_SEQUENCE[5],
+                    color=CYAN_COLOR, background_color=CYAN_BACKGROUND_COLOR,
                     text=char
                 )
         return text_styled

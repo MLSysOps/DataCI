@@ -36,12 +36,22 @@ config_dataset_version = st.sidebar.selectbox('Dataset Version', fetch_dataset_v
 
 # Main
 dataset_df = fetch_dataset(config_dataset_name, config_dataset_version)
+# Hide index column
+# CSS to inject contained in a string
+hide_table_row_index = """
+            <style>
+            thead tr th:first-child {display:none}
+            tbody th {display:none}
+            </style>
+            """
+st.markdown(hide_table_row_index, unsafe_allow_html=True)
+
 dataset_df_raw = dataset_df.head(10)
 dataset_df = dataset_df_raw.copy()
 
 st.title('Data Visualization')
 with st.expander('Show raw data'):
-    st.dataframe(dataset_df_raw, use_container_width=True)
+    st.markdown(dataset_df_raw.to_html(escape=False), unsafe_allow_html=True)
 dataset_df['product_name'] = visualize_text(dataset_df['product_name'])
 dataset_df['category_lv0'] = visualize_label(dataset_df['category_lv0'])
 st.markdown(dataset_df.to_html(escape=False), unsafe_allow_html=True)
