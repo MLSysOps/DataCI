@@ -92,6 +92,8 @@ def visualize_text(texts: pd.Series):
 
     def style_text(text: str):
         text_format_template = "<span style='color:{color};background-color:{background_color};'>{text}</span>"
+        text_uncolorable_format_template = "<span style='background-color:{background_color};" \
+                                           "border:2px solid;border-color:{border_color}'>{text}</span>"
         # Detect special characters in text
         # 1. punctuation
         # 2. digits
@@ -118,14 +120,14 @@ def visualize_text(texts: pd.Series):
                 )
             elif char in string.whitespace:
                 # white space
-                text_styled += text_format_template.format(
-                    color=BLUE_COLOR, background_color=BLUE_BACKGROUND_COLOR,
+                text_styled += text_uncolorable_format_template.format(
+                    background_color=BLUE_BACKGROUND_COLOR, border_color=BLUE_BORDER_COLOR,
                     text=char
                 )
-            elif char in emoji.UNICODE_EMOJI:
+            elif char in emoji.UNICODE_EMOJI_ENGLISH:
                 # emoji
-                text_styled += text_format_template.format(
-                    color=PURPLE_COLOR, background_color=PURPLE_BACKGROUND_COLOR,
+                text_styled += text_uncolorable_format_template.format(
+                    background_color=PURPLE_BACKGROUND_COLOR, border_color=PURPLE_BORDER_COLOR,
                     text=char
                 )
             elif not unicodedata.is_normalized('NFKD', char):

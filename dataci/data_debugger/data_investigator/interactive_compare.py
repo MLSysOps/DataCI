@@ -9,6 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from dataci.data_debugger.data_investigator.sample_visualize import visualize_label, visualize_text
+from dataci.data_debugger.data_investigator.statistical_analysis import statistics
 from dataci.dataset import list_dataset, get_dataset
 
 
@@ -43,30 +44,19 @@ if 'selected_data' not in st.session_state:
 st.set_page_config(layout='wide')
 
 # Sidebar
-st.sidebar.title('Data Flow Trace')
+st.sidebar.title('Data Visualization')
 # Benchmark dataset options (dataset name, dataset version)
 config_dataset_name = st.sidebar.selectbox('Dataset Name', ['train_data_pipeline:text_aug'])
 config_dataset_version = st.sidebar.selectbox('Dataset Version', fetch_dataset_versions(config_dataset_name))
 
 # Main
 dataset_df_raw = fetch_dataset(config_dataset_name, config_dataset_version)
-# Hide index column
-# CSS to inject contained in a string
-hide_table_row_index = """
-            <style>
-            thead tr th:first-child {display:none}
-            tbody th {display:none}
-            </style>
-            """
-st.markdown(hide_table_row_index, unsafe_allow_html=True)
 
 # Get id column
 dataset_df_selected = dataset_df_raw[dataset_df_raw['id'].isin(st.session_state.selected_data)]
 dataset_df_viz = dataset_df_selected.copy()
 
-st.title('Data Visualization')
-
-st.subheader('Samples Analysis')
+st.title('Samples Analysis')
 col1, col2 = st.columns(2)
 with col1:
     selection_method = st.selectbox(
@@ -78,7 +68,45 @@ with col2:
 submit_button = st.button(label='Sample Data', on_click=on_click_sample_data_btn)
 
 with st.expander('Show raw data'):
-    st.markdown(dataset_df_selected.to_html(escape=False), unsafe_allow_html=True)
+    dataset_df_selected_styler = dataset_df_selected.style.hide_index()
+    st.markdown(dataset_df_selected_styler.to_html(), unsafe_allow_html=True)
 dataset_df_viz['product_name'] = visualize_text(dataset_df_viz['product_name'])
 dataset_df_viz['category_lv0'] = visualize_label(dataset_df_viz['category_lv0'])
-st.markdown(dataset_df_viz.to_html(escape=False), unsafe_allow_html=True)
+dataset_df_viz_styler = dataset_df_viz.style.hide_index()
+st.markdown(dataset_df_viz_styler.to_html(), unsafe_allow_html=True)
+st.empty()
+
+# Statistics Analysis
+st.title('Statistics Analysis')
+# Tabs
+statistics_tab, distribution_tab = st.tabs(['Statistics', 'Feature Distribution'])
+# Statistics tab
+with statistics_tab:
+    statistics_data = statistics(dataset_df_raw)
+    for statis_col, (name, data) in zip(st.columns(len(statistics_data)), statistics_data.items()):
+        with statis_col:
+            st.markdown(f'**{name}**')
+            # get distribution statistics
+            opt_type = data.pop('opt_type', list())
+            distribution_statistics = data.pop('distribution', None)
+            # common statistics
+            common_statistics_df = pd.DataFrame(
+                [
+                    ('Data type', data['data_type']),
+                    ('Total', data['total']),
+                    ('Unique', data['unique']),
+                    ('Missing Value', data['missing']),
+                ]
+            )
+            common_statistics_styler = common_statistics_df.style.hide_index().hide_columns() \
+                .set_properties(subset=common_statistics_df.columns[-1:], **{'text-align': 'right'}) \
+                .format('{:,d}', subset=(common_statistics_df.index[1:], common_statistics_df.columns[-1:])) \
+                .set_table_styles([
+                dict(selector='td', props=[('width', '100vw'), ('border-width', '0px')]),
+            ])
+            st.write(common_statistics_styler.to_html(), unsafe_allow_html=True)
+            # distribution statistics
+            st.selectbox(
+                '', map(lambda x: x.title() + ' Column', opt_type),
+                key=f'{name}_opt_type_selectbox',
+                disabled=len(opt_type) == 1)
