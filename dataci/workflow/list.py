@@ -9,8 +9,9 @@ import re
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from dataci.db.pipeline import get_many_pipeline
 from dataci.pipeline import Pipeline
+
+from dataci.db.pipeline import get_many_pipeline
 
 if TYPE_CHECKING:
     from typing import Optional

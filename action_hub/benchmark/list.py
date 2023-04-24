@@ -8,6 +8,7 @@ Date: Mar 26, 2023
 from typing import TYPE_CHECKING
 
 from dataci.benchmark.benchmark import Benchmark
+
 from dataci.dataset.utils import LIST_DATASET_IDENTIFIER_PATTERN
 from dataci.db.benchmark import get_many_benchmarks
 

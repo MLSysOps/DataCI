@@ -13,10 +13,10 @@ from pathlib import Path
 from typing import Iterable, Union, Optional
 
 import yaml
-
-from dataci.dataset.dataset import Dataset
 from dataci.repo import Repo
 from dataci.run import Run
+
+from dataci.dataset.dataset import Dataset
 from dataci.utils import cwd, symlink_force
 from .stage import Stage
 from .utils import generate_pipeline_version_id

@@ -7,9 +7,9 @@ Date: Mar 09, 2023
 
 Run for pipeline.
 """
-from copy import deepcopy
 import os
-from shutil import copytree, rmtree, copy2
+from copy import deepcopy
+from shutil import rmtree, copy2
 from typing import TYPE_CHECKING
 
 from dataci.utils import symlink_force

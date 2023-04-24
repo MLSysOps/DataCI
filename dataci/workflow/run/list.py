@@ -8,9 +8,10 @@ Date: Mar 16, 2023
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from dataci.db.run import get_many_runs
 from dataci.pipeline.list import LIST_PIPELINE_IDENTIFIER_PATTERN
 from dataci.run import Run
+
+from dataci.db.run import get_many_runs
 
 if TYPE_CHECKING:
     from typing import Optional

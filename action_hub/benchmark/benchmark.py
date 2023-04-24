@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 import pandas as pd
-
 from dataci.benchmark.bench_type import verify_bench_type
 from dataci.repo import Repo
 

@@ -7,9 +7,9 @@ Date: Apr 04, 2023
 """
 import pandas as pd
 import streamlit as st
-
 from dataci.data_debugger.data_investigator.sample_visualize import visualize_label, visualize_text
 from dataci.data_debugger.data_investigator.statistical_analysis import statistics
+
 from dataci.dataset import list_dataset, get_dataset
 
 

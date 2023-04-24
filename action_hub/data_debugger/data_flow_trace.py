@@ -7,9 +7,9 @@ Date: Mar 27, 2023
 """
 import pandas as pd
 import streamlit as st
+from dataci.benchmark import list_benchmarks
 from st_aggrid import GridOptionsBuilder, AgGrid, ColumnsAutoSizeMode, JsCode
 
-from dataci.benchmark import list_benchmarks
 from dataci.dataset import list_dataset
 
 

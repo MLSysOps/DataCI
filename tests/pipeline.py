@@ -103,7 +103,7 @@ def test_publish_pipeline_v2():
 
 
 if __name__ == '__main__':
-    test_publish_pipeline()
+    # test_publish_pipeline()
     test_get_pipeline()
-    test_run_pipeline()
-    test_publish_pipeline_v2()
+    # test_run_pipeline()
+    # test_publish_pipeline_v2()

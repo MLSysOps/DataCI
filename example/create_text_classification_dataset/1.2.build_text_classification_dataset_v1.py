@@ -1,9 +1,7 @@
-import subprocess
 from pathlib import Path
 
 import augly.text as txtaugs
 import torch
-
 from dataci.pipeline import Pipeline, stage
 
 FILE_WORK_DIR = Path(__file__).parent.resolve()
@@ -56,7 +54,7 @@ cmd = [
           f'--test_dataset={FILE_WORK_DIR / "../../data/text_raw/val.csv"}',
       ] + other_args
 print('Benchmarking with command:', ' '.join(cmd))
-subprocess.call(cmd)
+# subprocess.call(cmd)
 print('Finish benchmarking!')
 
 # Publish

@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pandas as pd
+from dataci.repo import Repo
 
 from dataci.db.dataset import get_one_dataset
-from dataci.repo import Repo
 
 if TYPE_CHECKING:
     from typing import Iterable, List
