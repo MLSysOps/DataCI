@@ -6,45 +6,27 @@ Email: yuanmingleee@gmail.com
 Date: Feb 21, 2023
 """
 import os
-from pathlib import Path
 
-DATACI_DIR = '.dataci'
+from dataci import CACHE_ROOT
 
 
-class Repo(object):
-    DATACI_DIR = '.dataci'
+class Workspace(object):
 
-    def __init__(self):
-        self.root_dir = self.find_root()
-        self.dataci_dir = self.root_dir / self.DATACI_DIR
-
-    @property
-    def benchmark_dir(self):
-        return self.dataci_dir / 'benchmark'
+    def __init__(self, name: str):
+        self.name = str(name)
+        # Workspace root
+        self.root_dir = CACHE_ROOT / self.name
 
     @property
-    def pipeline_dir(self):
-        return self.dataci_dir / 'pipeline'
+    def workflow_dir(self):
+        return self.root_dir / 'workflow'
 
     @property
-    def tmp_dir(self):
-        return self.dataci_dir / 'tmp'
+    def data_dir(self):
+        return self.root_dir / 'data'
 
-    @staticmethod
-    def find_root(root=None):
-        root = Path(root or os.curdir)
-        root_dir = root.resolve()
 
-        if not root_dir.is_dir():
-            raise FileNotFoundError(f"directory '{root}' does not exist")
-
-        while True:
-            dataci_dir = root_dir / DATACI_DIR
-            if dataci_dir.is_dir():
-                return root_dir
-            # Reach the FS root
-            if root_dir.parent == root_dir:
-                break
-            root_dir = root_dir.parent
-
-        raise FileNotFoundError("you are not inside of a DVC repository")
+def create_workspace(workspace: Workspace):
+    os.makedirs(workspace.root_dir, exist_ok=True)
+    os.makedirs(workspace.workflow_dir, exist_ok=True)
+    os.makedirs(workspace.data_dir, exist_ok=True)
