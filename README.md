@@ -12,6 +12,9 @@ A tool to record data-science triplets (🗂️ `dataset`, 📏 `pipeline`, 📊
 
 ### Manual install
 
+- `s3fs-fuse` is required for S3 support. Please follow the [installation guide](https://github.com/s3fs-fuse/s3fs-fuse)
+  to install it.
+
 ## Qucik Start
 
 - [Build Text Classification Dataset](./docs/Create_Text_Classification_Dataset.md) [Jupyter Notebooks](./docs/Create_Text_Classification_Dataset.ipynb)
