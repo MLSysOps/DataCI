@@ -5,11 +5,13 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Feb 21, 2023
 """
+import logging
 import os
-import subprocess
 
 from dataci import CACHE_ROOT
-from dataci.connector.s3 import connect as connect_s3, create_bucket
+from dataci.connector.s3 import connect as connect_s3, create_bucket, mount_bucket
+
+logger = logging.getLogger(__name__)
 
 
 class Workspace(object):
@@ -42,12 +44,13 @@ def create_or_use_workspace(workspace: Workspace):
     # Add a prefix to bucket name to avoid name conflict
     # TODO: change the prefix to account specific
     bucket_name = 'dataci-' + workspace.name
-    if not fs.exists(f'/{workspace.name}'):
-        create_bucket(bucket_name)
-    # Mount the bucket to local data directory
-    cmd = ['s3fs', f'{bucket_name}', f'{workspace.data_dir}', '-o', f'passwd_file={CACHE_ROOT / ".passwd-s3fs"}'
-                                                                    '-o', 'url=https://s3.ap-southeast-1.amazonaws.com']
-    subprocess.run(cmd, check=True)
+    # TODO: region should be configurable
+    region = 'ap-southeast-1'
+    if not fs.exists(f'/{bucket_name}'):
+        create_bucket(bucket_name, region=region)
+
+    # Mount the S3 bucket to local
+    mount_bucket(bucket_name, workspace.data_dir, mount_ok=True)
 
     # Init database
     from dataci.db import init  # noqa

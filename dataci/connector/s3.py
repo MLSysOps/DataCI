@@ -7,6 +7,8 @@ Date: Apr 25, 2023
 """
 import configparser
 import logging
+import os
+import subprocess
 
 import boto3 as boto3
 import s3fs
@@ -68,16 +70,13 @@ def connect(key=None, secret=None, endpoint_url=None):
     return fs
 
 
-def create_bucket(bucket_name: str, region: str = 'ap-southeast-1'):
+def create_bucket(bucket_name: str, region: str = None):
     """Create a new S3 bucket.
 
     Args:
         bucket_name: Name of the bucket to be created.
         region: Region to create the bucket in. If not set then the default region for DataCI (ap-southeast-1)
             will be used.
-
-    TODO:
-        - Add support for other regions, better save/read the region in the config file.
     """
     # Read AWS credentials from config file
     config = configparser.ConfigParser()
@@ -87,17 +86,42 @@ def create_bucket(bucket_name: str, region: str = 'ap-southeast-1'):
     secret = config.get(section_name, 'secret')
 
     # Create an S3 client
-    s3 = boto3.client(
-        's3', aws_access_key_id=key, aws_secret_access_key=secret, region_name=region
-    )
+    if region is None:
+        s3 = boto3.client('s3', aws_access_key_id=key, aws_secret_access_key=secret)
+    else:
+        s3 = boto3.client(
+            's3', aws_access_key_id=key, aws_secret_access_key=secret, region_name=region
+        )
 
     # Create the bucket
     try:
-        location = {'LocationConstraint': region}
-        s3.create_bucket(Bucket=bucket_name, CreateBucketConfiguration=location)
+        if region is None:
+            s3.create_bucket(Bucket=bucket_name)
+        else:
+            location = {'LocationConstraint': region}
+            s3.create_bucket(Bucket=bucket_name, CreateBucketConfiguration=location)
         logging.info(f"Bucket {bucket_name} created successfully.")
     except Exception as e:
         logging.error(f"Error creating bucket {bucket_name}: {e}")
+
+
+def mount_bucket(bucket_name: str, local_dir: str, mount_ok: bool = False):
+    """Mount the bucket to local data directory
+    """
+    mounted = os.path.ismount(local_dir)
+    if not mount_ok and mounted:
+        raise FileExistsError(f'Local directory {local_dir} is already mounted.')
+    # Step 1: check if the bucket is already mounted
+    if mounted:
+        logger.info(f'Bucket {bucket_name} is already mounted to local data directory {local_dir}')
+    else:
+        # Step 2: mount the bucket to local data directory
+        cmd = [
+            's3fs', f'{bucket_name}', f'{local_dir}', '-o', f'passwd_file={CACHE_ROOT / ".passwd-s3fs"}',
+            # '-o', f'url=https://s3-{region}.amazonaws.com'
+        ]
+        logger.info(f'Mounting S3 bucket {bucket_name} to local data directory {local_dir}')
+        subprocess.run(cmd, check=True)
 
 
 if __name__ == '__main__':
