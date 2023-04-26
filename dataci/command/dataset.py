@@ -2,7 +2,6 @@ import argparse
 
 from dataci.dataset import Dataset
 from dataci.dataset.list import list_dataset, get_dataset
-from dataci.repo import Repo
 
 
 def publish(args):
@@ -16,9 +15,8 @@ def publish(args):
         -n/--name: dataset name
         targets: path to dataset base directory
     """
-    repo = Repo()
     dataset = Dataset(
-        name=args.name, dataset_files=args.targets, repo=repo,
+        name=args.name, dataset_files=args.targets,
     )
     dataset.publish()
 

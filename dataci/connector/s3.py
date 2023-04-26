@@ -103,6 +103,8 @@ def create_bucket(bucket_name: str, region: str = None):
         logging.info(f"Bucket {bucket_name} created successfully.")
     except Exception as e:
         logging.error(f"Error creating bucket {bucket_name}: {e}")
+    finally:
+        s3.close()
 
 
 def mount_bucket(bucket_name: str, local_dir: str, mount_ok: bool = False):
@@ -122,6 +124,20 @@ def mount_bucket(bucket_name: str, local_dir: str, mount_ok: bool = False):
         ]
         logger.info(f'Mounting S3 bucket {bucket_name} to local data directory {local_dir}')
         subprocess.run(cmd, check=True)
+
+
+def download(remote_path: str, local_path: str):
+    """Download a file from S3 bucket to local file system.
+    """
+    # Create an S3 client
+    fs = connect()
+
+    # Copy files to local
+    try:
+        fs.get(remote_path, local_path)
+        logger.info(f"File {remote_path} copy to {local_path} successfully.")
+    except Exception as e:
+        logger.error(f"Error copy file {remote_path}: {e}")
 
 
 if __name__ == '__main__':

@@ -168,6 +168,22 @@ def get_many_datasets(name, version=None):
     return dataset_dict_list
 
 
+def get_next_version_id(name):
+    with db_connection:
+        result_iter = db_connection.execute(
+            """
+            SELECT COALESCE(MAX(version), 0) + 1
+            FROM   dataset
+            WHERE  name = ?
+            ;
+            """, (name,))
+        result = list(result_iter)[0][0]
+        if result is None:
+            return 1
+        else:
+            return result
+
+
 def get_many_dataset_update_plan(name):
     with db_connection:
         result_iter = db_connection.execute(
