@@ -107,7 +107,7 @@ def create_bucket(bucket_name: str, region: str = None):
         s3.close()
 
 
-def mount_bucket(bucket_name: str, local_dir: str, mount_ok: bool = False):
+def mount_bucket(bucket_name: str, local_dir: str, mount_ok: bool = False, region: str = None):
     """Mount the bucket to local data directory
     """
     mounted = os.path.ismount(local_dir)
@@ -120,10 +120,11 @@ def mount_bucket(bucket_name: str, local_dir: str, mount_ok: bool = False):
         # Step 2: mount the bucket to local data directory
         cmd = [
             's3fs', f'{bucket_name}', f'{local_dir}', '-o', f'passwd_file={CACHE_ROOT / ".passwd-s3fs"}',
-            # '-o', f'url=https://s3-{region}.amazonaws.com'
+            '-o', f'url=https://s3-{region}.amazonaws.com',
         ]
-        logger.info(f'Mounting S3 bucket {bucket_name} to local data directory {local_dir}')
+        logger.info(f'Running command: {" ".join(cmd)}')
         subprocess.run(cmd, check=True)
+        logger.info(f'Mounting S3 bucket {bucket_name} to local data directory {local_dir}')
 
 
 def unmount_bucket(local_dir: str, unmount_ok: bool = False):

@@ -49,9 +49,7 @@ class Workspace(object):
 
     def remove(self):
         # Delete the S3 bucket content
-        for f in self.data_dir.glob('*'):
-            os.remove(f)
-            logger.info(f'Remove file {f} in bucket {self.data_dir}.')
+        shutil.rmtree(self.data_dir, ignore_errors=True)
         logger.info(f'Remove all files in bucket {self.data_dir}.')
 
         # Unmount the S3 bucket
@@ -91,7 +89,7 @@ def create_or_use_workspace(workspace: Workspace):
         create_bucket(bucket_name, region=region)
 
     # Mount the S3 bucket to local
-    mount_bucket(bucket_name, workspace.data_dir, mount_ok=True)
+    mount_bucket(bucket_name, workspace.data_dir, mount_ok=True, region=region)
 
     # Init database
     from dataci.db import init  # noqa
