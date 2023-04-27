@@ -38,7 +38,6 @@ with db_connection:
         timestamp              INTEGER,
         id_column              TEXT,
         size                   INTEGER,
-        file_config            TEXT,
         filename               TEXT,
         parent_dataset_name    TEXT,
         parent_dataset_version TEXT,

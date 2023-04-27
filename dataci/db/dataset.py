@@ -10,20 +10,21 @@ from . import db_connection
 
 def create_one_dataset(dataset_dict):
     pipeline_dict = dataset_dict['yield_pipeline']
+    parent_dataset_dict = dataset_dict['parent_dataset']
     with db_connection:
         db_connection.execute(
             """
             INSERT INTO dataset (name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, 
-            id_column, size, filename, file_config, parent_dataset_name, parent_dataset_version)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            id_column, size, filename, parent_dataset_name, parent_dataset_version)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
             ;
             """,
             (
                 dataset_dict['name'], dataset_dict['version'], pipeline_dict['name'], pipeline_dict['version'],
                 dataset_dict['log_message'], dataset_dict['timestamp'], dataset_dict['id_column'],
                 dataset_dict['size'], dataset_dict['filename'],
-                dataset_dict['file_config'], dataset_dict['parent_dataset_name'],
-                dataset_dict['parent_dataset_version'],
+                parent_dataset_dict['name'],
+                parent_dataset_dict['version'],
             )
         )
 

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import pandas as pd
 
 from dataci.workspace import Workspace
+from dataci.connector.s3 import download as s3_download
 
 if TYPE_CHECKING:
     from typing import Optional, Union
@@ -38,8 +39,21 @@ class Dataset(object):
         # Get workspace name from provided name or default workspace
         workspace_name, dataset_name = name.split('.') if '.' in name else (None, name)
         self.workspace = Workspace(workspace_name)
-        self.name = name
-        self.dataset_files = Path(dataset_files) if dataset_files else None
+        self.name = dataset_name
+        # Cache dataset files from cloud object storage
+        if dataset_files is not None:
+            # dataset_files is a S3 path
+            # FIXME: only support single file
+            if dataset_files.startswith('s3://'):
+                # Download to local cache directory
+                # FIXME: same file will be overwritten
+                cache_dir = self.workspace.tmp_dir
+                cache_path = cache_dir / dataset_files.split('/')[-1]
+                s3_download(dataset_files, str(cache_dir))
+                self.dataset_files = cache_path
+            else:
+                # dataset_files is a local path
+                self.dataset_files = Path(dataset_files)
         self._yield_pipeline = yield_pipeline
         self._parent_dataset = parent_dataset
         self.log_message = log_message or ''
@@ -50,7 +64,7 @@ class Dataset(object):
         self.create_date: 'Optional[datetime]' = None
         # TODO: improve this get size of dataset
         if self.dataset_files and self.dataset_files.suffix == '.csv':
-            self.size = len(pd.read_csv(dataset_files))
+            self.size = len(pd.read_csv(self.dataset_files))
         else:
             self.size = None
 

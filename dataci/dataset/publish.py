@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 def publish(dataset: 'Dataset' = ...):
     version = get_next_version_id(dataset.name)
+    dataset.version = version
     #####################################################################
     # Step 1: Save dataset to mount cloud object storage
     #####################################################################
@@ -27,7 +28,7 @@ def publish(dataset: 'Dataset' = ...):
     dataset_cache_dir = dataset.workspace.data_dir / dataset.name / str(version)
     dataset_cache_dir.mkdir(parents=True, exist_ok=True)
     # Dataset files is a S3 path
-    dataset_files = dataset.dataset_files
+    dataset_files = str(dataset.dataset_files)
     if dataset_files.startswith('s3://'):
         # Copy S3 files to cloud object storage
         s3_download(dataset_files, dataset_cache_dir)
