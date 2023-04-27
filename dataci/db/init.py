@@ -22,28 +22,33 @@ with db_connection:
     db_connection.executescript("""
     CREATE TABLE pipeline
     (
+        workspace TEXT,
         name      TEXT,
         version   TEXT,
         timestamp INTEGER,
-        PRIMARY KEY (name, version)
+        PRIMARY KEY (workspace, name, version)
     );
     
     CREATE TABLE dataset
     (
-        workspace              TEXT,
-        name                   TEXT,
-        version                TEXT,
-        yield_pipeline_name    TEXT,
-        yield_pipeline_version TEXT,
-        log_message            TEXT,
-        timestamp              INTEGER,
-        id_column              TEXT,
-        size                   INTEGER,
-        filename               TEXT,
-        parent_dataset_name    TEXT,
-        parent_dataset_version TEXT,
-        FOREIGN KEY (yield_pipeline_name, yield_pipeline_version) REFERENCES pipeline (name, version),
-        FOREIGN KEY (parent_dataset_name, parent_dataset_version) REFERENCES dataset (name, version),
+        workspace                TEXT,
+        name                     TEXT,
+        version                  TEXT,
+        yield_pipeline_workspace TEXT,
+        yield_pipeline_name      TEXT,
+        yield_pipeline_version   TEXT,
+        log_message              TEXT,
+        timestamp                INTEGER,
+        id_column                TEXT,
+        size                     INTEGER,
+        filename                 TEXT,
+        parent_dataset_workspace TEXT,
+        parent_dataset_name      TEXT,
+        parent_dataset_version   TEXT,
+        FOREIGN KEY (yield_pipeline_workspace, yield_pipeline_name, yield_pipeline_version)
+            REFERENCES pipeline (workspace, name, version),
+        FOREIGN KEY (parent_dataset_workspace, parent_dataset_name, parent_dataset_version)
+            REFERENCES dataset (workspace, name, version),
         PRIMARY KEY (workspace, name, version)
     );
     

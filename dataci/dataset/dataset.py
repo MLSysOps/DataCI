@@ -95,9 +95,16 @@ class Dataset(object):
         return dataset_obj
 
     def dict(self):
-        yield_pipeline_dict = self.yield_pipeline.dict() if self.yield_pipeline else {'name': None, 'version': None}
-        parent_dataset_dict = {'name': self.parent_dataset.name, 'version': self.parent_dataset.version} \
-            if self.parent_dataset else {'name': None, 'version': None}
+        yield_pipeline_dict = self.yield_pipeline.dict() if self.yield_pipeline else {
+            'workspace': None, 'name': None, 'version': None,
+        }
+        parent_dataset_dict = {
+            'workspace': self.workspace.name,
+            'name': self.parent_dataset.name,
+            'version': self.parent_dataset.version
+        } if self.parent_dataset else {
+            'workspace': None, 'name': None, 'version': None
+        }
         config = {
             'workspace': self.workspace.name,
             'name': self.name,
@@ -126,16 +133,10 @@ class Dataset(object):
         # The parent dataset is None or already loaded
         if self._parent_dataset is None or isinstance(self._parent_dataset, Dataset):
             return self._parent_dataset
-        # Load the parent dataset using `list_dataset` API
-        from dataci.dataset import list_dataset
-        datasets = list_dataset(
-            f'{self._parent_dataset["name"]}@{self._parent_dataset["version"]}',
-            tree_view=False,
+        # Load the parent dataset using get method
+        self._parent_dataset = Dataset.get(
+            f'{self._parent_dataset["workspace"]}.{self._parent_dataset["name"]}@{self._parent_dataset["version"]}'
         )
-        if len(datasets) == 0:
-            self._parent_dataset = None
-        else:
-            self._parent_dataset = datasets[0]
         return self._parent_dataset
 
     def __str__(self):

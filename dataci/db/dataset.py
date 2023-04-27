@@ -14,16 +14,36 @@ def create_one_dataset(dataset_dict):
     with db_connection:
         db_connection.execute(
             """
-            INSERT INTO dataset (workspace, name, version, yield_pipeline_name, yield_pipeline_version, log_message, 
-            timestamp, id_column, size, filename, parent_dataset_name, parent_dataset_version)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO dataset ( workspace
+                                , name
+                                , version
+                                , yield_pipeline_workspace
+                                , yield_pipeline_name
+                                , yield_pipeline_version
+                                , log_message
+                                , timestamp
+                                , id_column
+                                , size
+                                , filename
+                                , parent_dataset_workspace
+                                , parent_dataset_name
+                                , parent_dataset_version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ;
             """,
             (
                 dataset_dict['workspace'],
-                dataset_dict['name'], dataset_dict['version'], pipeline_dict['name'], pipeline_dict['version'],
-                dataset_dict['log_message'], dataset_dict['timestamp'], dataset_dict['id_column'],
-                dataset_dict['size'], dataset_dict['filename'],
+                dataset_dict['name'],
+                dataset_dict['version'],
+                pipeline_dict['workspace'],
+                pipeline_dict['name'],
+                pipeline_dict['version'],
+                dataset_dict['log_message'],
+                dataset_dict['timestamp'],
+                dataset_dict['id_column'],
+                dataset_dict['size'],
+                dataset_dict['filename'],
+                parent_dataset_dict['workspace'],
                 parent_dataset_dict['name'],
                 parent_dataset_dict['version'],
             )
@@ -66,6 +86,7 @@ def get_one_dataset(workspace, name, version='latest'):
                 SELECT d.workspace
                      , d.name
                      , d.version
+                     , yield_pipeline_workspace
                      , yield_pipeline_name
                      , yield_pipeline_version
                      , log_message
@@ -73,6 +94,7 @@ def get_one_dataset(workspace, name, version='latest'):
                      , id_column
                      , size
                      , filename
+                     , parent_dataset_workspace
                      , parent_dataset_name
                      , parent_dataset_version
                 FROM dataset d
@@ -89,6 +111,7 @@ def get_one_dataset(workspace, name, version='latest'):
                 SELECT workspace,
                        name,
                        version, 
+                       yield_pipeline_workspace,
                        yield_pipeline_name,
                        yield_pipeline_version,
                        log_message,
@@ -96,6 +119,7 @@ def get_one_dataset(workspace, name, version='latest'):
                        id_column,
                        size,
                        filename,
+                       parent_dataset_workspace,
                        parent_dataset_name,
                        parent_dataset_version
                 FROM  (
@@ -113,13 +137,23 @@ def get_one_dataset(workspace, name, version='latest'):
         raise ValueError(f'Dataset {workspace}.{name}@{version} not found.')
     if len(dataset_po_list) > 1:
         raise ValueError(f'Found more than one dataset {workspace}.{name}@{version}.')
-    workspace, name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, id_column, size, \
-    filename, parent_dataset_name, parent_dataset_version = dataset_po_list[0]
+    workspace, name, version, yield_pipeline_workspace, yield_pipeline_name, yield_pipeline_version, log_message, \
+    timestamp, id_column, size, filename, parent_dataset_workspace, parent_dataset_name, parent_dataset_version = \
+        dataset_po_list[0]
     return {
         'workspace': workspace, 'name': name, 'version': version,
-        'yield_pipeline': {'name': yield_pipeline_name, 'version': yield_pipeline_version}, 'log_message': log_message,
+        'yield_pipeline': {
+            'workspace': yield_pipeline_workspace,
+            'name': yield_pipeline_name,
+            'version': yield_pipeline_version,
+        },
+        'log_message': log_message,
         'timestamp': timestamp, 'size': size, 'filename': filename,
-        'parent_dataset': {'name': parent_dataset_name, 'version': parent_dataset_version},
+        'parent_dataset': {
+            'workspace': parent_dataset_workspace,
+            'name': parent_dataset_name,
+            'version': parent_dataset_version,
+        },
     }
 
 
