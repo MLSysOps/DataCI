@@ -10,20 +10,20 @@ from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from dataci.db.dataset import get_one_dataset, get_many_datasets
-from .dataset import Dataset
 from .utils import DATASET_IDENTIFIER_PATTERN, LIST_DATASET_IDENTIFIER_PATTERN
 
 if TYPE_CHECKING:
     from typing import Optional
+    from .dataset import Dataset
 
 logger = logging.getLogger(__name__)
 
 
-def get_dataset(name, version=None, repo: 'Optional[Repo]' = None):
+def get(cls: 'Dataset', name, version=None):
     # If version is provided along with name
     matched = DATASET_IDENTIFIER_PATTERN.match(str(name))
     if not matched:
-        raise ValueError(f'Invalid dataset identifier {name}')
+        raise ValueError(f'Invalid data identifier {name}')
     # Parse name and version
     name, version_ = matched.groups()
     # Only one version is allowed to be provided, either in name or in version
@@ -33,15 +33,8 @@ def get_dataset(name, version=None, repo: 'Optional[Repo]' = None):
     version = version or version_
     version = str(version).lower() + '*' if version else 'latest'
 
-    # Check version
-    if version != 'latest':
-        # Version hash ID should provide 7 - 40 digits
-        # -1 because the version is already appended with '*' in the end
-        assert 7 <= len(version) - 1 <= 40, \
-            'You should provided the length of version ID within 7 - 40 (both included).'
     dataset_dict = get_one_dataset(name=name, version=version)
-    dataset_dict['repo'] = repo
-    return Dataset.from_dict(dataset_dict)
+    return cls.from_dict(dataset_dict)
 
 
 def list_dataset(dataset_identifier=None, tree_view=True, repo: 'Repo' = None):

@@ -114,7 +114,7 @@ def get_one_dataset(name, version='latest'):
         'name': name, 'version': version,
         'yield_pipeline': {'name': yield_pipeline_name, 'version': yield_pipeline_version}, 'log_message': log_message,
         'timestamp': timestamp, 'size': size, 'filename': filename, 'file_config': file_config,
-        'parent_dataset_name': parent_dataset_name, 'parent_dataset_version': parent_dataset_version,
+        'parent_dataset': {'name': parent_dataset_name, 'version': parent_dataset_version},
     }
 
 

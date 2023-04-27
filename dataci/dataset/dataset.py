@@ -23,6 +23,8 @@ class Dataset(object):
     from .save import save  # type: ignore[misc]
     from .update import update  # type: ignore[misc]
     from .tag import tag  # type: ignore[misc]
+    from .list import get  # type: ignore[misc]
+    get = classmethod(get)
 
     def __init__(
             self,
