@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def publish(dataset: 'Dataset' = ...):
+def save(dataset: 'Dataset' = ...):
     version = get_next_version_id(dataset.name)
     dataset.version = version
     #####################################################################

@@ -18,11 +18,9 @@ if TYPE_CHECKING:
     from typing import Optional, Union
     from dataci.workflow.pipeline import Pipeline
 
-from .utils import generate_dataset_identifier
-
 
 class Dataset(object):
-    from .publish import publish  # type: ignore[misc]
+    from .save import save  # type: ignore[misc]
     from .update import update  # type: ignore[misc]
     from .tag import tag  # type: ignore[misc]
 
@@ -70,7 +68,7 @@ class Dataset(object):
 
     def __repr__(self):
         if all((self.name, self.version)):
-            return generate_dataset_identifier(self.name, self.version[:7])
+            return str(self.name, self.version)
         else:
             return f'{self.name} ! Unpublished'
 

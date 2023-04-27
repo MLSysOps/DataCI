@@ -17,30 +17,6 @@ LIST_DATASET_IDENTIFIER_PATTERN = re.compile(
 )
 
 
-def generate_dataset_identifier(dataset_name: str, version: str = None):
-    """Generate dataset identifier string
-
-    Args:
-        dataset_name (str): The dataset name should be a valid: start with alphabet and contains any
-            number, alphabet, and underscore ("_"). Example:
-                `1a` (invalid)
-                `_` (invalid)
-                `_abc` (invalid)
-                `abc123` (valid)
-        version (str): The version ID contains 7-40 hex characters (0-9, a-f).
-    """
-    dataset_name = str(dataset_name)
-    version = str(version).lower() or 'latest'
-    if not NAME_PATTERN.match(dataset_name):
-        raise ValueError(f'Invalid dataset_name="{dataset_name}".')
-    if not VERSION_PATTERN.match(version):
-        raise ValueError(
-            f'Invalid version="{version}": expected a hex string and with a length of 7 to 40.'
-        )
-
-    return f'{dataset_name}@{version}'
-
-
 def parse_dataset_identifier(name_str: str):
     """Parse dataset identifier to dataset name, version, and split.
 

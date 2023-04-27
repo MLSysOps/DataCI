@@ -4,7 +4,7 @@ from dataci.dataset import Dataset
 from dataci.dataset.list import list_dataset, get_dataset
 
 
-def publish(args):
+def save(args):
     """
     Publish a dataset to the repo.
     1. Generate dataset schema based on dataset files and perform schema checking
@@ -18,7 +18,7 @@ def publish(args):
     dataset = Dataset(
         name=args.name, dataset_files=args.targets,
     )
-    dataset.publish()
+    dataset.save()
 
 
 def ls(args):
@@ -53,12 +53,12 @@ def update(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('DataCI dataset')
     subparser = parser.add_subparsers()
-    publish_parser = subparser.add_parser('publish', help='Publish dataset')
+    publish_parser = subparser.add_parser('save', help='Save dataset')
     publish_parser.add_argument(
         '-n', '--name', type=str, required=True, help='Dataset name'
     )
     publish_parser.add_argument('targets', type=str, help='Path to dataset base directory.')
-    publish_parser.set_defaults(func=publish)
+    publish_parser.set_defaults(func=save)
     list_parser = subparser.add_parser('ls', help='List dataset')
     list_parser.add_argument(
         'targets', type=str, nargs='?', default=None,
