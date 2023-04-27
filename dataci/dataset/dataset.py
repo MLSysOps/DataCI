@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from dataci.workspace import Workspace
 from dataci.connector.s3 import download as s3_download
+from dataci.workspace import Workspace
 
 if TYPE_CHECKING:
     from typing import Optional, Union
@@ -30,7 +30,7 @@ class Dataset(object):
             self,
             name,
             dataset_files=None,
-            yield_pipeline: 'Optional[Pipeline]' = None,
+            yield_pipeline: 'Optional[Union[Pipeline, dict]]' = None,
             parent_dataset: 'Optional[Union[Dataset, dict]]' = None,
             log_message=None,
             id_column='id',
@@ -54,6 +54,8 @@ class Dataset(object):
             else:
                 # dataset_files is a local path
                 self.dataset_files = Path(dataset_files)
+        else:
+            self.dataset_files = None
         self._yield_pipeline = yield_pipeline
         self._parent_dataset = parent_dataset
         self.log_message = log_message or ''
@@ -77,7 +79,7 @@ class Dataset(object):
     @classmethod
     def from_dict(cls, config):
         # Build parent_dataset
-        if config['parent_dataset_name'] is not None and config['parent_dataset_version'] is not None:
+        if all(config['parent_dataset'].values()):
             config['parent_dataset'] = {
                 'name': config['parent_dataset_name'], 'version': config['parent_dataset_version']
             }
@@ -85,7 +87,7 @@ class Dataset(object):
             config['parent_dataset'] = None
         dataset_obj = cls(**config)
         dataset_obj.create_date = datetime.fromtimestamp(config['timestamp'])
-        dataset_obj.__published = True
+        dataset_obj.version = config['version']
         dataset_obj.dataset_files = (
                 dataset_obj.workspace.data_dir / dataset_obj.name / dataset_obj.version /
                 config['filename']
@@ -97,6 +99,7 @@ class Dataset(object):
         parent_dataset_dict = {'name': self.parent_dataset.name, 'version': self.parent_dataset.version} \
             if self.parent_dataset else {'name': None, 'version': None}
         config = {
+            'workspace': self.workspace.name,
             'name': self.name,
             'timestamp': self.create_date.timestamp() if self.create_date else None,
             'parent_dataset': parent_dataset_dict,
@@ -127,7 +130,7 @@ class Dataset(object):
         from dataci.dataset import list_dataset
         datasets = list_dataset(
             f'{self._parent_dataset["name"]}@{self._parent_dataset["version"]}',
-            tree_view=False, repo=self.repo,
+            tree_view=False,
         )
         if len(datasets) == 0:
             self._parent_dataset = None

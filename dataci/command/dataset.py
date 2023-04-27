@@ -1,7 +1,7 @@
 import argparse
 
 from dataci.dataset import Dataset
-from dataci.dataset.list import list_dataset, get_dataset
+from dataci.dataset.list import list_dataset
 
 
 def save(args):

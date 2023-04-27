@@ -6,6 +6,7 @@ Email: yuanmingleee@gmail.com
 Date: Mar 15, 2023
 """
 import logging
+from datetime import datetime
 from shutil import copy2
 from typing import TYPE_CHECKING
 
@@ -19,13 +20,13 @@ logger = logging.getLogger(__name__)
 
 
 def save(dataset: 'Dataset' = ...):
-    version = get_next_version_id(dataset.name)
-    dataset.version = version
+    dataset.version = get_next_version_id(dataset.name)
+    dataset.create_date = datetime.now()
     #####################################################################
     # Step 1: Save dataset to mount cloud object storage
     #####################################################################
     logger.info(f'Save dataset files to mounted S3: {dataset.workspace.data_dir}')
-    dataset_cache_dir = dataset.workspace.data_dir / dataset.name / str(version)
+    dataset_cache_dir = dataset.workspace.data_dir / dataset.name / str(dataset.version)
     dataset_cache_dir.mkdir(parents=True, exist_ok=True)
     # Dataset files is a S3 path
     dataset_files = str(dataset.dataset_files)

@@ -30,6 +30,7 @@ with db_connection:
     
     CREATE TABLE dataset
     (
+        workspace              TEXT,
         name                   TEXT,
         version                TEXT,
         yield_pipeline_name    TEXT,
@@ -43,7 +44,7 @@ with db_connection:
         parent_dataset_version TEXT,
         FOREIGN KEY (yield_pipeline_name, yield_pipeline_version) REFERENCES pipeline (name, version),
         FOREIGN KEY (parent_dataset_name, parent_dataset_version) REFERENCES dataset (name, version),
-        PRIMARY KEY (name, version)
+        PRIMARY KEY (workspace, name, version)
     );
     
     CREATE TABLE dataset_tag

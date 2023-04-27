@@ -15,13 +15,21 @@ from dataci.connector.s3 import connect as connect_s3, create_bucket, mount_buck
 logger = logging.getLogger(__name__)
 
 
+def get_default_workspace_name():
+    config = configparser.ConfigParser()
+    config.read(CACHE_ROOT / 'config.ini')
+    name = config.get('DEFAULT', 'workspace', fallback=None)
+    if name is None:
+        raise ValueError('Workspace name is not provided and default workspace is not set.')
+    return name
+
+
 class Workspace(object):
+    DEFAULT_WORKSPACE = get_default_workspace_name()
 
     def __init__(self, name: str = None):
         if name is None:
-            config = configparser.ConfigParser()
-            config.read(CACHE_ROOT / 'config.ini')
-            name = config.get('DEFAULT', 'workspace', fallback=None)
+            name = self.DEFAULT_WORKSPACE
         if name is None:
             raise ValueError('Workspace name is not provided and default workspace is not set.')
         self.name = str(name)

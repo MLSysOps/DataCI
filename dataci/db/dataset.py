@@ -14,12 +14,13 @@ def create_one_dataset(dataset_dict):
     with db_connection:
         db_connection.execute(
             """
-            INSERT INTO dataset (name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, 
-            id_column, size, filename, parent_dataset_name, parent_dataset_version)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO dataset (workspace, name, version, yield_pipeline_name, yield_pipeline_version, log_message, 
+            timestamp, id_column, size, filename, parent_dataset_name, parent_dataset_version)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
             ;
             """,
             (
+                dataset_dict['workspace'],
                 dataset_dict['name'], dataset_dict['version'], pipeline_dict['name'], pipeline_dict['version'],
                 dataset_dict['log_message'], dataset_dict['timestamp'], dataset_dict['id_column'],
                 dataset_dict['size'], dataset_dict['filename'],
@@ -41,26 +42,29 @@ def create_dataset_tag(dataset_name, dataset_version, tag_name, tag_version):
         )
 
 
-def get_one_dataset(name, version='latest'):
+def get_one_dataset(workspace, name, version='latest'):
     with db_connection:
         if version != 'latest':
             dataset_po_iter = db_connection.execute(
                 """
                 --beginsql
                 WITH selected_dataset AS (
-                    SELECT dataset_name    AS name,                      
-                           dataset_version AS version
-                    FROM  dataset_tag
-                    WHERE tag_name = ?
-                    AND   tag_version = ?
-                    UNION ALL
-                    SELECT name
+                    -- SELECT dataset_name    AS name,                      
+                    --        dataset_version AS version
+                    -- FROM  dataset_tag
+                    -- WHERE tag_name = ?
+                    -- AND   tag_version = ?
+                    -- UNION ALL
+                    SELECT workspace
+                         , name
                          , version
                     FROM   dataset
-                    WHERE  name = ?
+                    WHERE  workspace = ?
+                    AND    name = ?
                     AND    version GLOB ?
                 )
-                SELECT d.name
+                SELECT d.workspace
+                     , d.name
                      , d.version
                      , yield_pipeline_name
                      , yield_pipeline_version
@@ -69,20 +73,21 @@ def get_one_dataset(name, version='latest'):
                      , id_column
                      , size
                      , filename
-                     , file_config
                      , parent_dataset_name
                      , parent_dataset_version
                 FROM dataset d
                 JOIN selected_dataset sd 
-                ON   d.name = sd.name 
+                ON   d.workspace = sd.workspace
+                AND  d.name = sd.name 
                 AND  d.version = sd.version
                 ;
                 --endsql
-                """, (name, version, name, version))
+                """, (workspace, name, version))
         else:
             dataset_po_iter = db_connection.execute(
                 """
-                SELECT name,
+                SELECT workspace,
+                       name,
                        version, 
                        yield_pipeline_name,
                        yield_pipeline_version,
@@ -91,29 +96,29 @@ def get_one_dataset(name, version='latest'):
                        id_column,
                        size,
                        filename,
-                       file_config,
                        parent_dataset_name,
                        parent_dataset_version
                 FROM  (
                     SELECT *,
-                           rank() OVER (PARTITION BY name ORDER BY timestamp DESC) AS rk
+                           rank() OVER (PARTITION BY workspace, name ORDER BY timestamp DESC) AS rk
                     FROM   dataset
-                    WHERE  name = ?
+                    WHERE  workspace = ?
+                    AND    name = ?
                 )
                 WHERE rk = 1
                 ;
-                """, (name,))
+                """, (workspace, name,))
     dataset_po_list = list(dataset_po_iter)
     if len(dataset_po_list) == 0:
-        raise ValueError(f'Dataset {name}@{version} not found.')
+        raise ValueError(f'Dataset {workspace}.{name}@{version} not found.')
     if len(dataset_po_list) > 1:
-        raise ValueError(f'Found more than one dataset {name}@{version}.')
-    name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, id_column, size, filename, \
-    file_config, parent_dataset_name, parent_dataset_version = dataset_po_list[0]
+        raise ValueError(f'Found more than one dataset {workspace}.{name}@{version}.')
+    workspace, name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, id_column, size, \
+    filename, parent_dataset_name, parent_dataset_version = dataset_po_list[0]
     return {
-        'name': name, 'version': version,
+        'workspace': workspace, 'name': name, 'version': version,
         'yield_pipeline': {'name': yield_pipeline_name, 'version': yield_pipeline_version}, 'log_message': log_message,
-        'timestamp': timestamp, 'size': size, 'filename': filename, 'file_config': file_config,
+        'timestamp': timestamp, 'size': size, 'filename': filename,
         'parent_dataset': {'name': parent_dataset_name, 'version': parent_dataset_version},
     }
 
@@ -144,7 +149,6 @@ def get_many_datasets(name, version=None):
                    id_column,
                    size,
                    filename,
-                   file_config,
                    parent_dataset_name,
                    parent_dataset_version
             FROM   dataset d
@@ -231,7 +235,6 @@ def get_many_dataset_update_plan(name):
                     ,dataset_list.timestamp
                     ,dataset_list.id_column
                     ,dataset_list.size
-                    ,dataset_list.file_config
                     ,dataset_list.filename
                     ,dataset_list.parent_dataset_name
                     ,dataset_list.parent_dataset_version

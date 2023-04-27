@@ -7,10 +7,10 @@ Date: Feb 20, 2023
 """
 import re
 
-NAME_PATTERN = re.compile(r'^[a-z][\w:]*$', flags=re.IGNORECASE)
-VERSION_PATTERN = re.compile(r'latest|[a-f\d]{7,40}', flags=re.IGNORECASE)
+NAME_PATTERN = re.compile(r'^(?:[a-z]\w*\.)?[a-z]\w*$', flags=re.IGNORECASE)
+VERSION_PATTERN = re.compile(r'latest|\d+', flags=re.IGNORECASE)
 DATASET_IDENTIFIER_PATTERN = re.compile(
-    r'^([a-z][\w:]*)(?:@(latest|[a-z\d]{7,40}))?$', flags=re.IGNORECASE
+    r'^((?:[a-z]\w*\.)?[a-z]\w*)(?:@(latest|\d+))?$', flags=re.IGNORECASE
 )
 LIST_DATASET_IDENTIFIER_PATTERN = re.compile(
     r'^([\w:.*[\]]+?)(?:@([\da-f]{1,40}))?$', re.IGNORECASE
