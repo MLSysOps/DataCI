@@ -15,22 +15,26 @@ bash 0.prerequisites.sh
 
 ## Initialize DataCI
 
+1. Create Workspace
+
 ```shell
-python dataci/command/init.py -f
+python dataci/command/workspace.py use testspace
 ```
 
-## Download Sample Raw Data
+2. Connect Cloud Services
+
+```shell
+python dataci/command/connect.py s3 -k <your_s3_key> -p
+# Your password will be prompted to input
+```
+
+## Obtain Sample Raw Data
 
 Assume we have sampled 20K raw data from online product database, and hand over these raw data to annotators for
 verify their product category which are filled by sellers and contains some noise. Now, the first batch of
 10K finish labelling data are returned.
 
-```shell
-# saved at data/pairwise_raw/
-mkdir -p data
-rm -r data/*
-cp -r dataset/text_cls_v1 data/text_raw/
-```
+We can check the raw data at `s3://dataci-shared/text_cls_v1/train.csv`
 
 This dataset contains train and val splits. Each split contains a CSV file with 3 columns:
 `id`, `product_name` and `category_lv3`. We are going to build a pipeline to classify the product category
@@ -49,8 +53,7 @@ bash 1.1.publish_raw_data.sh
 Add this dataset into the data repository.
 
 ```shell
-python dataci/command/dataset.py publish -n text_raw_train data/text_raw/train.csv
-python dataci/command/dataset.py publish -n text_raw_val data/text_raw/val.csv
+python dataci/command/dataset.py save -n text_raw_train s3://dataci-shared/text_cls_v1/train.csv
 ```
 
 ## 1.2 Build a dataset for text classification

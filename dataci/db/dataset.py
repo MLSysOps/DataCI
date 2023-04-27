@@ -173,15 +173,16 @@ def get_many_datasets(name, version=None):
     return dataset_dict_list
 
 
-def get_next_version_id(name):
+def get_next_version_id(workspace, name):
     with db_connection:
         result_iter = db_connection.execute(
             """
             SELECT COALESCE(MAX(version), 0) + 1
             FROM   dataset
-            WHERE  name = ?
+            WHERE  workspace = ?
+            AND    name = ?
             ;
-            """, (name,))
+            """, (workspace, name,))
         result = list(result_iter)[0][0]
         if result is None:
             return 1

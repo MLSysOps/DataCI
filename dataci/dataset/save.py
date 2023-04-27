@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def save(dataset: 'Dataset' = ...):
-    dataset.version = get_next_version_id(dataset.name)
+    dataset.version = get_next_version_id(dataset.workspace.name, dataset.name)
     dataset.create_date = datetime.now()
     #####################################################################
     # Step 1: Save dataset to mount cloud object storage

@@ -20,8 +20,6 @@ def get_default_workspace_name():
     config = configparser.ConfigParser()
     config.read(CACHE_ROOT / 'config.ini')
     name = config.get('DEFAULT', 'workspace', fallback=None)
-    if name is None:
-        raise ValueError('Workspace name is not provided and default workspace is not set.')
     return name
 
 
