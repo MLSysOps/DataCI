@@ -8,9 +8,10 @@ Date: Feb 21, 2023
 import configparser
 import logging
 import os
+import shutil
 
 from dataci import CACHE_ROOT
-from dataci.connector.s3 import connect as connect_s3, create_bucket, mount_bucket
+from dataci.connector.s3 import connect as connect_s3, create_bucket, mount_bucket, unmount_bucket
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,32 @@ class Workspace(object):
     @property
     def tmp_dir(self):
         return self.root_dir / 'tmp'
+
+    def remove(self):
+        # Delete the S3 bucket content
+        for f in self.data_dir.glob('*'):
+            os.remove(f)
+            logger.info(f'Remove file {f} in bucket {self.data_dir}.')
+        logger.info(f'Remove all files in bucket {self.data_dir}.')
+
+        # Unmount the S3 bucket
+        unmount_bucket(self.data_dir, unmount_ok=True)
+        logger.info(f'Unmount bucket {self.data_dir}.')
+
+        # Clear the database
+        # FIXME: only remove the tables belong to the current workspace
+
+        # Delete the workspace directory
+        shutil.rmtree(self.root_dir)
+        logger.info(f'Remove workspace {self.name} from {self.root_dir}.')
+
+        # Delete the workspace from config file
+        config = configparser.ConfigParser()
+        config.read(CACHE_ROOT / 'config.ini')
+        config.remove_option('DEFAULT', 'workspace')
+        with open(CACHE_ROOT / 'config.ini', 'w') as f:
+            config.write(f)
+        logger.info(f'Remove workspace {self.name} from config {CACHE_ROOT / "config.ini"}.')
 
 
 def create_or_use_workspace(workspace: Workspace):

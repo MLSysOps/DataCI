@@ -126,6 +126,22 @@ def mount_bucket(bucket_name: str, local_dir: str, mount_ok: bool = False):
         subprocess.run(cmd, check=True)
 
 
+def unmount_bucket(local_dir: str, unmount_ok: bool = False):
+    """Unmount the bucket from local data directory
+    """
+    mounted = os.path.ismount(local_dir)
+    if not unmount_ok and not mounted:
+        raise FileNotFoundError(f'Local directory {local_dir} is not mounted.')
+    # Step 1: check if the bucket is already mounted
+    if not mounted:
+        logger.info(f'Local data directory {local_dir} is not mounted.')
+    else:
+        # Step 2: unmount the bucket from local data directory
+        cmd = ['umount', str(local_dir)]
+        subprocess.run(cmd, check=True)
+        logger.info(f'Unmounting S3 bucket from local data directory {local_dir}')
+
+
 def download(remote_path: str, local_path: str):
     """Download a file from S3 bucket to local file system.
     """
