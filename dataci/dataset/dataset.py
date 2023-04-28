@@ -81,6 +81,14 @@ class Dataset(object):
             }
         else:
             config['parent_dataset'] = None
+        # Build yield_pipeline
+        if all(config['yield_pipeline'].values()):
+            config['yield_pipeline'] = {
+                'workspace': config['workspace'], 'name': config['yield_pipeline_name'],
+                'version': config['yield_pipeline_version']
+            }
+        else:
+            config['yield_pipeline'] = None
         dataset_obj = cls(**config)
         dataset_obj.create_date = datetime.fromtimestamp(config['timestamp'])
         dataset_obj.version = config['version']
@@ -88,6 +96,7 @@ class Dataset(object):
                 dataset_obj.workspace.data_dir / dataset_obj.name / dataset_obj.version /
                 config['filename']
         )
+        dataset_obj.size = config['size']
         return dataset_obj
 
     def dict(self):
@@ -118,10 +127,12 @@ class Dataset(object):
     @property
     def yield_pipeline(self):
         """Lazy load yield workflow"""
-        if isinstance(self._yield_pipeline, dict):
-            from dataci.workflow.pipeline import Pipeline
+        # from dataci.workflow.pipeline import Pipeline
 
-            self._yield_pipeline = Pipeline.from_dict(self._yield_pipeline)
+        if self._yield_pipeline is None or isinstance(self._yield_pipeline, Pipeline):
+            return self._yield_pipeline
+
+        self._yield_pipeline = Pipeline.from_dict(self._yield_pipeline)
         return self._yield_pipeline
 
     @property

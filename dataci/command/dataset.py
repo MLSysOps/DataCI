@@ -1,7 +1,6 @@
 import argparse
 
 from dataci.dataset import Dataset
-from dataci.dataset.list import list_dataset
 
 
 def save(args):
@@ -22,8 +21,7 @@ def save(args):
 
 
 def ls(args):
-    repo = Repo()
-    dataset_version_dict = list_dataset(repo=repo, dataset_identifier=args.targets)
+    dataset_version_dict = Dataset.find(dataset_identifier=args.targets)
 
     for dataset_name, version_dict in dataset_version_dict.items():
         print(dataset_name)
@@ -33,15 +31,9 @@ def ls(args):
             )
         for version, dataset in version_dict.items():
             print(
-                f'|- {version[:7]}\t{dataset.yield_pipeline or "N.A."}\t\t{dataset.parent_dataset or "N.A."}\t\t'
+                f'|- {version}\t{dataset.yield_pipeline or "N.A."}\t\t{dataset.parent_dataset or "N.A."}\t\t'
                 f'{dataset.size or "N.A."}\t{dataset.create_date.strftime("%Y-%m-%d %H:%M:%S")}'
             )
-
-
-def tag(args):
-    tag_name, tag_version = args.tag.split('@')
-    dataset = get_dataset(name=args.dataset)
-    dataset.tag(tag_name, tag_version)
 
 
 def update(args):
@@ -65,17 +57,6 @@ if __name__ == '__main__':
         help='Dataset name with optional version and optional split information to query.'
     )
     list_parser.set_defaults(func=ls)
-
-    tag_parser = subparser.add_parser('tag', help='Tag dataset')
-    tag_parser.add_argument(
-        'dataset', type=str,
-        help='Dataset in format of <dataset_name>@<dataset_version>. Dataset version is optional, default to "latest".'
-    )
-    tag_parser.add_argument(
-        'tag', type=str,
-        help='Tag in format of <tag_name>@<tag_version>.'
-    )
-    tag_parser.set_defaults(func=tag)
 
     update_parser = subparser.add_parser('update', help='Update dataset')
     update_parser.add_argument('-n', '--name', type=str, required=True, help='Dataset name.')
