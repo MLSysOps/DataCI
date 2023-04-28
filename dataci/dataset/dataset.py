@@ -72,12 +72,6 @@ class Dataset(object):
         else:
             self.size = None
 
-    def __repr__(self):
-        if all((self.name, self.version)):
-            return str(self.name, self.version)
-        else:
-            return f'{self.name} ! Unpublished'
-
     @classmethod
     def from_dict(cls, config):
         # Build parent_dataset
@@ -141,8 +135,13 @@ class Dataset(object):
         )
         return self._parent_dataset
 
+    def __repr__(self):
+        if all((self.workspace.name, self.name, self.version)):
+            return f'{self.workspace.name}.{self.name}@{self.version}'
+        return f'{self.workspace.name}.{self.name} ! Unpublished'
+
     def __str__(self):
-        return f'{self.name}@{self.version}' if self.version else f'{self.name} ! Unpublished'
+        return f'{self.workspace.name}.{self.name}@{self.version}'
 
     def __hash__(self):
         return hash(str(self))

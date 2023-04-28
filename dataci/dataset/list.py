@@ -73,17 +73,17 @@ def find(cls: 'Dataset' = ..., dataset_identifier=None, tree_view=True):
         raise ValueError(f'Invalid dataset identifier {dataset_identifier}')
     name, version = matched.groups()
     name = name or '*'
-    workspace = name.split('.')[0] if '.' in name else Workspace.DEFAULT_WORKSPACE
+    workspace, name = name.split('.', maxsplit=1) if '.' in name else (Workspace.DEFAULT_WORKSPACE, name)
     version = (version or '*').lower()
 
     dataset_dict_list = get_many_datasets(workspace=workspace, name=name, version=version)
     dataset_list = list()
     for dataset_dict in dataset_dict_list:
-        dataset_list.append(Dataset.from_dict(dataset_dict))
+        dataset_list.append(cls.from_dict(dataset_dict))
     if tree_view:
         dataset_dict = defaultdict(dict)
         for dataset in dataset_list:
             dataset_dict[dataset.name][dataset.version] = dataset
-        return dataset_dict
+        return dict(dataset_dict)
 
     return dataset_list

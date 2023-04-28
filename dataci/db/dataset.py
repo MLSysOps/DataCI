@@ -157,25 +157,29 @@ def get_one_dataset(workspace, name, version='latest'):
     }
 
 
-def get_many_datasets(name, version=None):
+def get_many_datasets(workspace, name, version=None):
     with db_connection:
         dataset_po_iter = db_connection.execute("""
             --beginsql
             WITH selected_dataset AS (
-                SELECT dataset_name    AS name,                      
-                       dataset_version AS version
-                FROM  dataset_tag
-                WHERE tag_name GLOB ?
-                AND   tag_version GLOB ?
-                UNION ALL
-                SELECT name
+                -- SELECT dataset_name    AS name,                      
+                --        dataset_version AS version
+                -- FROM  dataset_tag
+                -- WHERE tag_name GLOB ?
+                -- AND   tag_version GLOB ?
+                -- UNION ALL
+                SELECT workspace
+                     , name
                      , version
                 FROM   dataset
-                WHERE  name GLOB ?
+                WHERE  workspace = ?
+                AND    name GLOB ?
                 AND    version GLOB ?
             )
-            SELECT d.name,
-                   d.version, 
+            SELECT d.workspace,
+                   d.name,
+                   d.version,
+                   yield_pipeline_workspace,
                    yield_pipeline_name,
                    yield_pipeline_version,
                    log_message,
@@ -183,25 +187,40 @@ def get_many_datasets(name, version=None):
                    id_column,
                    size,
                    filename,
+                   parent_dataset_workspace,
                    parent_dataset_name,
                    parent_dataset_version
             FROM   dataset d
             JOIN  selected_dataset sd
-            ON    d.name = sd.name
+            ON    d.workspace = sd.workspace
+            AND   d.name = sd.name
             AND   d.version = sd.version
             ;
             --endsql
-            """, (name, version, name, version))
+            """, (workspace, name, version))
     dataset_dict_list = list()
     for dataset_po in dataset_po_iter:
-        name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, id_column, size, \
-        filename, file_config, parent_dataset_name, parent_dataset_version = dataset_po
+        workspace, name, version, yield_pipeline_workspace, yield_pipeline_name, yield_pipeline_version, log_message, \
+        timestamp, id_column, size, filename, parent_dataset_workspace, parent_dataset_name, parent_dataset_version = \
+            dataset_po
         dataset_dict = {
-            'name': name, 'version': version,
-            'yield_pipeline': {'name': yield_pipeline_name, 'version': yield_pipeline_version},
-            'log_message': log_message, 'timestamp': timestamp, 'id_column': id_column, 'size': size,
-            'filename': filename, 'file_config': file_config,
-            'parent_dataset_name': parent_dataset_name, 'parent_dataset_version': parent_dataset_version,
+            'name': name,
+            'version': version,
+            'yield_pipeline': {
+                'workspace': yield_pipeline_workspace,
+                'name': yield_pipeline_name,
+                'version': yield_pipeline_version,
+            },
+            'log_message': log_message,
+            'timestamp': timestamp,
+            'id_column': id_column,
+            'size': size,
+            'filename': filename,
+            'parent_dataset': {
+                'workspace': parent_dataset_workspace,
+                'name': parent_dataset_name,
+                'version': parent_dataset_version,
+            }
         }
         dataset_dict_list.append(dataset_dict)
     return dataset_dict_list
