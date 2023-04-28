@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def get(cls: 'Dataset', name, version=None):
+def get(cls: 'Dataset' = ..., name: str = ..., version=None):
     # If version is provided along with name
     matched = DATASET_IDENTIFIER_PATTERN.match(str(name))
     if not matched:
@@ -27,7 +27,7 @@ def get(cls: 'Dataset', name, version=None):
     # Parse name and version
     name, version_ = matched.groups()
     # Get workspace name
-    workspace = name.split('.')[0] if '.' in name else Workspace.DEFAULT_WORKSPACE
+    workspace, name = name.split('.') if '.' in name else (Workspace.DEFAULT_WORKSPACE, name)
     # Only one version is allowed to be provided, either in name or in version
     if version and version_:
         raise ValueError('Only one version is allowed to be provided by name or version.')
@@ -39,7 +39,7 @@ def get(cls: 'Dataset', name, version=None):
     return cls.from_dict(dataset_dict)
 
 
-def list_dataset(dataset_identifier=None, tree_view=True):
+def find(cls: 'Dataset' = ..., dataset_identifier=None, tree_view=True):
     """
     List dataset with optional dataset identifier to query.
 
@@ -57,16 +57,15 @@ def list_dataset(dataset_identifier=None, tree_view=True):
             If view as a tree, the format is {dataset_name: {split_tag: {version_id: dataset_info}}}.
 
     Examples:
-        >>> list_dataset()
-        {'dataset1': {'1234567a': ..., '1234567b': ...}, 'dataset12': ...}
-        >>> list_dataset(dataset_identifier='dataset1')
-        {'dataset1': {'1234567a': ..., '1234567b': ...}}
-        >>> list_dataset(dataset_identifier='data*')
-        {'dataset1': {'1234567a': ..., '1234567b': ...}, 'dataset12': ...}
-        >>> list_dataset(dataset_identifier='dataset1@1')
-        {'dataset1': {'1234567a': ..., '1234567b': ...}}
-        >>> list_dataset(dataset_identifier='dataset1@1*')
-        {'dataset1': {'1234567a': ...}}
+        >>> from dataci.dataset import Dataset
+        >>> Dataset.find()
+        {'dataset1': {'1': ..., '2': ...}, 'dataset12': ...}
+        >>> Dataset.find(dataset_identifier='dataset1')
+        {'dataset1': {'1': ..., '2': ...}}
+        >>> Dataset.find(dataset_identifier='data*')
+        {'dataset1': {'1': ..., '2': ...}, 'dataset12': ...}
+        >>> Dataset.find(dataset_identifier='dataset1@1')
+        {'dataset1': {'1': ..., '2': ...}}
     """
     dataset_identifier = dataset_identifier or '*'
     matched = LIST_DATASET_IDENTIFIER_PATTERN.match(dataset_identifier)
@@ -74,12 +73,12 @@ def list_dataset(dataset_identifier=None, tree_view=True):
         raise ValueError(f'Invalid dataset identifier {dataset_identifier}')
     name, version = matched.groups()
     name = name or '*'
-    version = (version or '').lower()
+    workspace = name.split('.')[0] if '.' in name else Workspace.DEFAULT_WORKSPACE
+    version = (version or '*').lower()
 
-    dataset_dict_list = get_many_datasets(name=name, version=version)
+    dataset_dict_list = get_many_datasets(workspace=workspace, name=name, version=version)
     dataset_list = list()
     for dataset_dict in dataset_dict_list:
-        dataset_dict['repo'] = repo
         dataset_list.append(Dataset.from_dict(dataset_dict))
     if tree_view:
         dataset_dict = defaultdict(dict)

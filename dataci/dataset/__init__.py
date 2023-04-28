@@ -6,6 +6,6 @@ Email: yuanmingleee@gmail.com
 Date: Feb 20, 2023
 """
 from .dataset import Dataset
-from .list import list_dataset
+from .list import find
 
-__all__ = ['Dataset', 'list_dataset']
+__all__ = ['Dataset', 'find']

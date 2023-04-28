@@ -24,7 +24,9 @@ class Dataset(object):
     from .update import update  # type: ignore[misc]
     from .tag import tag  # type: ignore[misc]
     from .list import get  # type: ignore[misc]
+    from .list import find  # type: ignore[misc]
     get = classmethod(get)
+    find = classmethod(find)
 
     def __init__(
             self,
@@ -134,7 +136,7 @@ class Dataset(object):
         if self._parent_dataset is None or isinstance(self._parent_dataset, Dataset):
             return self._parent_dataset
         # Load the parent dataset using get method
-        self._parent_dataset = Dataset.get(
+        self._parent_dataset = self.get(
             f'{self._parent_dataset["workspace"]}.{self._parent_dataset["name"]}@{self._parent_dataset["version"]}'
         )
         return self._parent_dataset
