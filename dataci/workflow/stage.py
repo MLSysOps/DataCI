@@ -31,7 +31,7 @@ class Stage(ABC):
         self._output = None
 
     @abstractmethod
-    def run(self, inputs):
+    def run(self, *args, **kwargs):
         raise NotImplementedError('Method `run` not implemented.')
 
     @property
@@ -65,27 +65,6 @@ class Stage(ABC):
         self = sub_cls(**config)
         return self
 
-    @property
-    def context(self):
-        # Get context from contextvars, this will be set within the context of a workflow
-        return WORKFLOW_CONTEXT.get()
-
-    def __call__(self, inputs=None):
-        kwargs = dict()
-        if inputs is not None:
-            kwargs.update(inputs)
-        # Inspect run method signature
-        sig = inspect.signature(self.run)
-        # If context is in run method signature, pass context to run method
-        if 'context' in sig.parameters:
-            kwargs.update(self.context)
-        outputs = self.run(**kwargs)
-        self._output = outputs
-        return outputs
-
-    def __rshift__(self, other):
-        return self.add_downstream(other)
-
     def add_downstream(self, stage: 'Stage'):
         dag: DiGraph = self.context.get('dag')
         if dag is None:
@@ -94,10 +73,35 @@ class Stage(ABC):
 
         return stage
 
+    @property
+    def context(self):
+        # Get context from contextvars, this will be set within the context of a workflow
+        return WORKFLOW_CONTEXT.get()
+
+    @property
+    def ancestors(self):
+        return self.context.get('dag').predecessors(self)
+
+    def __call__(self, *args, **kwargs):
+        # Inspect run method signature
+        sig = inspect.signature(self.run)
+        # If context is in run method signature, pass context to run method
+        if 'context' in sig.parameters:
+            kwargs.update(self.context)
+        outputs = self.run(*args, **kwargs)
+        self._output = outputs
+        return outputs
+
+    def __rshift__(self, other):
+        return self.add_downstream(other)
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}(name={self.name})'
+
 
 class VirtualStage(Stage):
     def __init__(self, name: str, **kwargs):
         super().__init__(name, symbolize='virtual', **kwargs)
 
-    def run(self, inputs):
-        return inputs
+    def run(self, *args, **kwargs):
+        pass

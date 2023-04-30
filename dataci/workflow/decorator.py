@@ -6,6 +6,7 @@ Email: yuanmingleee@gmail.com
 Date: Mar 1, 2023
 """
 from functools import wraps
+from inspect import signature, Parameter
 from typing import Callable
 
 from .stage import Stage
@@ -23,8 +24,14 @@ def stage(name=None, **kwargs) -> Callable[[Callable], Stage]:
             # Convert stage name to camel case
             name_camel_case = ''.join(map(str.title, stage_name.split('_'))) + 'Stage'
             # Generate stage class of the wrapped `run` function
+            run_func = lambda self, *args, **kwargs: run(*args, **kwargs)
+            # override the run method signature
+            sig = signature(run)
+            run_func.__signature__ = sig.replace(
+                parameters=(Parameter('self', kind=Parameter.POSITIONAL_ONLY),) + tuple(sig.parameters.values())
+            )
             stage_cls = type(
-                name_camel_case, (Stage,), {'run': lambda self, *args, **kwargs: run(*args, **kwargs)},
+                name_camel_case, (Stage,), {'run': run_func},
             )
             # Initiate the stage object with configured info (e.g., inputs, outputs, etc.)
             stage_obj: Stage = stage_cls(name=stage_name, **kwargs)

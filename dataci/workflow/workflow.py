@@ -27,6 +27,7 @@ class Workflow(object):
             self,
             name: str,
             params: dict = None,
+            debug: bool = True,
             **kwargs,
     ):
         workspace_name, name = name.split('.') if '.' in name else (None, name)
@@ -34,6 +35,7 @@ class Workflow(object):
         self.workspace = Workspace(workspace_name)
         # Context for each stage
         self.params = params or dict()
+        self.flag = {'debug': debug}
         self.dag = nx.DiGraph()
         # Add a root node to dag
         self.root_stage = VirtualStage('__root')
@@ -51,55 +53,12 @@ class Workflow(object):
         return {
             'params': self.params,
             'dag': self.dag,
+            'flag': self.flag,
         }
 
     @property
     def stages(self):
         return self.dag.nodes
-
-    # def build(self):
-    #     self.workdir.mkdir(exist_ok=True, parents=True)
-    #     (self.workdir / self.CODE_DIR).mkdir(exist_ok=True)
-    #     (self.workdir / self.FEAT_DIR).mkdir(exist_ok=True)
-    #
-    #     with cwd(self.workdir):
-    #         for stage in self.stages:
-    #             # For each stage
-    #             # resolve input and output feature path
-    #             stage.code_base_dir = Path(self.CODE_DIR)
-    #             stage.feat_base_dir = Path(self.FEAT_DIR)
-    #
-    #             # Pack the stage object and all its dependencies to `code_dir`
-    #             file_dict = stage.serialize()
-    #             for file_path, file_bytes in file_dict.items():
-    #                 with open(file_path, 'wb') as f:
-    #                     f.write(file_bytes)
-    #
-    #             # Get output path
-    #             output_path = str(stage.outputs.dataset_files if isinstance(stage.outputs, Dataset) else stage.outputs)
-    #
-    #             # manage stages by dvc
-    #             # dvc stage add -n <stage name> -d stage.py -d input.csv -O output.csv -w self.workdir python stage.py
-    #             cmd = [
-    #                 'dvc', 'stage', 'add', '-f', '-n', str(stage.name),
-    #                 '-o', output_path, '-w', str(self.workdir),
-    #             ]
-    #             # Add dependencies
-    #             for dependency in stage.dependency:
-    #                 if isinstance(dependency, Dataset):
-    #                     # Link global dataset files path to local
-    #                     local_file_path = os.path.join(self.FEAT_DIR, dependency.name + dependency.dataset_files.suffix)
-    #                     symlink_force(dependency.dataset_files, local_file_path)
-    #                     dependency = local_file_path
-    #                 else:
-    #                     dependency = os.path.relpath(str(dependency), str(self.workdir))
-    #                 cmd += ['-d', dependency]
-    #             # Add running command
-    #             cmd += ['python', os.path.join(self.CODE_DIR, f'{stage.name}.py')]
-    #             subprocess.call(cmd)
-    #         # Get pipeline version
-    #         self.version = generate_pipeline_version_id(self.CODE_DIR)
-    #     self.is_built = True
 
     def validate(self):
         """
@@ -120,6 +79,15 @@ class Workflow(object):
         # Validate the workflow
         self.validate()
 
+        # Execute the workflow from the root stage
+        stages = nx.topological_sort(self.dag)
+        # Skip the root stage, since it is a virtual stage
+        for stage in stages:
+            self.logger.info(f'Executing stage: {stage}')
+            inputs = [t._output for t in stage.ancestors if t._output is not None]
+            stage(*inputs)
+            self.logger.info(f'Finished stage: {stage}')
+
         # # Create a Run
         # run = Run(pipeline=self, run_num=self.get_next_run_num())
         # run.prepare()
@@ -133,8 +101,8 @@ class Workflow(object):
         #             f'{",".join(map(str, self.inputs))} '
         #             f'>>> {str(run)} '
         #             f'>>> {",".join(map(str, self.outputs))}')
-
-        return run
+        #
+        # return run
 
     def __enter__(self):
         self.context_token = WORKFLOW_CONTEXT.set(self.context)
