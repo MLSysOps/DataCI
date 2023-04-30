@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 from dataci.workspace import Workspace
+from . import WORKFLOW_CONTEXT
 
 if TYPE_CHECKING:
     from networkx import DiGraph
@@ -66,8 +67,6 @@ class Stage(ABC):
 
     @property
     def context(self):
-        from dataci.workflow import WORKFLOW_CONTEXT
-
         # Get context from contextvars, this will be set within the context of a workflow
         return WORKFLOW_CONTEXT.get()
 
@@ -94,3 +93,11 @@ class Stage(ABC):
         dag.add_edge(self, stage)
 
         return stage
+
+
+class VirtualStage(Stage):
+    def __init__(self, name: str, **kwargs):
+        super().__init__(name, symbolize='virtual', **kwargs)
+
+    def run(self, inputs):
+        return inputs

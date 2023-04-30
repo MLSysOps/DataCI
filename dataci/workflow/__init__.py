@@ -7,10 +7,12 @@ Date: Feb 20, 2023
 """
 import contextvars
 
+WORKFLOW_CONTEXT = contextvars.ContextVar('workflow_context', default={})
+
 from .decorator import stage
 from .stage import Stage
 from .workflow import Workflow
 
-WORKFLOW_CONTEXT = contextvars.ContextVar('workflow_context', default={})
-
-__all__ = ['Workflow', 'Stage', 'stage', 'WORKFLOW_CONTEXT']
+__all__ = [
+    'Workflow', 'Stage', 'stage', 'WORKFLOW_CONTEXT'
+]
