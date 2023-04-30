@@ -13,16 +13,15 @@ from pathlib import Path
 from typing import Iterable, Union, Optional
 
 import yaml
-from dataci.repo import Repo
 from dataci.run import Run
 
-from dataci.dataset.dataset import Dataset
 from dataci.utils import cwd, symlink_force
 from .stage import Stage
 from .utils import generate_pipeline_version_id
+from ..workspace import Workspace
 
 
-class Pipeline(object):
+class Workflow(object):
     CODE_DIR = 'code'
     FEAT_DIR = 'feat'
     RUN_DIR = 'runs'
@@ -34,14 +33,12 @@ class Pipeline(object):
             self,
             name: str,
             version: str = None,
-            basedir: os.PathLike = os.curdir,
-            repo: Repo = None,
             stages: Union[Iterable[Stage], Stage] = None,
             **kwargs,
     ):
-        self.repo = repo or Repo()
+        workspace_name, name = name.split('.') if '.' in name else (None, name)
         self.name = name
-        # Filled version if pipeline published
+        self.workspace = Workspace(workspace_name)
         self.version = version or 'latest'
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.basedir = Path(basedir).resolve()

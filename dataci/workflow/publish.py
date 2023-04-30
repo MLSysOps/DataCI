@@ -12,12 +12,12 @@ from typing import TYPE_CHECKING
 from dataci.db.pipeline import create_one_pipeline
 
 if TYPE_CHECKING:
-    from .pipeline import Pipeline
+    from .workflow import Workflow
 
 logger = logging.getLogger(__name__)
 
 
-def publish(pipeline: 'Pipeline' = ...):
+def publish(pipeline: 'Workflow' = ...):
     repo = pipeline.repo
     #####################################################################
     # Step 1: Build pipeline

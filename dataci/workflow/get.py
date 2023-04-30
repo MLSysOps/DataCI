@@ -13,11 +13,11 @@ from dataci.db.run import get_next_run_num as get_next_run
 if TYPE_CHECKING:
     from typing import Optional
     from dataci.repo import Repo
-    from dataci.pipeline import Pipeline
+    from dataci.workflow import Workflow
 
 
 def get_pipeline(name, version=None, repo: 'Optional[Repo]' = None):
-    from .pipeline import Pipeline
+    from .workflow import Workflow
 
     version = version or 'latest'
     if version != 'latest':
@@ -27,8 +27,8 @@ def get_pipeline(name, version=None, repo: 'Optional[Repo]' = None):
     pipeline_dict = get_one_pipeline(name=name, version=version)
     if repo is not None:
         pipeline_dict['repo'] = repo
-    return Pipeline.from_dict(pipeline_dict)
+    return Workflow.from_dict(pipeline_dict)
 
 
-def get_next_run_num(pipeline: 'Pipeline' = ...):
+def get_next_run_num(pipeline: 'Workflow' = ...):
     return get_next_run(pipeline.name, pipeline.version)
