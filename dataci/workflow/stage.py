@@ -8,8 +8,12 @@ Date: Feb 20, 2023
 import inspect
 import logging
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from dataci.workspace import Workspace
+
+if TYPE_CHECKING:
+    from networkx import DiGraph
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +26,8 @@ class Stage(ABC):
         self.workspace = Workspace(workspace_name)
         self.name = task_name
         self.symbolize = symbolize
-        # context is set by workflow
-        self.context = dict()
+        # Output is saved after the stage is run, this is for the descendant stages to use
+        self._output = None
 
     @abstractmethod
     def run(self, inputs):
@@ -60,6 +64,13 @@ class Stage(ABC):
         self = sub_cls(**config)
         return self
 
+    @property
+    def context(self):
+        from dataci.workflow import WORKFLOW_CONTEXT
+
+        # Get context from contextvars, this will be set within the context of a workflow
+        return WORKFLOW_CONTEXT.get()
+
     def __call__(self, inputs=None):
         kwargs = dict()
         if inputs is not None:
@@ -70,4 +81,16 @@ class Stage(ABC):
         if 'context' in sig.parameters:
             kwargs.update(self.context)
         outputs = self.run(**kwargs)
+        self._output = outputs
         return outputs
+
+    def __rshift__(self, other):
+        return self.add_downstream(other)
+
+    def add_downstream(self, stage: 'Stage'):
+        dag: DiGraph = self.context.get('dag')
+        if dag is None:
+            raise ValueError('DAG is not set in context.')
+        dag.add_edge(self, stage)
+
+        return stage
