@@ -14,13 +14,13 @@ with db_connection:
     DROP TABLE IF EXISTS run;
     DROP TABLE IF EXISTS dataset_tag;
     DROP TABLE IF EXISTS dataset;
-    DROP TABLE IF EXISTS pipeline;
+    DROP TABLE IF EXISTS workflow;
     """)
 
 # Create dataset table
 with db_connection:
     db_connection.executescript("""
-    CREATE TABLE pipeline
+    CREATE TABLE workflow
     (
         workspace TEXT,
         name      TEXT,
@@ -34,9 +34,9 @@ with db_connection:
         workspace                TEXT,
         name                     TEXT,
         version                  TEXT,
-        yield_pipeline_workspace TEXT,
-        yield_pipeline_name      TEXT,
-        yield_pipeline_version   TEXT,
+        yield_workflow_workspace TEXT,
+        yield_workflow_name      TEXT,
+        yield_workflow_version   TEXT,
         log_message              TEXT,
         timestamp                INTEGER,
         id_column                TEXT,
@@ -45,8 +45,8 @@ with db_connection:
         parent_dataset_workspace TEXT,
         parent_dataset_name      TEXT,
         parent_dataset_version   TEXT,
-        FOREIGN KEY (yield_pipeline_workspace, yield_pipeline_name, yield_pipeline_version)
-            REFERENCES pipeline (workspace, name, version),
+        FOREIGN KEY (yield_workflow_workspace, yield_workflow_name, yield_workflow_version)
+            REFERENCES workflow (workspace, name, version),
         FOREIGN KEY (parent_dataset_workspace, parent_dataset_name, parent_dataset_version)
             REFERENCES dataset (workspace, name, version),
         PRIMARY KEY (workspace, name, version)
@@ -65,10 +65,10 @@ with db_connection:
     CREATE TABLE run
     (
         run_num INTEGER,
-        pipeline_name TEXT,
-        pipeline_version TEXT,
-        FOREIGN KEY (pipeline_name, pipeline_version) REFERENCES pipeline (name, version),
-        PRIMARY KEY (pipeline_name, pipeline_version, run_num)
+        workflow_name TEXT,
+        workflow_version TEXT,
+        FOREIGN KEY (workflow_name, workflow_version) REFERENCES workflow (name, version),
+        PRIMARY KEY (workflow_name, workflow_version, run_num)
     );
     
     CREATE TABLE benchmark

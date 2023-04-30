@@ -9,7 +9,7 @@ from . import db_connection
 
 
 def create_one_dataset(dataset_dict):
-    pipeline_dict = dataset_dict['yield_pipeline']
+    workflow_dict = dataset_dict['yield_workflow']
     parent_dataset_dict = dataset_dict['parent_dataset']
     with db_connection:
         db_connection.execute(
@@ -17,9 +17,9 @@ def create_one_dataset(dataset_dict):
             INSERT INTO dataset ( workspace
                                 , name
                                 , version
-                                , yield_pipeline_workspace
-                                , yield_pipeline_name
-                                , yield_pipeline_version
+                                , yield_workflow_workspace
+                                , yield_workflow_name
+                                , yield_workflow_version
                                 , log_message
                                 , timestamp
                                 , id_column
@@ -35,9 +35,9 @@ def create_one_dataset(dataset_dict):
                 dataset_dict['workspace'],
                 dataset_dict['name'],
                 dataset_dict['version'],
-                pipeline_dict['workspace'],
-                pipeline_dict['name'],
-                pipeline_dict['version'],
+                workflow_dict['workspace'],
+                workflow_dict['name'],
+                workflow_dict['version'],
                 dataset_dict['log_message'],
                 dataset_dict['timestamp'],
                 dataset_dict['id_column'],
@@ -86,9 +86,9 @@ def get_one_dataset(workspace, name, version='latest'):
                 SELECT d.workspace
                      , d.name
                      , d.version
-                     , yield_pipeline_workspace
-                     , yield_pipeline_name
-                     , yield_pipeline_version
+                     , yield_workflow_workspace
+                     , yield_workflow_name
+                     , yield_workflow_version
                      , log_message
                      , timestamp
                      , id_column
@@ -111,9 +111,9 @@ def get_one_dataset(workspace, name, version='latest'):
                 SELECT workspace,
                        name,
                        version, 
-                       yield_pipeline_workspace,
-                       yield_pipeline_name,
-                       yield_pipeline_version,
+                       yield_workflow_workspace,
+                       yield_workflow_name,
+                       yield_workflow_version,
                        log_message,
                        timestamp,
                        id_column,
@@ -137,15 +137,15 @@ def get_one_dataset(workspace, name, version='latest'):
         raise ValueError(f'Dataset {workspace}.{name}@{version} not found.')
     if len(dataset_po_list) > 1:
         raise ValueError(f'Found more than one dataset {workspace}.{name}@{version}.')
-    workspace, name, version, yield_pipeline_workspace, yield_pipeline_name, yield_pipeline_version, log_message, \
+    workspace, name, version, yield_workflow_workspace, yield_workflow_name, yield_workflow_version, log_message, \
     timestamp, id_column, size, filename, parent_dataset_workspace, parent_dataset_name, parent_dataset_version = \
         dataset_po_list[0]
     return {
         'workspace': workspace, 'name': name, 'version': version,
-        'yield_pipeline': {
-            'workspace': yield_pipeline_workspace,
-            'name': yield_pipeline_name,
-            'version': yield_pipeline_version,
+        'yield_workflow': {
+            'workspace': yield_workflow_workspace,
+            'name': yield_workflow_name,
+            'version': yield_workflow_version,
         },
         'log_message': log_message,
         'timestamp': timestamp, 'size': size, 'filename': filename,
@@ -179,9 +179,9 @@ def get_many_datasets(workspace, name, version=None):
             SELECT d.workspace,
                    d.name,
                    d.version,
-                   yield_pipeline_workspace,
-                   yield_pipeline_name,
-                   yield_pipeline_version,
+                   yield_workflow_workspace,
+                   yield_workflow_name,
+                   yield_workflow_version,
                    log_message,
                    timestamp,
                    id_column,
@@ -200,16 +200,16 @@ def get_many_datasets(workspace, name, version=None):
             """, (workspace, name, version))
     dataset_dict_list = list()
     for dataset_po in dataset_po_iter:
-        workspace, name, version, yield_pipeline_workspace, yield_pipeline_name, yield_pipeline_version, log_message, \
+        workspace, name, version, yield_workflow_workspace, yield_workflow_name, yield_workflow_version, log_message, \
         timestamp, id_column, size, filename, parent_dataset_workspace, parent_dataset_name, parent_dataset_version = \
             dataset_po
         dataset_dict = {
             'name': name,
             'version': version,
-            'yield_pipeline': {
-                'workspace': yield_pipeline_workspace,
-                'name': yield_pipeline_name,
-                'version': yield_pipeline_version,
+            'yield_workflow': {
+                'workspace': yield_workflow_workspace,
+                'name': yield_workflow_name,
+                'version': yield_workflow_version,
             },
             'log_message': log_message,
             'timestamp': timestamp,
@@ -254,8 +254,8 @@ def get_many_dataset_update_plan(name):
                 SELECT  d.version
                         ,parent_dataset_name
                         ,parent_dataset_version
-                        ,yield_pipeline_name
-                        ,yield_pipeline_version
+                        ,yield_workflow_name
+                        ,yield_workflow_version
                 FROM    dataset d
                 WHERE   d.name GLOB ?
             )
@@ -270,21 +270,21 @@ def get_many_dataset_update_plan(name):
                         ) cur_dataset
                 ON      cur_dataset.parent_dataset_name = name
             )
-            ,pipeline_list AS 
+            ,workflow_list AS 
             (
-                SELECT  pipeline.*
-                FROM    pipeline
+                SELECT  workflow.*
+                FROM    workflow
                 JOIN    (
-                            SELECT      yield_pipeline_name
+                            SELECT      yield_workflow_name
                             FROM        base
-                            GROUP BY    yield_pipeline_name
+                            GROUP BY    yield_workflow_name
                         ) 
-                ON      yield_pipeline_name = name
+                ON      yield_workflow_name = name
             )
             SELECT  dataset_list.name
                     ,dataset_list.version
-                    ,dataset_list.yield_pipeline_name
-                    ,dataset_list.yield_pipeline_version
+                    ,dataset_list.yield_workflow_name
+                    ,dataset_list.yield_workflow_version
                     ,dataset_list.log_message
                     ,dataset_list.timestamp
                     ,dataset_list.id_column
@@ -292,16 +292,16 @@ def get_many_dataset_update_plan(name):
                     ,dataset_list.filename
                     ,dataset_list.parent_dataset_name
                     ,dataset_list.parent_dataset_version
-                    ,pipeline_list.name
-                    ,pipeline_list.version
-                    ,pipeline_list.timestamp
+                    ,workflow_list.name
+                    ,workflow_list.version
+                    ,workflow_list.timestamp
             FROM    dataset_list
-            CROSS JOIN pipeline_list
+            CROSS JOIN workflow_list
             LEFT JOIN base
             ON      dataset_list.name = base.parent_dataset_name
             AND     dataset_list.version = base.parent_dataset_version
-            AND     pipeline_list.name = base.yield_pipeline_name
-            AND     pipeline_list.version = base.yield_pipeline_version
+            AND     workflow_list.name = base.yield_workflow_name
+            AND     workflow_list.version = base.yield_workflow_version
             WHERE   base.version IS NULL
             ;
             -- endsql
@@ -311,21 +311,21 @@ def get_many_dataset_update_plan(name):
 
     update_plans = list()
     for result in result_iter:
-        name, version, yield_pipeline_name, yield_pipeline_version, log_message, timestamp, id_column, size, \
+        name, version, yield_workflow_name, yield_workflow_version, log_message, timestamp, id_column, size, \
         file_config, filename, parent_dataset_name, parent_dataset_version = result[:12]
         dataset_dict = {
             'name': name, 'version': version,
-            'yield_pipeline': {'name': yield_pipeline_name, 'version': yield_pipeline_version},
+            'yield_workflow': {'name': yield_workflow_name, 'version': yield_workflow_version},
             'log_message': log_message, 'timestamp': timestamp, 'id_column': id_column, 'size': size,
             'filename': filename, 'file_config': file_config,
             'parent_dataset_name': parent_dataset_name, 'parent_dataset_version': parent_dataset_version,
         }
         name, version, timestamp = result[12:]
-        pipeline_dict = {
+        workflow_dict = {
             'name': name, 'version': version, 'timestamp': timestamp,
         }
         update_plans.append({
             'parent_dataset': dataset_dict,
-            'pipeline': pipeline_dict,
+            'workflow': workflow_dict,
         })
     return update_plans

@@ -16,7 +16,6 @@ from dataci.workspace import Workspace
 
 if TYPE_CHECKING:
     from typing import Optional, Union
-    from dataci.workflow.pipeline import Pipeline
 
 
 class Dataset(object):
@@ -32,7 +31,7 @@ class Dataset(object):
             self,
             name,
             dataset_files=None,
-            yield_pipeline: 'Optional[Union[Pipeline, dict]]' = None,
+            yield_workflow: 'Optional[Union[workflow, dict]]' = None,
             parent_dataset: 'Optional[Union[Dataset, dict]]' = None,
             log_message=None,
             id_column='id',
@@ -58,7 +57,7 @@ class Dataset(object):
                 self.dataset_files = Path(dataset_files)
         else:
             self.dataset_files = None
-        self._yield_pipeline = yield_pipeline
+        self._yield_workflow = yield_workflow
         self._parent_dataset = parent_dataset
         self.log_message = log_message or ''
         # TODO: create a dataset schema and verify
@@ -81,14 +80,15 @@ class Dataset(object):
             }
         else:
             config['parent_dataset'] = None
-        # Build yield_pipeline
-        if all(config['yield_pipeline'].values()):
-            config['yield_pipeline'] = {
-                'workspace': config['workspace'], 'name': config['yield_pipeline_name'],
-                'version': config['yield_pipeline_version']
+        # Build yield_workflow
+        if all(config['yield_workflow'].values()):
+            config['yield_workflow'] = {
+                'workspace': config['workspace'], 'name': config['yield_workflow_name'],
+                'version': config['yield_workflow_version']
             }
         else:
-            config['yield_pipeline'] = None
+            config['yield_workflow'] = None
+        config['name'] = f'{config["workspace"]}.{config["name"]}'
         dataset_obj = cls(**config)
         dataset_obj.create_date = datetime.fromtimestamp(config['timestamp'])
         dataset_obj.version = config['version']
@@ -100,7 +100,7 @@ class Dataset(object):
         return dataset_obj
 
     def dict(self):
-        yield_pipeline_dict = self.yield_pipeline.dict() if self.yield_pipeline else {
+        yield_workflow_dict = self.yield_workflow.dict() if self.yield_workflow else {
             'workspace': None, 'name': None, 'version': None,
         }
         parent_dataset_dict = {
@@ -115,7 +115,7 @@ class Dataset(object):
             'name': self.name,
             'timestamp': self.create_date.timestamp() if self.create_date else None,
             'parent_dataset': parent_dataset_dict,
-            'yield_pipeline': yield_pipeline_dict,
+            'yield_workflow': yield_workflow_dict,
             'log_message': self.log_message,
             'version': self.version,
             'filename': self.dataset_files.name,
@@ -125,15 +125,15 @@ class Dataset(object):
         return config
 
     @property
-    def yield_pipeline(self):
+    def yield_workflow(self):
         """Lazy load yield workflow"""
-        # from dataci.workflow.pipeline import Pipeline
+        # from dataci.workflow.workflow import workflow
 
-        if self._yield_pipeline is None or isinstance(self._yield_pipeline, Pipeline):
-            return self._yield_pipeline
+        if self._yield_workflow is None or isinstance(self._yield_workflow, workflow):
+            return self._yield_workflow
 
-        self._yield_pipeline = Pipeline.from_dict(self._yield_pipeline)
-        return self._yield_pipeline
+        self._yield_workflow = workflow.from_dict(self._yield_workflow)
+        return self._yield_workflow
 
     @property
     def parent_dataset(self):
