@@ -16,11 +16,12 @@ logger = logging.getLogger(__name__)
 
 class Stage(ABC):
     def __init__(
-            self, name: str,
+            self, name: str, symbolize: str = None, **kwargs,
     ) -> None:
         workspace_name, task_name = name.split('.') if '.' in name else (None, name)
         self.workspace = Workspace(workspace_name)
         self.name = task_name
+        self.symbolize = symbolize
         # context is set by workflow
         self.context = dict()
 
@@ -44,6 +45,7 @@ class Stage(ABC):
             name=self.name,
             workspace=self.workspace.name,
             script=self.script,
+            symbolize=self.symbolize,
             cls_name=self.__class__.__name__,
         )
 
@@ -55,7 +57,7 @@ class Stage(ABC):
         local_dict = locals()
         exec(config['script'], globals(), local_dict)
         sub_cls = local_dict[config['cls_name']]
-        self = sub_cls(name=config['name'])
+        self = sub_cls(**config)
         return self
 
     def __call__(self, inputs=None):
