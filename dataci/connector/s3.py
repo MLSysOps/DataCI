@@ -13,7 +13,7 @@ import subprocess
 import boto3 as boto3
 import s3fs
 
-from dataci import CONFIG_FILE, CACHE_ROOT
+from dataci.config import CONFIG_FILE, CACHE_ROOT
 
 logger = logging.getLogger(__name__)
 

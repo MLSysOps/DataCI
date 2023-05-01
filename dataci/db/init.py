@@ -5,7 +5,11 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Mar 09, 2023
 """
+import logging
+
 from dataci.db import db_connection
+
+logger = logging.getLogger(__name__)
 
 # Drop all tables
 with db_connection:
@@ -13,9 +17,11 @@ with db_connection:
     DROP TABLE IF EXISTS benchmark;
     DROP TABLE IF EXISTS run;
     DROP TABLE IF EXISTS dataset_tag;
-    DROP TABLE IF EXISTS dataset;
     DROP TABLE IF EXISTS workflow;
+    DROP TABLE IF EXISTS stage;
+    DROP TABLE IF EXISTS dataset;
     """)
+logger.info('Drop all tables.')
 
 # Create dataset table
 with db_connection:
@@ -26,6 +32,17 @@ with db_connection:
         name      TEXT,
         version   TEXT,
         timestamp INTEGER,
+        PRIMARY KEY (workspace, name, version)
+    );
+    
+    CREATE TABLE stage
+    (
+        workspace   TEXT,
+        name        TEXT,
+        version     TEXT,
+        script_path TEXT,
+        cls_name    TEXT,
+        symbolize   TEXT,
         PRIMARY KEY (workspace, name, version)
     );
     
@@ -87,3 +104,4 @@ with db_connection:
         FOREIGN KEY (test_dataset_name, test_dataset_version) REFERENCES dataset (name, version)
     );
     """)
+logger.info('Create all tables.')
