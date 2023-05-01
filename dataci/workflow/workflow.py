@@ -64,22 +64,23 @@ class Workflow(object):
         """
         if not nx.is_directed_acyclic_graph(self.dag):
             raise ValueError('The dag should be a directed acyclic graph.')
-        if not nx.is_connected(self.dag):
+        if not nx.is_connected(nx.to_undirected(self.dag)):
             raise ValueError('All dag nodes should be connected.')
         return True
 
     def __call__(self):
-        # Validate the workflow
-        self.validate()
+        with self:
+            # Validate the workflow
+            self.validate()
 
-        # Execute the workflow from the root stage
-        stages = nx.topological_sort(self.dag)
-        # Skip the root stage, since it is a virtual stage
-        for stage in stages:
-            self.logger.info(f'Executing stage: {stage}')
-            inputs = [t._output for t in stage.ancestors if t._output is not None]
-            stage(*inputs)
-            self.logger.info(f'Finished stage: {stage}')
+            # Execute the workflow from the root stage
+            stages = nx.topological_sort(self.dag)
+            # Skip the root stage, since it is a virtual stage
+            for stage in stages:
+                self.logger.info(f'Executing stage: {stage}')
+                inputs = [t._output for t in stage.ancestors if t._output is not None]
+                stage(*inputs)
+                self.logger.info(f'Finished stage: {stage}')
 
         # # Create a Run
         # run = Run(pipeline=self, run_num=self.get_next_run_num())
