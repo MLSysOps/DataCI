@@ -10,25 +10,16 @@ import logging
 import os
 import shutil
 
-from dataci import CACHE_ROOT
+from dataci.config import CACHE_ROOT, DEFAULT_WORKSPACE, CONFIG_FILE
 from dataci.connector.s3 import connect as connect_s3, create_bucket, mount_bucket, unmount_bucket
 
 logger = logging.getLogger(__name__)
 
 
-def get_default_workspace_name():
-    config = configparser.ConfigParser()
-    config.read(CACHE_ROOT / 'config.ini')
-    name = config.get('DEFAULT', 'workspace', fallback=None)
-    return name
-
-
 class Workspace(object):
-    DEFAULT_WORKSPACE = get_default_workspace_name()
-
     def __init__(self, name: str = None):
         if name is None:
-            name = self.DEFAULT_WORKSPACE
+            name = DEFAULT_WORKSPACE
         if name is None:
             raise ValueError('Workspace name is not provided and default workspace is not set.')
         self.name = str(name)
@@ -91,16 +82,10 @@ def create_or_use_workspace(workspace: Workspace):
     # Mount the S3 bucket to local
     mount_bucket(bucket_name, workspace.data_dir, mount_ok=True, region=region)
 
-    # Init database
-    from dataci.db import init  # noqa
-
     # Set the current workspace as the default workspace to config file
     config = configparser.ConfigParser()
-    config.read(CACHE_ROOT / 'config.ini')
-    # Create a default section if not exists
-    if 'DEFAULT' not in config:
-        config.add_section('DEFAULT')
-    config['DEFAULT']['workspace'] = workspace.name
-    with open(CACHE_ROOT / 'config.ini', 'w') as f:
+    config.read(CONFIG_FILE)
+    config['CORE']['default_workspace'] = workspace.name
+    with open(CONFIG_FILE, 'w') as f:
         config.write(f)
-    logger.info(f'Set default workspace to {workspace.name} in config {CACHE_ROOT / "config.ini"}.')
+    logger.info(f'Set default workspace to {workspace.name} in config {CONFIG_FILE}.')
