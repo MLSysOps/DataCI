@@ -11,7 +11,7 @@ import os
 import shutil
 
 from dataci.config import CACHE_ROOT, DEFAULT_WORKSPACE, CONFIG_FILE
-from dataci.connector.s3 import connect as connect_s3, create_bucket, mount_bucket, unmount_bucket
+from dataci.connector.s3 import connect as connect_s3, mount_bucket, unmount_bucket
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +27,8 @@ class Workspace(object):
         self.root_dir = CACHE_ROOT / self.name
 
     @property
-    def workflow_dir(self):
-        return self.root_dir / 'workflow'
+    def stage_dir(self):
+        return self.root_dir / 'stage'
 
     @property
     def data_dir(self):
@@ -66,21 +66,25 @@ class Workspace(object):
 def create_or_use_workspace(workspace: Workspace):
     # if not workspace.root_dir.exists():
     os.makedirs(workspace.root_dir, exist_ok=True)
-    os.makedirs(workspace.workflow_dir, exist_ok=True)
+    os.makedirs(workspace.stage_dir, exist_ok=True)
     os.makedirs(workspace.data_dir, exist_ok=True)
     os.makedirs(workspace.tmp_dir, exist_ok=True)
     # Create a S3 bucket for data
-    fs = connect_s3()
+    # TODO: region should be configurable
+    region = 'ap-southeast-1'
+    fs = connect_s3(region_name=region)
     # Add a prefix to bucket name to avoid name conflict
     # TODO: change the prefix to account specific
     bucket_name = 'dataci-' + workspace.name
-    # TODO: region should be configurable
-    region = 'ap-southeast-1'
-    if not fs.exists(f'/{bucket_name}'):
-        create_bucket(bucket_name, region=region)
+    if not fs.exists(bucket_name):
+        fs.mkdir(f'/{bucket_name}', exist_ok=True)
+    # create folders in bucket
+    fs.touch(f'/{bucket_name}/data/.keep', exist_ok=True)
+    fs.touch(f'/{bucket_name}/stage/.keep', exist_ok=True)
 
     # Mount the S3 bucket to local
-    mount_bucket(bucket_name, workspace.data_dir, mount_ok=True, region=region)
+    mount_bucket(f'{bucket_name}:/data', workspace.data_dir, mount_ok=True, region=region)
+    mount_bucket(f'{bucket_name}:/stage', workspace.stage_dir, mount_ok=True, region=region)
 
     # Set the current workspace as the default workspace to config file
     config = configparser.ConfigParser()

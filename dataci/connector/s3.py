@@ -10,7 +10,6 @@ import logging
 import os
 import subprocess
 
-import boto3 as boto3
 import s3fs
 
 from dataci.config import CONFIG_FILE, CACHE_ROOT
@@ -18,7 +17,7 @@ from dataci.config import CONFIG_FILE, CACHE_ROOT
 logger = logging.getLogger(__name__)
 
 
-def connect(key=None, secret=None, endpoint_url=None):
+def connect(key=None, secret=None, endpoint_url=None, **kwargs):
     """Connect to S3 using access ID and access key.
     When connecting, make sure that the user has the right to read and write to the bucket.
     If the access ID and access key are not provided, it will read the local configuration file
@@ -46,7 +45,10 @@ def connect(key=None, secret=None, endpoint_url=None):
     endpoint_url_ = None if not endpoint_url else endpoint_url
 
     # test connection
-    fs = s3fs.S3FileSystem(anon=False, key=key_, secret=secret_, endpoint_url=endpoint_url_)
+    fs = s3fs.S3FileSystem(
+        anon=False, key=key_, secret=secret_, endpoint_url=endpoint_url_,
+        client_kwargs=kwargs,
+    )
     fs.ls('/')
 
     logger.info('S3 connection established.')
@@ -68,43 +70,6 @@ def connect(key=None, secret=None, endpoint_url=None):
         logger.info('S3 credentials saved to config file.')
 
     return fs
-
-
-def create_bucket(bucket_name: str, region: str = None):
-    """Create a new S3 bucket.
-
-    Args:
-        bucket_name: Name of the bucket to be created.
-        region: Region to create the bucket in. If not set then the default region for DataCI (ap-southeast-1)
-            will be used.
-    """
-    # Read AWS credentials from config file
-    config = configparser.ConfigParser()
-    config.read(CONFIG_FILE)
-    section_name = 'connector.s3'
-    key = config.get(section_name, 'key')
-    secret = config.get(section_name, 'secret')
-
-    # Create an S3 client
-    if region is None:
-        s3 = boto3.client('s3', aws_access_key_id=key, aws_secret_access_key=secret)
-    else:
-        s3 = boto3.client(
-            's3', aws_access_key_id=key, aws_secret_access_key=secret, region_name=region
-        )
-
-    # Create the bucket
-    try:
-        if region is None:
-            s3.create_bucket(Bucket=bucket_name)
-        else:
-            location = {'LocationConstraint': region}
-            s3.create_bucket(Bucket=bucket_name, CreateBucketConfiguration=location)
-        logging.info(f"Bucket {bucket_name} created successfully.")
-    except Exception as e:
-        logging.error(f"Error creating bucket {bucket_name}: {e}")
-    finally:
-        s3.close()
 
 
 def mount_bucket(bucket_name: str, local_dir: str, mount_ok: bool = False, region: str = None):
