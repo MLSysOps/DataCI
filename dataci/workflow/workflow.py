@@ -23,9 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 class Workflow(object):
-    from .publish import publish  # type: ignore[misc]
-    from .get import get_next_run_num  # type: ignore[misc]
-
     def __init__(
             self,
             name: str,

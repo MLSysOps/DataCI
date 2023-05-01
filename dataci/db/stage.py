@@ -56,9 +56,41 @@ def update_one_stage(stage_dict):
 
 
 def get_one_stage(workspace, name, version=None):
+    # Version is None, get the latest version
+    # Some illustration of versions:
+    # v1 -> v2 (latest) -> (head)
+    # In this case,
+    #   version=latest: get v2
+    #   version=head: get head
+    #   version=v1/v2: get v1/v2
+    #
+    # v1 -> v2 (latest, head)
+    # In this case,
+    #   version=latest: get v2
+    #   version=head: get v2 (there will be no head in DB)
+    #   version=v1/v2: get v1/v2
     with db_connection:
         cur = db_connection.cursor()
-        if version is None:
+        if version == 'head':
+            # Get the head version
+            cur.execute(
+                """
+                SELECT workspace, name, version, script_path, timestamp, symbolize
+                FROM   stage 
+                WHERE  workspace=:workspace 
+                AND    name=:name
+                AND    version = 'head'
+                """,
+                {
+                    'workspace': workspace,
+                    'name': name,
+                }
+            )
+            po = cur.fetchone()
+            if po is None:
+                # If there is no head version, get the latest version (by set version to None)
+                version = None
+        if version is None or version == 'latest':
             # Get the latest version
             cur.execute(
                 """
@@ -75,7 +107,8 @@ def get_one_stage(workspace, name, version=None):
                     'name': name,
                 }
             )
-        else:
+            po = cur.fetchone()
+        elif version != 'head':
             cur.execute(
                 """
                 SELECT workspace, name, version, script_path, timestamp, symbolize
@@ -90,6 +123,6 @@ def get_one_stage(workspace, name, version=None):
                     'version': version,
                 }
             )
-        po = cur.fetchone()
+            po = cur.fetchone()
 
     return dict(zip(['workspace', 'name', 'version', 'script_path', 'timestamp', 'symbolize'], po))
