@@ -1,13 +1,13 @@
 import argparse
 
-from dataci.workspace import create_or_use_workspace, Workspace
+from dataci.workspace import Workspace
 
 
 def use(args):
     """Use a workspace. If the workspace does not exist, create it."""
     workspace_name = args.name
     workspace = Workspace(workspace_name)
-    create_or_use_workspace(workspace)
+    workspace.use()
 
 
 def rm(args):

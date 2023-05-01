@@ -85,7 +85,7 @@ def mount_bucket(bucket_name: str, local_dir: str, mount_ok: bool = False, regio
         # Step 2: mount the bucket to local data directory
         cmd = [
             's3fs', f'{bucket_name}', f'{local_dir}', '-o', f'passwd_file={CACHE_ROOT / ".passwd-s3fs"}',
-            '-o', f'url=https://s3-{region}.amazonaws.com',
+            # '-o', f'url=https://s3-{region}.amazonaws.com',
         ]
         logger.info(f'Running command: {" ".join(cmd)}')
         subprocess.run(cmd, check=True)

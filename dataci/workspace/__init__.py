@@ -25,6 +25,7 @@ class Workspace(object):
         self.name = str(name)
         # Workspace root
         self.root_dir = CACHE_ROOT / self.name
+        self.connect()
 
     @property
     def stage_dir(self):
@@ -57,39 +58,38 @@ class Workspace(object):
         # Delete the workspace from config file
         config = configparser.ConfigParser()
         config.read(CACHE_ROOT / 'config.ini')
-        config.remove_option('DEFAULT', 'workspace')
+        config.set('DEFAULT', 'workspace', 'default')
         with open(CACHE_ROOT / 'config.ini', 'w') as f:
             config.write(f)
         logger.info(f'Remove workspace {self.name} from config {CACHE_ROOT / "config.ini"}.')
 
+    def use(self):
+        """Set the current workspace as the default workspace."""
+        # Set the current workspace as the default workspace to config file
+        config = configparser.ConfigParser()
+        config.read(CONFIG_FILE)
+        config['CORE']['default_workspace'] = self.name
+        with open(CONFIG_FILE, 'w') as f:
+            config.write(f)
+        logger.info(f'Set default workspace to {self.name} in config {CONFIG_FILE}.')
 
-def create_or_use_workspace(workspace: Workspace):
-    # if not workspace.root_dir.exists():
-    os.makedirs(workspace.root_dir, exist_ok=True)
-    os.makedirs(workspace.stage_dir, exist_ok=True)
-    os.makedirs(workspace.data_dir, exist_ok=True)
-    os.makedirs(workspace.tmp_dir, exist_ok=True)
-    # Create a S3 bucket for data
-    # TODO: region should be configurable
-    region = 'ap-southeast-1'
-    fs = connect_s3(region_name=region)
-    # Add a prefix to bucket name to avoid name conflict
-    # TODO: change the prefix to account specific
-    bucket_name = 'dataci-' + workspace.name
-    if not fs.exists(bucket_name):
-        fs.mkdir(f'/{bucket_name}', exist_ok=True)
-    # create folders in bucket
-    fs.touch(f'/{bucket_name}/data/.keep', exist_ok=True)
-    fs.touch(f'/{bucket_name}/stage/.keep', exist_ok=True)
+    def connect(self):
+        os.makedirs(self.root_dir, exist_ok=True)
+        if not self.root_dir.is_mount():
+            # Create a S3 bucket for data
+            # TODO: region should be configurable
+            region = 'ap-southeast-1'
+            fs = connect_s3(region_name=region)
+            # Add a prefix to bucket name to avoid name conflict
+            # TODO: change the prefix to account specific
+            bucket_name = 'dataci-' + self.name
+            if not fs.exists(bucket_name):
+                fs.mkdir(f'/{bucket_name}', exist_ok=True)
 
-    # Mount the S3 bucket to local
-    mount_bucket(f'{bucket_name}:/data', workspace.data_dir, mount_ok=True, region=region)
-    mount_bucket(f'{bucket_name}:/stage', workspace.stage_dir, mount_ok=True, region=region)
+            # Mount the S3 bucket to local
+            mount_bucket(f'{bucket_name}', self.root_dir, mount_ok=True)
 
-    # Set the current workspace as the default workspace to config file
-    config = configparser.ConfigParser()
-    config.read(CONFIG_FILE)
-    config['CORE']['default_workspace'] = workspace.name
-    with open(CONFIG_FILE, 'w') as f:
-        config.write(f)
-    logger.info(f'Set default workspace to {workspace.name} in config {CONFIG_FILE}.')
+        # Create the workspace directory
+        os.makedirs(self.stage_dir, exist_ok=True)
+        os.makedirs(self.data_dir, exist_ok=True)
+        os.makedirs(self.tmp_dir, exist_ok=True)
