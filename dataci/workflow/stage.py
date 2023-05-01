@@ -86,6 +86,7 @@ class Stage(ABC):
         with (workspace.stage_dir / config['script_path']).open() as f:
             script = f.read()
 
+        config['script'] = script
         # Build class object from script
         # TODO: make the build process more secure with sandbox / allowed safe methods
         local_dict = locals()
@@ -106,11 +107,7 @@ class Stage(ABC):
         else:
             raise ValueError(f'Stage not found by script: {config["script_path"]}\n{script}')
 
-        self.version = config['version'] if config['version'] != 'head' else None
-        self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
-        # Manual set the script to the stage object, as the script is not available in the exec context
-        self._script = script
-        return self
+        return self.reload(config)
 
     def add_downstream(self, stage: 'Stage'):
         dag: DiGraph = self.context.get('dag')
@@ -145,6 +142,14 @@ class Stage(ABC):
     def __repr__(self):
         return f'{self.__class__.__name__}(name={self.workspace.name}.{self.name})'
 
+    def reload(self, config):
+        """Reload the stage from the config."""
+        self.version = config['version'] if config['version'] != 'head' else None
+        self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
+        # Manual set the script to the stage object, as the script is not available in the exec context
+        self._script = config['script']
+        return self
+
     def save(self):
         """Save the stage to the workspace."""
         config = self.dict()
@@ -168,7 +173,7 @@ class Stage(ABC):
             with open(save_file_path, 'w') as f:
                 f.write(config['script'])
             update_one_stage(config)
-        return self
+        return self.reload(config)
 
     @classmethod
     def get(cls, name, version=None):
