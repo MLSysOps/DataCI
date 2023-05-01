@@ -8,13 +8,17 @@ Date: Feb 20, 2023
 import inspect
 import logging
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from dataci.db.stage import create_one_stage, exist_stage, update_one_stage
+from dataci.db.stage import create_one_stage, exist_stage, update_one_stage, get_one_stage
 from dataci.workspace import Workspace
 from . import WORKFLOW_CONTEXT
+from ..config import DEFAULT_WORKSPACE
 
 if TYPE_CHECKING:
+    from typing import Optional
+
     from networkx import DiGraph
 
 logger = logging.getLogger(__name__)
@@ -30,8 +34,10 @@ class Stage(ABC):
         self.symbolize = symbolize
         # Version is automatically generated when the stage is published
         self.version = None
+        self.create_date: 'Optional[datetime]' = None
         # Output is saved after the stage is run, this is for the descendant stages to use
         self._output = None
+        self._script = None
 
     @abstractmethod
     def run(self, *args, **kwargs):
@@ -39,14 +45,18 @@ class Stage(ABC):
 
     @property
     def script(self):
-        # Get the source code of the class
-        try:
-            source_code = inspect.getsource(self.__class__)
-        except OSError:
-            # If the source code is not available, the class is probably dynamically generated
-            # We can get the source code from the wrapped function
-            source_code = inspect.getsource(getattr(self, '__wrapped__'))
-        return source_code
+        # Note: if the Stage object is created from exec, it is not able to get the source code by this function
+        # Therefore, we need to manual set the script passed to exec to self._script
+        if self._script is None:
+            # Get the source code of the class
+            try:
+                source_code = inspect.getsource(self.__class__)
+            except OSError:
+                # If the source code is not available, the class is probably dynamically generated
+                # We can get the source code from the wrapped function
+                source_code = inspect.getsource(getattr(self, '__wrapped__'))
+            self._script = source_code
+        return self._script
 
     def dict(self, id_only=False):
         """Get the dict representation of the stage.
@@ -65,19 +75,41 @@ class Stage(ABC):
             'workspace': self.workspace.name,
             'version': self.version,
             'script': self.script,
-            'cls_name': self.__class__.__name__,
+            'timestamp': self.create_date.timestamp() if self.create_date else None,
             'symbolize': self.symbolize,
         }
 
     @classmethod
     def from_dict(cls, config: dict):
-        config['name'] = f'{config["workspace"]}.{config["name"]}'
+        # Get script from stage code directory
+        workspace = Workspace(config['workspace'])
+        with (workspace.stage_dir / config['script_path']).open() as f:
+            script = f.read()
+
         # Build class object from script
         # TODO: make the build process more secure with sandbox / allowed safe methods
         local_dict = locals()
-        exec(config['script'], globals(), local_dict)
-        sub_cls = local_dict[config['cls_name']]
-        self = sub_cls(**config)
+        # import stage
+        from dataci.workflow.decorator import stage
+        local_dict['stage'] = stage
+        exec(script, globals(), local_dict)
+        for v in local_dict.copy().values():
+            # Stage is instantiated by a class
+            if inspect.isclass(v) and issubclass(v, Stage) and v is not Stage:
+                sub_cls = v
+                self = sub_cls(**config)
+                break
+            # Stage is instantiated by a function decorated by @stage
+            elif isinstance(v, Stage):
+                self = v
+                break
+        else:
+            raise ValueError(f'Stage not found by script: {config["script_path"]}\n{script}')
+
+        self.version = config['version'] if config['version'] != 'head' else None
+        self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
+        # Manual set the script to the stage object, as the script is not available in the exec context
+        self._script = script
         return self
 
     def add_downstream(self, stage: 'Stage'):
@@ -118,6 +150,8 @@ class Stage(ABC):
         config = self.dict()
         # Since save, we set the version to head (this is different from latest)
         config['version'] = 'head'
+        # Update create date
+        config['timestamp'] = int(datetime.now().timestamp())
 
         # Save the stage script to the workspace stage directory
         save_dir = self.workspace.stage_dir / config['name'] / config['version']
@@ -135,3 +169,11 @@ class Stage(ABC):
                 f.write(config['script'])
             update_one_stage(config)
         return self
+
+    @classmethod
+    def get(cls, name, version=None):
+        """Get the stage from the workspace."""
+        workspace_name, name = name.split('.') if '.' in name else (DEFAULT_WORKSPACE, name)
+        stage_config = get_one_stage(workspace_name, name, version)
+        stage = cls.from_dict(stage_config)
+        return stage

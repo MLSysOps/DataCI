@@ -41,7 +41,7 @@ with db_connection:
         name        TEXT,
         version     TEXT,
         script_path TEXT,
-        cls_name    TEXT,
+        timestamp   INTEGER,
         symbolize   TEXT,
         PRIMARY KEY (workspace, name, version)
     );
