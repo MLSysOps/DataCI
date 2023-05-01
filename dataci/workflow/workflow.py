@@ -13,7 +13,6 @@ import networkx as nx
 
 from dataci.workspace import Workspace
 from . import WORKFLOW_CONTEXT
-from .stage import VirtualStage
 
 
 # from dataci.run import Run
@@ -37,9 +36,6 @@ class Workflow(object):
         self.params = params or dict()
         self.flag = {'debug': debug}
         self.dag = nx.DiGraph()
-        # Add a root node to dag
-        self.root_stage = VirtualStage('__root')
-        self.dag.add_node(self.root_stage)
         self.context_token = None
         self.version = None
         self.create_date: 'Optional[datetime]' = datetime.now()
@@ -64,15 +60,12 @@ class Workflow(object):
         """
         Validate the workflow:
         1. there is any cycle in the dag
-        2. All stages have an ancestor except the root stage
+        2. All stages are connected
         """
         if not nx.is_directed_acyclic_graph(self.dag):
             raise ValueError('The dag should be a directed acyclic graph.')
-        if not all(nx.ancestors(self.dag, stage) for stage in self.stages if stage != self.root_stage):
-            raise ValueError(
-                'All stages should have an ancestor except the root stage.\n'
-                'Add the root stage of the workflow to current stages by `workflow.root_stage >> stage`.\n'
-            )
+        if not nx.is_connected(self.dag):
+            raise ValueError('All dag nodes should be connected.')
         return True
 
     def __call__(self):

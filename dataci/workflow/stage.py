@@ -97,11 +97,3 @@ class Stage(ABC):
 
     def __repr__(self):
         return f'{self.__class__.__name__}(name={self.name})'
-
-
-class VirtualStage(Stage):
-    def __init__(self, name: str, **kwargs):
-        super().__init__(name, symbolize='virtual', **kwargs)
-
-    def run(self, *args, **kwargs):
-        pass
