@@ -132,3 +132,24 @@ def get_one_stage(workspace, name, version=None):
             po = cur.fetchone()
 
     return dict(zip(['workspace', 'name', 'version', 'script_path', 'timestamp', 'symbolize'], po))
+
+
+def get_next_stage_version_id(workspace, name, version):
+    version = version or ''
+    with db_connection:
+        cur = db_connection.cursor()
+        cur.execute(
+            """
+            SELECT COALESCE(MAX(version), 0) + 1
+            FROM   stage 
+            WHERE  workspace=:workspace 
+            AND    name=:name 
+            AND    version=:version
+            """,
+            {
+                'workspace': workspace,
+                'name': name,
+                'version': version,
+            }
+        )
+        return cur.fetchone()[0]

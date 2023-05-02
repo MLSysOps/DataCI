@@ -10,9 +10,9 @@ import re
 from contextlib import contextmanager
 
 NAME_PATTERN = re.compile(r'^(?:[a-z]\w*\.)?[a-z]\w*$', flags=re.IGNORECASE)
-VERSION_PATTERN = re.compile(r'latest|\d+', flags=re.IGNORECASE)
+VERSION_PATTERN = re.compile(r'latest|none|\d+', flags=re.IGNORECASE)
 GET_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
-    r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|\d+))?$', flags=re.IGNORECASE
+    r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|none|\d+))?$', flags=re.IGNORECASE
 )
 LIST_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
     r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|none))?$', re.IGNORECASE

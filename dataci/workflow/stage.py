@@ -7,6 +7,7 @@ Date: Feb 20, 2023
 """
 import inspect
 import logging
+import shutil
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -16,6 +17,7 @@ from dataci.db.stage import create_one_stage, exist_stage, update_one_stage, get
 from dataci.utils import GET_DATA_MODEL_IDENTIFIER_PATTERN
 from dataci.workspace import Workspace
 from . import WORKFLOW_CONTEXT
+from ..db.workflow import get_next_workflow_version_id
 
 if TYPE_CHECKING:
     from typing import Optional
@@ -160,7 +162,7 @@ class Stage(ABC):
         config['timestamp'] = int(datetime.now().timestamp())
 
         # Save the stage script to the workspace stage directory
-        save_dir = self.workspace.stage_dir / config['name'] / (config['version'] if config['version'] else 'HEAD')
+        save_dir = self.workspace.stage_dir / str(config['name']) / 'HEAD'
         save_file_path = save_dir / 'script.py'
         save_dir.mkdir(parents=True, exist_ok=True)
 
@@ -174,6 +176,24 @@ class Stage(ABC):
             with open(save_file_path, 'w') as f:
                 f.write(config['script'])
             update_one_stage(config)
+        return self.reload(config)
+
+    def publish(self):
+        """Publish the stage to the workspace."""
+        # Save the stage to the workspace first
+        self.save()
+        config = self.dict()
+        config['version'] = str(get_next_workflow_version_id(config['workspace'], config['name']))
+        # Copy the script path from save version dir to the workspace publish version dir
+        publish_dir = self.workspace.stage_dir / str(config['name']) / config['version']
+        save_dir = self.workspace.stage_dir / str(config['name']) / 'HEAD'
+        shutil.rmtree(publish_dir)
+        publish_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(save_dir, publish_dir)
+
+        # Update the script path in the config
+        config['script_path'] = str(publish_dir / 'script.py')
+        create_one_stage(config)
         return self.reload(config)
 
     @classmethod
@@ -190,7 +210,10 @@ class Stage(ABC):
         if version and version_:
             raise ValueError('Only one version is allowed to be provided by name or version.')
         version = version or version_
-        version = str(version).lower() if version else None
+        if version:
+            version = str(version).lower()
+            if version == 'none':
+                version = None
 
         stage_config = get_one_stage(workspace, name, version)
         stage = cls.from_dict(stage_config)

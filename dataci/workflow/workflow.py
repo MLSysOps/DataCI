@@ -13,14 +13,22 @@ from typing import Optional
 
 import networkx as nx
 
+from dataci.config import DEFAULT_WORKSPACE
+from dataci.db.workflow import (
+    create_one_workflow,
+    exist_workflow,
+    update_one_workflow,
+    get_one_workflow,
+    get_many_workflow,
+    get_next_workflow_version_id,
+)
 from dataci.utils import GET_DATA_MODEL_IDENTIFIER_PATTERN, LIST_DATA_MODEL_IDENTIFIER_PATTERN
+from dataci.utils import NAME_PATTERN
 from dataci.workspace import Workspace
 from . import WORKFLOW_CONTEXT
 from .stage import Stage
+
 # from dataci.run import Run
-from ..config import DEFAULT_WORKSPACE
-from ..dataset.utils import NAME_PATTERN
-from ..db.workflow import create_one_workflow, exist_workflow, update_one_workflow, get_one_workflow, get_many_workflow
 
 logger = logging.getLogger(__name__)
 
@@ -198,6 +206,23 @@ class Workflow(object):
             logger.info(f'Updated workflow: {self}')
         return self.reload(config)
 
+    def publish(self):
+        """Publish the workflow to the workspace."""
+        # TODO: use DB transaction / data object lock
+        # Save workflow first
+        self.save()
+        # Save the used stages (only if the stage is not saved)
+        for stage in self.stages:
+            if stage.version is None:
+                stage.publish()
+                logger.info(f'Published stage: {stage}')
+
+        config = self.dict()
+        # Since publish, we generate the latest version
+        config['version'] = get_next_workflow_version_id(workspace=config['workspace'], name=config['name'])
+        create_one_workflow(config)
+        return self.reload(config)
+
     @classmethod
     def get(cls, name: str, version: str = None):
         """Get a workflow from the workspace."""
@@ -213,7 +238,10 @@ class Workflow(object):
             raise ValueError('Only one version is allowed to be provided by name or version.')
 
         version = version or version_
-        version = str(version).lower() if version else None
+        if version:
+            version = str(version).lower()
+            if version == 'none':
+                version = None
 
         config = get_one_workflow(workspace, name, version)
         return cls.from_dict(config)

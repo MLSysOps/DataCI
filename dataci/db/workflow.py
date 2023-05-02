@@ -206,7 +206,7 @@ def get_one_workflow(workspace, name, version=None):
         workflow_dict = {
             'workspace': workflow[0],
             'name': workflow[1],
-            'version': workflow[2] if workflow[2] != '' else None,
+            'version': workflow[2],
             'timestamp': workflow[3],
             'params': json.loads(workflow[4]),
             'flag': json.loads(workflow[5]),
@@ -238,6 +238,7 @@ def get_one_workflow(workspace, name, version=None):
                 'version': node[2] if node[2] != '' else None,
             } for node in cur.fetchall()
         }
+        workflow_dict['version'] = workflow_dict['version'] or ''
         return workflow_dict
 
 
@@ -335,3 +336,21 @@ def get_many_workflow(workspace, name, version=None):
                 } for node in cur.fetchall()
             }
         return workflow_list
+
+
+def get_next_workflow_version_id(workspace, name):
+    with db_connection:
+        cur = db_connection.cursor()
+        cur.execute(
+            """
+            SELECT COALESCE(MAX(version), 0) + 1
+            FROM   workflow
+            WHERE  workspace=:workspace AND name=:name
+            ;
+            """,
+            {
+                'workspace': workspace,
+                'name': name,
+            },
+        )
+        return cur.fetchone()[0]
