@@ -15,7 +15,7 @@ GET_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
     r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|\d+))?$', flags=re.IGNORECASE
 )
 LIST_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
-    r'^([\w:.*[\]]+?)(?:@(\d+|latest|head))?$', re.IGNORECASE
+    r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|none))?$', re.IGNORECASE
 )
 
 

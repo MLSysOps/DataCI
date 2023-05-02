@@ -217,3 +217,34 @@ class Workflow(object):
 
         config = get_one_workflow(workspace, name, version)
         return cls.from_dict(config)
+
+    @classmethod
+    def find(cls, workflow_identifier: str = None, tree_view: bool = False):
+        workflow_identifier = workflow_identifier or '*'
+
+        matched = LIST_DATA_MODEL_IDENTIFIER_PATTERN.match(workflow_identifier)
+        if not matched:
+            raise ValueError(f'Invalid pipeline identifier {workflow_identifier}')
+        workspace, name, version = matched.groups()
+        workspace = workspace or DEFAULT_WORKSPACE
+        # Case                      Provided        Matched    Action
+        # version is not provided   ws.name         None       Get all versions
+        # version is None           ws.name@None    'None'     Get version = NULL
+        # version is provided       ws.name@version 'version'  Get version = version
+        if version and version.lower() == 'none':
+            version = None
+        else:
+            version = str(version or '*').lower()
+
+        # Check matched pipeline
+        workflow_dict_list = get_many_workflow(workspace, name, version)
+        workflow_list = list()
+        for workflow_dict in workflow_dict_list:
+            workflow_list.append(cls.from_dict(workflow_dict))
+        if tree_view:
+            workflow_dict = defaultdict(dict)
+            for workflow in workflow_list:
+                workflow_dict[f'{workflow.name}.{workflow.name}'][workflow.version] = workflow
+            return workflow_dict
+
+        return workflow_list

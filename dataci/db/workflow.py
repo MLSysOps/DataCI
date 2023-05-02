@@ -239,3 +239,99 @@ def get_one_workflow(workspace, name, version=None):
             } for node in cur.fetchall()
         }
         return workflow_dict
+
+
+def get_many_workflow(workspace, name, version=None):
+    # replace None with '', since None will lead to issues in SQL
+    version = version or ''
+    with db_connection:
+        cur = db_connection.cursor()
+        if version == '':
+            # Get the head version
+            cur.execute(
+                """
+                SELECT workspace, name, version, timestamp, params, flag, dag
+                FROM   workflow 
+                WHERE  workspace = :workspace 
+                AND    name GLOB :name
+                AND    version = :version
+                ;
+                """,
+                {
+                    'workspace': workspace,
+                    'name': name,
+                    'version': version,
+                }
+            )
+            workflow_po_iter = cur.fetchall()
+            if workflow_po_iter is None:
+                # If there is no head version, get the latest version (by set version to None)
+                version = 'latest'
+        if version == 'latest':
+            # Get the latest version
+            cur.execute(
+                """
+                SELECT workspace, name, version, timestamp, params, flag, dag
+                FROM   workflow
+                WHERE  workspace=:workspace
+                AND    name GLOB :name
+                ORDER BY version DESC
+                LIMIT 1
+                ;
+                """,
+                {
+                    'workspace': workspace,
+                    'name': name,
+                },
+            )
+            workflow_po_iter = cur.fetchall()
+        elif version != '':
+            cur.execute(
+                """
+                SELECT workspace, name, version, timestamp, params, flag, dag
+                FROM   workflow
+                WHERE  workspace =:workspace 
+                AND    name GLOB :name 
+                AND    version GLOB :version
+                """,
+                {
+                    'workspace': workspace,
+                    'name': name,
+                    'version': version,
+                },
+            )
+            workflow_po_iter = cur.fetchall()
+        workflow_list = [
+            {
+                'workspace': workflow[0],
+                'name': workflow[1],
+                'version': workflow[2],
+                'timestamp': workflow[3],
+                'params': json.loads(workflow[4]),
+                'flag': json.loads(workflow[5]),
+                'dag': {
+                    'edge': json.loads(workflow[6]),
+                }
+            } for workflow in workflow_po_iter
+        ]
+        # Query dag nodes for each workflow
+        for workflow in workflow_list:
+            cur.execute(
+                f"""
+                SELECT stage_workspace, stage_name, stage_version, dag_node_id
+                FROM   workflow_dag_node
+                WHERE  workflow_workspace=:workspace
+                AND    workflow_name=:name
+                AND    workflow_version =:version
+                """,
+                workflow,
+            )
+            workflow['version'] = workflow['version'] if workflow['version'] != '' else None
+            workflow['dag']['node'] = {
+                node[3]: {
+                    'workspace': node[0],
+                    'name': node[1],
+                    'version': node[2] if node[2] != '' else None,
+                } for node in cur.fetchall()
+            }
+        return workflow_list
