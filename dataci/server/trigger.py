@@ -25,6 +25,7 @@ class Trigger(object):
             event = EVENT_QUEUE.get()
             if event is QUEUE_END:
                 break
+            logger.info(f'Received event: {event}')
             if event not in self._execution_map:
                 continue
             for workflow_identifier in self._execution_map[event]:
