@@ -10,6 +10,3 @@ from queue import Queue
 EVENT_QUEUE = Queue()
 EXECUTION_QUEUE = Queue()
 QUEUE_END = object()
-
-SERVER_ADDRESS = '0.0.0.0'
-SERVER_PORT = 8000

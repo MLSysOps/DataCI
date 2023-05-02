@@ -10,7 +10,9 @@ Event for trigger.
 import logging
 import time
 
-from dataci.server import EVENT_QUEUE, SERVER_ADDRESS, SERVER_PORT
+import requests
+
+from dataci.config import SERVER_ADDRESS, SERVER_PORT
 
 logger = logging.getLogger(__name__)
 
@@ -27,4 +29,10 @@ class Event(object):
         return f'<Event {self.producer}:{self.name}>'
 
     def set(self):
-        EVENT_QUEUE.put(f'{self.producer}:{self.name}')
+        r = requests.post(
+            f'http://{self.server_address}:{self.server_port}/events?producer={self.producer}&name={self.name}',
+        )
+        if r.status_code != 200:
+            logger.error(f'Failed to set event {self.producer}:{self.name}')
+        else:
+            logger.debug(f'Set event {self.producer}:{self.name}')

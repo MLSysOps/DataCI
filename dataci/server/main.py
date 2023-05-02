@@ -12,7 +12,8 @@ import logging
 import uvicorn
 from fastapi import FastAPI
 
-from dataci.server import EVENT_QUEUE, QUEUE_END, EXECUTION_QUEUE, SERVER_ADDRESS, SERVER_PORT
+from dataci.config import SERVER_ADDRESS, SERVER_PORT
+from dataci.server import EVENT_QUEUE, QUEUE_END, EXECUTION_QUEUE
 from dataci.server.scheduler import Scheduler
 from dataci.server.trigger import Trigger
 

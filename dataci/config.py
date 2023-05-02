@@ -72,4 +72,8 @@ DB_FILE = None
 LOG_DIR = None
 LOG_LEVEL = None
 
+# DataCI Trigger and Scheduler server
+SERVER_ADDRESS = '0.0.0.0'
+SERVER_PORT = 8000
+
 load_config()
