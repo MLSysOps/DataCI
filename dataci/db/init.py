@@ -36,7 +36,8 @@ with db_connection:
         params    TEXT,
         flag      TEXT,
         dag       TEXT,
-        PRIMARY KEY (workspace, name, version)
+        PRIMARY KEY (workspace, name, version),
+        UNIQUE (workspace, name, version)
     );
     
     CREATE TABLE stage
@@ -47,7 +48,8 @@ with db_connection:
         script_path TEXT,
         timestamp   INTEGER,
         symbolize   TEXT,
-        PRIMARY KEY (workspace, name, version)
+        PRIMARY KEY (workspace, name, version),
+        UNIQUE (workspace, name, version)
     );
     
     CREATE TABLE workflow_dag_node
@@ -60,6 +62,7 @@ with db_connection:
         stage_version      TEXT,
         dag_node_id        INTEGER,
         PRIMARY KEY (workflow_workspace, workflow_name, workflow_version, stage_workspace, stage_name, stage_version),
+        UNIQUE (workflow_workspace, workflow_name, workflow_version, dag_node_id),
         FOREIGN KEY (workflow_workspace, workflow_name, workflow_version)
             REFERENCES workflow (workspace, name, version),
         FOREIGN KEY (stage_workspace, stage_name, stage_version)
@@ -86,7 +89,8 @@ with db_connection:
             REFERENCES workflow (workspace, name, version),
         FOREIGN KEY (parent_dataset_workspace, parent_dataset_name, parent_dataset_version)
             REFERENCES dataset (workspace, name, version),
-        PRIMARY KEY (workspace, name, version)
+        PRIMARY KEY (workspace, name, version),
+        UNIQUE (workspace, name, version)
     );
     
     CREATE TABLE dataset_tag

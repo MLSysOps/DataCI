@@ -9,6 +9,8 @@ from . import db_connection
 
 
 def create_one_stage(stage_dict):
+    stage_dict['version'] = stage_dict['version'] or ''
+
     with db_connection:
         cur = db_connection.cursor()
         cur.execute(
@@ -21,10 +23,11 @@ def create_one_stage(stage_dict):
 
 
 def exist_stage(workspace, name, version):
+    version = version or ''
     with db_connection:
         cur = db_connection.cursor()
         cur.execute(
-            """
+            f"""
             SELECT EXISTS(
                 SELECT 1 
                 FROM   stage 
@@ -43,6 +46,7 @@ def exist_stage(workspace, name, version):
 
 
 def update_one_stage(stage_dict):
+    stage_dict['version'] = stage_dict['version'] or ''
     with db_connection:
         cur = db_connection.cursor()
         cur.execute(
@@ -61,17 +65,18 @@ def get_one_stage(workspace, name, version=None):
     # v1 -> v2 (latest) -> (head)
     # In this case,
     #   version=latest: get v2
-    #   version=head: get head
+    #   version=None: get head
     #   version=v1/v2: get v1/v2
     #
     # v1 -> v2 (latest, head)
     # In this case,
     #   version=latest: get v2
-    #   version=head: get v2 (there will be no head in DB)
+    #   version=None: get v2 (there will be no head in DB, get latest)
     #   version=v1/v2: get v1/v2
+    version = version or ''
     with db_connection:
         cur = db_connection.cursor()
-        if version == 'head':
+        if version == '':
             # Get the head version
             cur.execute(
                 """
@@ -79,18 +84,19 @@ def get_one_stage(workspace, name, version=None):
                 FROM   stage 
                 WHERE  workspace=:workspace 
                 AND    name=:name
-                AND    version = 'head'
+                AND    version =:version
                 """,
                 {
                     'workspace': workspace,
                     'name': name,
+                    'version': version,
                 }
             )
             po = cur.fetchone()
             if po is None:
                 # If there is no head version, get the latest version (by set version to None)
-                version = None
-        if version is None or version == 'latest':
+                version = 'latest'
+        if version == 'latest':
             # Get the latest version
             cur.execute(
                 """
@@ -98,7 +104,7 @@ def get_one_stage(workspace, name, version=None):
                 FROM   stage 
                 WHERE  workspace=:workspace 
                 AND    name=:name
-                AND    version <> 'head'
+                AND    version <> ''
                 ORDER BY version DESC
                 LIMIT 1
                 """,
@@ -108,7 +114,7 @@ def get_one_stage(workspace, name, version=None):
                 }
             )
             po = cur.fetchone()
-        elif version != 'head':
+        elif version != '':
             cur.execute(
                 """
                 SELECT workspace, name, version, script_path, timestamp, symbolize

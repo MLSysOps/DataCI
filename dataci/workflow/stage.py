@@ -11,10 +11,11 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from dataci.config import DEFAULT_WORKSPACE
 from dataci.db.stage import create_one_stage, exist_stage, update_one_stage, get_one_stage
+from dataci.utils import GET_DATA_MODEL_IDENTIFIER_PATTERN
 from dataci.workspace import Workspace
 from . import WORKFLOW_CONTEXT
-from ..config import DEFAULT_WORKSPACE
 
 if TYPE_CHECKING:
     from typing import Optional
@@ -144,7 +145,7 @@ class Stage(ABC):
 
     def reload(self, config):
         """Reload the stage from the config."""
-        self.version = config['version'] if config['version'] != 'head' else None
+        self.version = config['version']
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
         # Manual set the script to the stage object, as the script is not available in the exec context
         self._script = config['script']
@@ -153,13 +154,13 @@ class Stage(ABC):
     def save(self):
         """Save the stage to the workspace."""
         config = self.dict()
-        # Since save, we set the version to head (this is different from latest)
-        config['version'] = 'head'
+        # Since save, we force set the version to None
+        config['version'] = None
         # Update create date
         config['timestamp'] = int(datetime.now().timestamp())
 
         # Save the stage script to the workspace stage directory
-        save_dir = self.workspace.stage_dir / config['name'] / config['version']
+        save_dir = self.workspace.stage_dir / config['name'] / (config['version'] if config['version'] else 'HEAD')
         save_file_path = save_dir / 'script.py'
         save_dir.mkdir(parents=True, exist_ok=True)
 
@@ -178,7 +179,19 @@ class Stage(ABC):
     @classmethod
     def get(cls, name, version=None):
         """Get the stage from the workspace."""
-        workspace_name, name = name.split('.') if '.' in name else (DEFAULT_WORKSPACE, name)
-        stage_config = get_one_stage(workspace_name, name, version)
+        # If version is provided along with name
+        matched = GET_DATA_MODEL_IDENTIFIER_PATTERN.match(str(name))
+        if not matched:
+            raise ValueError(f'Invalid data identifier {name}')
+        # Parse name and version
+        workspace, name, version_ = matched.groups()
+        workspace = workspace or DEFAULT_WORKSPACE
+        # Only one version is allowed to be provided, either in name or in version
+        if version and version_:
+            raise ValueError('Only one version is allowed to be provided by name or version.')
+        version = version or version_
+        version = str(version).lower() if version else None
+
+        stage_config = get_one_stage(workspace, name, version)
         stage = cls.from_dict(stage_config)
         return stage

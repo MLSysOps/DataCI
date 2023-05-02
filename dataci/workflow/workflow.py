@@ -13,11 +13,14 @@ from typing import Optional
 
 import networkx as nx
 
+from dataci.utils import GET_DATA_MODEL_IDENTIFIER_PATTERN, LIST_DATA_MODEL_IDENTIFIER_PATTERN
 from dataci.workspace import Workspace
 from . import WORKFLOW_CONTEXT
 from .stage import Stage
 # from dataci.run import Run
-from ..db.workflow import create_one_workflow, exist_workflow, update_one_workflow
+from ..config import DEFAULT_WORKSPACE
+from ..dataset.utils import NAME_PATTERN
+from ..db.workflow import create_one_workflow, exist_workflow, update_one_workflow, get_one_workflow, get_many_workflow
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +137,10 @@ class Workflow(object):
         # 2. convert each node from Stage to an id
         dag_edge_list = config['dag']['edge']
         # Build stage conversion mapping
-        stage_mapping = {k: Stage.get(**v) for k, v in config['dag']['node'].items()}
+        stage_mapping = {
+            k: Stage.get(f"{v['workspace']}.{v['name']}", version=v['version'])
+            for k, v in config['dag']['node'].items()
+        }
         # Convert the dag edge list
         dag_edge_list = [
             (stage_mapping[source], stage_mapping[target], data) for source, target, data in dag_edge_list
@@ -142,8 +148,7 @@ class Workflow(object):
         # Build the workflow
         workflow = cls(config['name'], params=config['params'], **config['flag'])
         workflow.dag.add_edges_from(dag_edge_list)
-        workflow.version = config['version']
-        workflow.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
+        workflow.reload(config)
         return workflow
 
     def __repr__(self) -> str:
@@ -170,6 +175,9 @@ class Workflow(object):
 
     def save(self):
         """Save the workflow to the workspace."""
+        # Check if the workflow name is valid
+        if NAME_PATTERN.match(f'{self.workspace.name}.{self.name}') is None:
+            raise ValueError(f'Workflow name {self.workspace}.{self.name} is not valid.')
         # Save the used stages (only if the stage is not saved)
         for stage in self.stages:
             if stage.version is None:
@@ -177,11 +185,8 @@ class Workflow(object):
                 logger.info(f'Saved stage: {stage}')
 
         config = self.dict()
-        # Since save, we set the version to head (this is different from latest)
-        config['version'] = 'head'
-        # Set the dag node (stage) version to head
-        for stage_dict in config['dag']['node'].values():
-            stage_dict['version'] = 'head'
+        # Since save, we force set the version to None (this is different from latest)
+        config['version'] = None
         # Update create date
         config['timestamp'] = int(datetime.now().timestamp())
         # Save the workflow
@@ -192,3 +197,23 @@ class Workflow(object):
             update_one_workflow(config)
             logger.info(f'Updated workflow: {self}')
         return self.reload(config)
+
+    @classmethod
+    def get(cls, name: str, version: str = None):
+        """Get a workflow from the workspace."""
+        # If version is provided along with name
+        matched = GET_DATA_MODEL_IDENTIFIER_PATTERN.match(str(name))
+        if not matched:
+            raise ValueError(f'Invalid data identifier {name}')
+        # Parse name and version
+        workspace, name, version_ = matched.groups()
+        workspace = workspace or DEFAULT_WORKSPACE
+        # Only one version is allowed to be provided, either in name or in version
+        if version and version_:
+            raise ValueError('Only one version is allowed to be provided by name or version.')
+
+        version = version or version_
+        version = str(version).lower() if version else None
+
+        config = get_one_workflow(workspace, name, version)
+        return cls.from_dict(config)

@@ -6,7 +6,17 @@ Email: yuanmingleee@gmail.com
 Date: Mar 15, 2023
 """
 import os
+import re
 from contextlib import contextmanager
+
+NAME_PATTERN = re.compile(r'^(?:[a-z]\w*\.)?[a-z]\w*$', flags=re.IGNORECASE)
+VERSION_PATTERN = re.compile(r'latest|\d+', flags=re.IGNORECASE)
+GET_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
+    r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|\d+))?$', flags=re.IGNORECASE
+)
+LIST_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
+    r'^([\w:.*[\]]+?)(?:@(\d+|latest|head))?$', re.IGNORECASE
+)
 
 
 @contextmanager
