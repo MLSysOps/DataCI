@@ -29,6 +29,7 @@ from .base import BaseModel
 from .stage import Stage
 
 # from dataci.run import Run
+from ..decorators.event import event
 
 logger = logging.getLogger(__name__)
 
@@ -178,6 +179,7 @@ class Workflow(BaseModel):
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
         return self
 
+    @event(name='workflow_save')
     def save(self):
         """Save the models to the workspace."""
         # Check if the models name is valid
@@ -203,6 +205,7 @@ class Workflow(BaseModel):
             logger.info(f'Updated models: {self}')
         return self.reload(config)
 
+    @event(name='workflow_publish')
     def publish(self):
         """Publish the models to the workspace."""
         # TODO: use DB transaction / data object lock

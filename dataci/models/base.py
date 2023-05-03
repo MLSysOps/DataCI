@@ -43,20 +43,12 @@ class BaseModel(abc.ABC):
     def publish(self):
         pass
 
-    @abc.abstractmethod
-    def delete(self):
-        pass
-
-    @abc.abstractmethod
-    def update(self):
-        pass
-
     @classmethod
     @abc.abstractmethod
     def get(cls, name, version=None):
         pass
 
-    @classmethod
-    @abc.abstractmethod
-    def find(cls, identifier=None, tree_view=False):
-        pass
+    # @classmethod
+    # @abc.abstractmethod
+    # def find(cls, identifier=None, tree_view=False):
+    #     pass

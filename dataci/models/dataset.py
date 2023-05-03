@@ -18,6 +18,7 @@ from dataci.connector.s3 import download as s3_download
 from dataci.db.dataset import get_many_datasets, get_one_dataset, get_next_version_id, create_one_dataset
 from dataci.utils import parse_data_model_get_identifier, parse_data_model_list_identifier
 from .base import BaseModel
+from ..decorators.event import event
 
 if TYPE_CHECKING:
     from typing import Optional, Union
@@ -168,6 +169,7 @@ class Dataset(BaseModel):
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
         return self
 
+    @event('dataset_save')
     def save(self):
         config = self.dict()
         config['version'] = get_next_version_id(self.workspace.name, self.name)
@@ -214,7 +216,7 @@ class Dataset(BaseModel):
                 If view as a tree, the format is {dataset_name: {split_tag: {version_id: dataset_info}}}.
 
         Examples:
-            >>> from dataci.dataset import Dataset
+            >>> from dataci.models import Dataset
             >>> Dataset.find()
             {'dataset1': {'1': ..., '2': ...}, 'dataset12': ...}
             >>> Dataset.find(dataset_identifier='dataset1')

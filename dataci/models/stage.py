@@ -13,12 +13,12 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from dataci.config import DEFAULT_WORKSPACE
-from dataci.db.stage import create_one_stage, exist_stage, update_one_stage, get_one_stage
+from dataci.db.stage import create_one_stage, exist_stage, update_one_stage, get_one_stage, get_next_stage_version_id
+from dataci.decorators.event import event
 from dataci.utils import GET_DATA_MODEL_IDENTIFIER_PATTERN
 from . import WORKFLOW_CONTEXT
 from .base import BaseModel
 from .workspace import Workspace
-from ..db.workflow import get_next_workflow_version_id
 
 if TYPE_CHECKING:
     from typing import Optional
@@ -91,7 +91,7 @@ class Stage(BaseModel, ABC):
         # TODO: make the build process more secure with sandbox / allowed safe methods
         local_dict = locals()
         # import stage
-        from dataci.decorators import stage
+        from dataci.decorators.stage import stage
         local_dict['stage'] = stage
         exec(script, globals(), local_dict)
         for v in local_dict.copy().values():
@@ -150,6 +150,7 @@ class Stage(BaseModel, ABC):
         self._script = config['script']
         return self
 
+    @event(name='stage_save')
     def save(self):
         """Save the stage to the workspace."""
         config = self.dict()
@@ -175,12 +176,13 @@ class Stage(BaseModel, ABC):
             update_one_stage(config)
         return self.reload(config)
 
+    @event(name='stage_publish')
     def publish(self):
         """Publish the stage to the workspace."""
         # Save the stage to the workspace first
         self.save()
         config = self.dict()
-        config['version'] = str(get_next_workflow_version_id(config['workspace'], config['name']))
+        config['version'] = str(get_next_stage_version_id(config['workspace'], config['name']))
         # Copy the script path from save version dir to the workspace publish version dir
         publish_dir = self.workspace.stage_dir / str(config['name']) / config['version']
         save_dir = self.workspace.stage_dir / str(config['name']) / 'HEAD'
