@@ -15,6 +15,7 @@ def create_one_workflow(workflow_dict):
     dag = workflow_dict.pop('dag')
     workflow_dict['params'] = json.dumps(workflow_dict['params'], sort_keys=True)
     workflow_dict['flag'] = json.dumps(workflow_dict['flag'], sort_keys=True)
+    workflow_dict['schedule'] = ','.join(workflow_dict['schedule'])
     workflow_dict['dag'] = json.dumps(dag['edge'], sort_keys=True)
     workflow_dag_node_dict = dag['node']
     workflow_dict['version'] = workflow_dict['version'] or ''
@@ -23,8 +24,8 @@ def create_one_workflow(workflow_dict):
         cur = db_connection.cursor()
         cur.execute(
             """
-            INSERT INTO workflow (workspace, name, version, timestamp, params, flag, dag)
-            VALUES (:workspace, :name, :version, :timestamp, :params, :flag, :dag)
+            INSERT INTO workflow (workspace, name, version, timestamp, params, flag, schedule, dag)
+            VALUES (:workspace, :name, :version, :timestamp, :params, :flag, :schedule, :dag)
             """,
             workflow_dict,
         )
@@ -90,6 +91,7 @@ def update_one_workflow(workflow_dict):
     dag = workflow_dict.pop('dag')
     workflow_dict['params'] = json.dumps(workflow_dict['params'], sort_keys=True)
     workflow_dict['flag'] = json.dumps(workflow_dict['flag'], sort_keys=True)
+    workflow_dict['schedule'] = ','.join(workflow_dict['schedule'])
     workflow_dict['dag'] = json.dumps(dag['edge'], sort_keys=True)
     workflow_dag_node_dict = dag['node']
     workflow_dict['version'] = workflow_dict['version'] or ''
@@ -99,8 +101,9 @@ def update_one_workflow(workflow_dict):
         cur.execute(
             """
             UPDATE workflow
-            SET timestamp=:timestamp, params=:params, flag=:flag, dag=:dag
+            SET timestamp=:timestamp, params=:params, flag=:flag, schedule=:schedule, dag=:dag
             WHERE workspace=:workspace AND name=:name AND version=:version
+            ;
             """,
             workflow_dict,
         )
@@ -155,11 +158,12 @@ def get_one_workflow(workspace, name, version=None):
             # Get the head version
             cur.execute(
                 """
-                SELECT workspace, name, version, timestamp, params, flag, dag
+                SELECT workspace, name, version, timestamp, params, flag, schedule, dag
                 FROM   workflow 
                 WHERE  workspace=:workspace 
                 AND    name=:name
                 AND    version=:version
+                ;
                 """,
                 {
                     'workspace': workspace,
@@ -175,7 +179,7 @@ def get_one_workflow(workspace, name, version=None):
             # Get the latest version
             cur.execute(
                 """
-                SELECT workspace, name, version, timestamp, params, flag, dag
+                SELECT workspace, name, version, timestamp, params, flag, schedule, dag
                 FROM   workflow
                 WHERE  workspace=:workspace AND name=:name
                 ORDER BY version DESC
@@ -191,7 +195,7 @@ def get_one_workflow(workspace, name, version=None):
         elif version != '':
             cur.execute(
                 """
-                SELECT workspace, name, version, timestamp, params, flag, dag
+                SELECT workspace, name, version, timestamp, params, flag, schedule, dag
                 FROM   workflow
                 WHERE  workspace=:workspace AND name=:name AND version=:version
                 ;
@@ -210,8 +214,9 @@ def get_one_workflow(workspace, name, version=None):
             'timestamp': workflow[3],
             'params': json.loads(workflow[4]),
             'flag': json.loads(workflow[5]),
+            'schedule': workflow[6].split(','),  # schedule is a list
             'dag': {
-                'edge': json.loads(workflow[6]),
+                'edge': json.loads(workflow[7]),
             }
         }
         # Overwrite the query version for dag node
@@ -251,7 +256,7 @@ def get_many_workflow(workspace, name, version=None):
             # Get the head version
             cur.execute(
                 """
-                SELECT workspace, name, version, timestamp, params, flag, dag
+                SELECT workspace, name, version, timestamp, params, flag, schedule, dag
                 FROM   workflow 
                 WHERE  workspace = :workspace 
                 AND    name GLOB :name
@@ -272,7 +277,7 @@ def get_many_workflow(workspace, name, version=None):
             # Get the latest version
             cur.execute(
                 """
-                SELECT workspace, name, version, timestamp, params, flag, dag
+                SELECT workspace, name, version, timestamp, params, flag, schedule, dag
                 FROM   workflow
                 WHERE  workspace=:workspace
                 AND    name GLOB :name
@@ -289,7 +294,7 @@ def get_many_workflow(workspace, name, version=None):
         elif version != '':
             cur.execute(
                 """
-                SELECT workspace, name, version, timestamp, params, flag, dag
+                SELECT workspace, name, version, timestamp, params, flag, schedule, dag
                 FROM   workflow
                 WHERE  workspace =:workspace 
                 AND    name GLOB :name 
@@ -310,8 +315,9 @@ def get_many_workflow(workspace, name, version=None):
                 'timestamp': workflow[3],
                 'params': json.loads(workflow[4]),
                 'flag': json.loads(workflow[5]),
+                'schedule': workflow[6].split(','),  # schedule is a list
                 'dag': {
-                    'edge': json.loads(workflow[6]),
+                    'edge': json.loads(workflow[7]),
                 }
             } for workflow in workflow_po_iter
         ]

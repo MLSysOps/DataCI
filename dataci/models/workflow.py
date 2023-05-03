@@ -9,7 +9,7 @@ import itertools
 import logging
 from collections import defaultdict
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import networkx as nx
 
@@ -22,6 +22,7 @@ from dataci.db.workflow import (
     get_many_workflow,
     get_next_workflow_version_id,
 )
+from dataci.decorators.event import event
 from dataci.utils import GET_DATA_MODEL_IDENTIFIER_PATTERN, LIST_DATA_MODEL_IDENTIFIER_PATTERN
 from dataci.utils import NAME_PATTERN
 from . import WORKFLOW_CONTEXT
@@ -29,7 +30,9 @@ from .base import BaseModel
 from .stage import Stage
 
 # from dataci.run import Run
-from ..decorators.event import event
+
+if TYPE_CHECKING:
+    from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +43,18 @@ class Workflow(BaseModel):
             name: str,
             params: dict = None,
             debug: bool = True,
+            schedule: 'List[str]' = None,
             **kwargs,
     ):
         super().__init__(name, **kwargs)
         # Context for each stage
         self.params = params or dict()
         self.flag = {'debug': debug}
+        # schedule: list of event expression
+        # e.g., ['@daily', '@event producer name status']
+        if isinstance(schedule, str):
+            schedule = [schedule]
+        self.schedule = schedule or list()
         self.dag = nx.DiGraph()
         self.context_token = None
         self.create_date: 'Optional[datetime]' = datetime.now()
@@ -124,11 +133,21 @@ class Workflow(BaseModel):
         dag_edge_list = [
             (stage_mapping[source], stage_mapping[target], data) for source, target, data in dag_edge_list
         ]
+
+        # Translate the schedule list to a list of event string
+        schedule_list = list()
+        for e in self.schedule:
+            if e.startswith('@event'):
+                # @event producer name status -> producer:name:status
+                schedule_list.append(':'.join(e.split(' ')[1:]))
+            else:
+                raise ValueError(f'Invalid event expression: {e}')
         return {
             'workspace': self.workspace.name,
             'name': self.name,
             'version': self.version,
             'params': self.params,
+            'schedule': schedule_list,
             'dag': {
                 'node': {v: k.dict(id_only=True) for k, v in stage_mapping.items()},
                 'edge': dag_edge_list,
@@ -151,8 +170,12 @@ class Workflow(BaseModel):
         dag_edge_list = [
             (stage_mapping[source], stage_mapping[target], data) for source, target, data in dag_edge_list
         ]
+        # Translate the schedule list to a list of event string
+        for i, e in enumerate(config['schedule']):
+            # producer:name:status -> @event producer name status
+            config['schedule'][i] = '@event ' + ' '.join(e.split(':'))
         # Build the models
-        workflow = cls(config['name'], params=config['params'], **config['flag'])
+        workflow = cls(config['name'], params=config['params'], schedule=config['schedule'], **config['flag'])
         workflow.dag.add_edges_from(dag_edge_list)
         workflow.reload(config)
         return workflow

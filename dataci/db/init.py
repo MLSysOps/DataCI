@@ -35,6 +35,7 @@ with db_connection:
         timestamp INTEGER,
         params    TEXT,
         flag      TEXT,
+        schedule  TEXT,
         dag       TEXT,
         PRIMARY KEY (workspace, name, version),
         UNIQUE (workspace, name, version)
