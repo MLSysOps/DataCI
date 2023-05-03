@@ -28,7 +28,7 @@ def event(name: str, producer: str = None):
             evt.start()
             try:
                 result = func(self, *args, **kwargs)
-                evt.end()
+                evt.success()
                 return result
             except Exception as e:
                 evt.fail()

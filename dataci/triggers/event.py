@@ -43,8 +43,8 @@ class Event(object):
         self.status = 'start'
         self._set()
 
-    def end(self):
-        self.status = 'end'
+    def success(self):
+        self.status = 'success'
         self._set()
 
     def fail(self):
