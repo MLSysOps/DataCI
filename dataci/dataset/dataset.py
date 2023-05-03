@@ -5,6 +5,9 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Mar 10, 2023
 """
+import logging
+import shutil
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -12,26 +15,23 @@ from typing import TYPE_CHECKING
 import pandas as pd
 
 from dataci.connector.s3 import download as s3_download
+from dataci.db.dataset import get_many_datasets, get_one_dataset, get_next_version_id, create_one_dataset
+from dataci.utils import parse_data_model_get_identifier, parse_data_model_list_identifier
 from dataci.workspace import Workspace
 
 if TYPE_CHECKING:
     from typing import Optional, Union
+    from dataci.workflow import Workflow
+
+logger = logging.getLogger(__name__)
 
 
 class Dataset(object):
-    from .save import save  # type: ignore[misc]
-    from .update import update  # type: ignore[misc]
-    from .tag import tag  # type: ignore[misc]
-    from .list import get  # type: ignore[misc]
-    from .list import find  # type: ignore[misc]
-    get = classmethod(get)
-    find = classmethod(find)
-
     def __init__(
             self,
             name,
             dataset_files=None,
-            yield_workflow: 'Optional[Union[workflow, dict]]' = None,
+            yield_workflow: 'Optional[Union[Workflow, dict]]' = None,
             parent_dataset: 'Optional[Union[Dataset, dict]]' = None,
             log_message=None,
             id_column='id',
@@ -127,12 +127,15 @@ class Dataset(object):
     @property
     def yield_workflow(self):
         """Lazy load yield workflow"""
-        # from dataci.workflow.workflow import workflow
+        from dataci.workflow import Workflow
 
-        if self._yield_workflow is None or isinstance(self._yield_workflow, workflow):
+        if self._yield_workflow is None or isinstance(self._yield_workflow, Workflow):
             return self._yield_workflow
 
-        self._yield_workflow = workflow.from_dict(self._yield_workflow)
+        self._yield_workflow = Workflow.get(
+            name=f'{self._yield_workflow["workspace"]}.{self._yield_workflow["name"]}',
+            version=self._yield_workflow['version'],
+        )
         return self._yield_workflow
 
     @property
@@ -161,3 +164,80 @@ class Dataset(object):
         if isinstance(__o, type(self)):
             return repr(self) == repr(__o)
         return False
+
+    def reload(self, config):
+        """Reload dataset from db returned config
+        """
+        self.version = config['version']
+        self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
+        return self
+
+    def save(self):
+        config = self.dict()
+        config['version'] = get_next_version_id(self.workspace.name, self.name)
+        config['timestamp'] = int(datetime.now().timestamp())
+        #####################################################################
+        # Step 1: Save dataset to mount cloud object storage
+        #####################################################################
+        logger.info(f'Save dataset files to mounted S3: {self.workspace.data_dir}')
+        dataset_cache_dir = self.workspace.data_dir / config['name'] / config['version']
+        dataset_cache_dir.mkdir(parents=True, exist_ok=True)
+        # Copy local files to cloud object storage
+        # FIXME: only support a single file now
+        shutil.copy2(self.dataset_files, dataset_cache_dir)
+
+        #####################################################################
+        # Step 2: Publish dataset to DB
+        #####################################################################
+        create_one_dataset(config)
+        logger.info(f'Adding dataset to db: {self}')
+        self.reload(config)
+
+    @classmethod
+    def get(cls, name: str, version=None):
+        workspace, name, version = parse_data_model_get_identifier(name=name, version=version)
+        dataset_dict = get_one_dataset(workspace=workspace, name=name, version=version)
+        return cls.from_dict(dataset_dict)
+
+    @classmethod
+    def find(cls, dataset_identifier=None, tree_view=True):
+        """
+        List dataset with optional dataset identifier to query.
+
+        Args:
+            dataset_identifier: Dataset name with optional version and optional split information to query.
+                In this field, it supports three components in the format of dataset_name@version[split].
+                - dataset name: Support glob. Default to query for all datasets.
+                - version (optional): Version ID or the starting few characters of version ID. It will search
+                    all matched versions of this dataset. Default to list all versions.
+            tree_view (bool): View the queried dataset as a 3-level-tree, level 1 is dataset name, level 2 is split tag,
+                and level 3 is version.
+
+        Returns:
+            A dict (tree_view=True, default) or a list (tree_view=False) of dataset information.
+                If view as a tree, the format is {dataset_name: {split_tag: {version_id: dataset_info}}}.
+
+        Examples:
+            >>> from dataci.dataset import Dataset
+            >>> Dataset.find()
+            {'dataset1': {'1': ..., '2': ...}, 'dataset12': ...}
+            >>> Dataset.find(dataset_identifier='dataset1')
+            {'dataset1': {'1': ..., '2': ...}}
+            >>> Dataset.find(dataset_identifier='data*')
+            {'dataset1': {'1': ..., '2': ...}, 'dataset12': ...}
+            >>> Dataset.find(dataset_identifier='dataset1@1')
+            {'dataset1': {'1': ..., '2': ...}}
+        """
+        workspace, name, version = parse_data_model_list_identifier(identifier=dataset_identifier)
+
+        dataset_dict_list = get_many_datasets(workspace=workspace, name=name, version=version)
+        dataset_list = list()
+        for dataset_dict in dataset_dict_list:
+            dataset_list.append(cls.from_dict(dataset_dict))
+        if tree_view:
+            dataset_dict = defaultdict(dict)
+            for dataset in dataset_list:
+                dataset_dict[dataset.name][dataset.version] = dataset
+            return dict(dataset_dict)
+
+        return dataset_list
