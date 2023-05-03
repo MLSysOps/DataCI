@@ -67,7 +67,7 @@ class Workflow(object):
 
     def validate(self):
         """
-        Validate the workflow:
+        Validate the models:
         1. there is any cycle in the dag
         2. All stages are connected
         """
@@ -79,10 +79,10 @@ class Workflow(object):
 
     def __call__(self):
         with self:
-            # Validate the workflow
+            # Validate the models
             self.validate()
 
-            # Execute the workflow from the root stage
+            # Execute the models from the root stage
             stages = nx.topological_sort(self.dag)
             # Skip the root stage, since it is a virtual stage
             for stage in stages:
@@ -153,7 +153,7 @@ class Workflow(object):
         dag_edge_list = [
             (stage_mapping[source], stage_mapping[target], data) for source, target, data in dag_edge_list
         ]
-        # Build the workflow
+        # Build the models
         workflow = cls(config['name'], params=config['params'], **config['flag'])
         workflow.dag.add_edges_from(dag_edge_list)
         workflow.reload(config)
@@ -176,14 +176,14 @@ class Workflow(object):
         return False
 
     def reload(self, config):
-        """Reload the workflow from the updated config."""
+        """Reload the models from the updated config."""
         self.version = config['version'] if config['version'] != 'head' else None
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
         return self
 
     def save(self):
-        """Save the workflow to the workspace."""
-        # Check if the workflow name is valid
+        """Save the models to the workspace."""
+        # Check if the models name is valid
         if NAME_PATTERN.match(f'{self.workspace.name}.{self.name}') is None:
             raise ValueError(f'Workflow name {self.workspace}.{self.name} is not valid.')
         # Save the used stages (only if the stage is not saved)
@@ -197,19 +197,19 @@ class Workflow(object):
         config['version'] = None
         # Update create date
         config['timestamp'] = int(datetime.now().timestamp())
-        # Save the workflow
+        # Save the models
         if not exist_workflow(config['workspace'], config['name'], config['version']):
             create_one_workflow(config)
-            logger.info(f'Saved workflow: {self}')
+            logger.info(f'Saved models: {self}')
         else:
             update_one_workflow(config)
-            logger.info(f'Updated workflow: {self}')
+            logger.info(f'Updated models: {self}')
         return self.reload(config)
 
     def publish(self):
-        """Publish the workflow to the workspace."""
+        """Publish the models to the workspace."""
         # TODO: use DB transaction / data object lock
-        # Save workflow first
+        # Save models first
         self.save()
         # Save the used stages (only if the stage is not saved)
         for stage in self.stages:
@@ -225,7 +225,7 @@ class Workflow(object):
 
     @classmethod
     def get(cls, name: str, version: str = None):
-        """Get a workflow from the workspace."""
+        """Get a models from the workspace."""
         # If version is provided along with name
         matched = GET_DATA_MODEL_IDENTIFIER_PATTERN.match(str(name))
         if not matched:

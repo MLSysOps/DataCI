@@ -21,7 +21,7 @@ from dataci.workspace import Workspace
 
 if TYPE_CHECKING:
     from typing import Optional, Union
-    from dataci.workflow import Workflow
+    from dataci.models import Workflow
 
 logger = logging.getLogger(__name__)
 
@@ -126,8 +126,8 @@ class Dataset(object):
 
     @property
     def yield_workflow(self):
-        """Lazy load yield workflow"""
-        from dataci.workflow import Workflow
+        """Lazy load yield models"""
+        from dataci.models import Workflow
 
         if self._yield_workflow is None or isinstance(self._yield_workflow, Workflow):
             return self._yield_workflow
@@ -191,7 +191,7 @@ class Dataset(object):
         #####################################################################
         create_one_dataset(config)
         logger.info(f'Adding dataset to db: {self}')
-        self.reload(config)
+        return self.reload(config)
 
     @classmethod
     def get(cls, name: str, version=None):

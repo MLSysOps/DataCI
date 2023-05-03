@@ -51,7 +51,7 @@ def stage(name=None, **kwargs) -> 'Callable[[Callable], Stage]':
 
 def workflow(name=None, **kwargs) -> 'Callable[[Callable], Workflow]':
     """Workflow decorator. Convert the wrapped function into a
-    :code:`dataci.pipeline.workflow.Workflow` object.
+    :code:`dataci.pipeline.models.Workflow` object.
     """
 
     def decorator_workflow(run):
@@ -63,7 +63,7 @@ def workflow(name=None, **kwargs) -> 'Callable[[Callable], Workflow]':
             workflow_cls = type(
                 name_camel_case, (Workflow,), kwargs,
             )
-            # Initiate the workflow object with configured info (e.g., inputs, outputs, etc.)
+            # Initiate the models object with configured info (e.g., inputs, outputs, etc.)
             workflow_obj: Workflow = workflow_cls(name=workflow_name, **kwargs)
             # Build DAG from the wrapped `run` function
             with workflow_obj:

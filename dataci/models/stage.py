@@ -94,7 +94,7 @@ class Stage(ABC):
         # TODO: make the build process more secure with sandbox / allowed safe methods
         local_dict = locals()
         # import stage
-        from dataci.workflow.decorator import stage
+        from dataci.models.decorator import stage
         local_dict['stage'] = stage
         exec(script, globals(), local_dict)
         for v in local_dict.copy().values():
@@ -122,7 +122,7 @@ class Stage(ABC):
 
     @property
     def context(self):
-        # Get context from contextvars, this will be set within the context of a workflow
+        # Get context from contextvars, this will be set within the context of a models
         return WORKFLOW_CONTEXT.get()
 
     @property
