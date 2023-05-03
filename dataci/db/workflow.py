@@ -344,6 +344,34 @@ def get_many_workflow(workspace, name, version=None):
         return workflow_list
 
 
+def get_all_latest_workflow_schedule():
+    with db_connection:
+        cur = db_connection.cursor()
+        cur.execute(
+            """
+            SELECT workspace, name, version, schedule
+            FROM   (
+                SELECT workspace
+                     , name
+                     , version
+                     , schedule
+                     , ROW_NUMBER() OVER (PARTITION BY workspace, name ORDER BY version DESC) AS rk
+                FROM   workflow
+            )
+            WHERE rk = 1
+            ;
+            """
+        )
+        return [
+            {
+                'workspace': workflow[0],
+                'name': workflow[1],
+                'version': workflow[2] if workflow[2] != '' else None,
+                'schedule': workflow[3].split(','),
+            } for workflow in cur.fetchall()
+        ]
+
+
 def get_next_workflow_version_id(workspace, name):
     with db_connection:
         cur = db_connection.cursor()
