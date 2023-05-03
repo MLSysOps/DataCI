@@ -25,10 +25,16 @@ trigger = Trigger()
 scheduler = Scheduler()
 
 
+@app.get('/live')
+def live():
+    return
+
+
 @app.post('/events')
-def set_event(producer: str, name: str):
+def set_event(producer: str, name: str, status: str = None):
+    status = status or ''
     EVENT_QUEUE.put(f'{producer}:{name}')
-    logger.debug(f'Received event {producer}:{name}')
+    logger.debug(f'Received event {producer}:{name}:{status}')
     return {'status': 'ok'}
 
 

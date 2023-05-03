@@ -6,3 +6,4 @@ Email: yuanming.li@alibaba-inc.com
 Date: May 03, 2023
 """
 from .trigger import Trigger
+from .event import Event
