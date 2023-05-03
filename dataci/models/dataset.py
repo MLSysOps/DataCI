@@ -17,7 +17,7 @@ import pandas as pd
 from dataci.connector.s3 import download as s3_download
 from dataci.db.dataset import get_many_datasets, get_one_dataset, get_next_version_id, create_one_dataset
 from dataci.utils import parse_data_model_get_identifier, parse_data_model_list_identifier
-from dataci.workspace import Workspace
+from .base import BaseModel
 
 if TYPE_CHECKING:
     from typing import Optional, Union
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Dataset(object):
+class Dataset(BaseModel):
     def __init__(
             self,
             name,
@@ -37,10 +37,7 @@ class Dataset(object):
             id_column='id',
             **kwargs,
     ):
-        # Get workspace name from provided name or default workspace
-        workspace_name, dataset_name = name.split('.') if '.' in name else (None, name)
-        self.workspace = Workspace(workspace_name)
-        self.name = dataset_name
+        super().__init__(name, **kwargs)
         # Cache dataset files from cloud object storage
         if dataset_files is not None:
             # dataset_files is a S3 path
@@ -63,7 +60,6 @@ class Dataset(object):
         # TODO: create a dataset schema and verify
         self.id_column = id_column
         self.__published = False
-        self.version = None
         self.create_date: 'Optional[datetime]' = None
         # TODO: improve this get size of dataset
         if self.dataset_files and self.dataset_files.suffix == '.csv':
@@ -200,7 +196,7 @@ class Dataset(object):
         return cls.from_dict(dataset_dict)
 
     @classmethod
-    def find(cls, dataset_identifier=None, tree_view=True):
+    def find(cls, dataset_identifier=None, tree_view=False):
         """
         List dataset with optional dataset identifier to query.
 

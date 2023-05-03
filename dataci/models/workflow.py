@@ -24,8 +24,8 @@ from dataci.db.workflow import (
 )
 from dataci.utils import GET_DATA_MODEL_IDENTIFIER_PATTERN, LIST_DATA_MODEL_IDENTIFIER_PATTERN
 from dataci.utils import NAME_PATTERN
-from dataci.workspace import Workspace
 from . import WORKFLOW_CONTEXT
+from .base import BaseModel
 from .stage import Stage
 
 # from dataci.run import Run
@@ -33,7 +33,7 @@ from .stage import Stage
 logger = logging.getLogger(__name__)
 
 
-class Workflow(object):
+class Workflow(BaseModel):
     def __init__(
             self,
             name: str,
@@ -41,15 +41,12 @@ class Workflow(object):
             debug: bool = True,
             **kwargs,
     ):
-        workspace_name, name = name.split('.') if '.' in name else (None, name)
-        self.name = name
-        self.workspace = Workspace(workspace_name)
+        super().__init__(name, **kwargs)
         # Context for each stage
         self.params = params or dict()
         self.flag = {'debug': debug}
         self.dag = nx.DiGraph()
         self.context_token = None
-        self.version = None
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.logger = logging.getLogger(__name__)
 

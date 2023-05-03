@@ -15,8 +15,9 @@ from typing import TYPE_CHECKING
 from dataci.config import DEFAULT_WORKSPACE
 from dataci.db.stage import create_one_stage, exist_stage, update_one_stage, get_one_stage
 from dataci.utils import GET_DATA_MODEL_IDENTIFIER_PATTERN
-from dataci.workspace import Workspace
 from . import WORKFLOW_CONTEXT
+from .base import BaseModel
+from .workspace import Workspace
 from ..db.workflow import get_next_workflow_version_id
 
 if TYPE_CHECKING:
@@ -27,16 +28,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Stage(ABC):
+class Stage(BaseModel, ABC):
     def __init__(
             self, name: str, symbolize: str = None, **kwargs,
     ) -> None:
-        workspace_name, task_name = name.split('.') if '.' in name else (None, name)
-        self.workspace = Workspace(workspace_name)
-        self.name = task_name
+        super().__init__(name, **kwargs)
         self.symbolize = symbolize
-        # Version is automatically generated when the stage is published
-        self.version = None
         self.create_date: 'Optional[datetime]' = None
         # Output is saved after the stage is run, this is for the descendant stages to use
         self._output = None
@@ -94,7 +91,7 @@ class Stage(ABC):
         # TODO: make the build process more secure with sandbox / allowed safe methods
         local_dict = locals()
         # import stage
-        from dataci.models.decorator import stage
+        from dataci.decorators import stage
         local_dict['stage'] = stage
         exec(script, globals(), local_dict)
         for v in local_dict.copy().values():
