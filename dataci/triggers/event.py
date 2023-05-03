@@ -5,7 +5,7 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: May 02, 2023
 
-Event for trigger.
+Event for triggers.
 """
 import logging
 import time

@@ -11,8 +11,8 @@ WORKFLOW_CONTEXT = contextvars.ContextVar('workflow_context', default={})
 
 from .stage import Stage
 from .workflow import Workflow
-from .decorator import stage, workflow
+from .dataset import Dataset
 
 __all__ = [
-    'Workflow', 'workflow', 'Stage', 'stage', 'WORKFLOW_CONTEXT'
+    'Dataset', 'Workflow', 'Stage', 'WORKFLOW_CONTEXT'
 ]
