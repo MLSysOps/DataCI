@@ -36,7 +36,7 @@ class Dataset(BaseModel):
         r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|[a-f\d]{32}|\d+))?$', flags=re.IGNORECASE
     )
     LIST_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
-        r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|[a-f\d]{32}))?$', re.IGNORECASE
+        r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|[a-f\d]{1,32}))?$', re.IGNORECASE
     )
 
     def __init__(
@@ -213,7 +213,7 @@ class Dataset(BaseModel):
     @event('dataset_publish')
     def publish(self):
         config = self.dict()
-        config['version'] = get_next_version_id(self.workspace.name, self.name)
+        config['version'] = str(get_next_version_id(self.workspace.name, self.name))
         config['timestamp'] = int(datetime.now().timestamp())
         #####################################################################
         # Step 1: Save dataset to mount cloud object storage
@@ -229,8 +229,9 @@ class Dataset(BaseModel):
         # Step 2: Publish dataset to DB
         #####################################################################
         create_one_dataset(config)
+        self.reload(config)
         logger.info(f'Adding dataset to db: {self}')
-        return self.reload(config)
+        return self
 
     @classmethod
     def get(cls, name: str, version=None):
@@ -268,6 +269,9 @@ class Dataset(BaseModel):
             {'dataset1': {'1': ..., '2': ...}}
         """
         workspace, name, version = cls.parse_data_model_list_identifier(identifier=dataset_identifier)
+        # Add * at the end of version for BLOB
+        if version and '*' not in version:
+            version += '*'
 
         dataset_dict_list = get_many_datasets(workspace=workspace, name=name, version=version)
         dataset_list = list()

@@ -5,9 +5,10 @@ from dataci.models import Dataset
 
 def save(args):
     """
-    Publish a dataset to the repo.
+    Save a dataset to the workspace.
     1. Generate dataset schema based on dataset files and perform schema checking
-    2. copy content of every <targets>.dvc file to .dataci/dataset with versioning
+    2. Generate dataset version
+    3. copy content of dataset files to workspace data storage and save dataset metadata to database
     
     Command syntax:
         -n/--name: dataset name
@@ -17,6 +18,26 @@ def save(args):
         name=args.name, dataset_files=args.targets,
     )
     dataset.save()
+
+
+def publish(args):
+    """
+    Publish a saved dataset.
+
+    Command syntax:
+        targets: dataset identifier, including workspace, dataset name and version.
+    """
+    datasets = Dataset.find(dataset_identifier=args.targets, tree_view=False)
+    if len(datasets) == 0:
+        raise ValueError(f'No dataset found for {args.targets}')
+    if len(datasets) > 1:
+        raise ValueError(
+            f'Dataset identifier {args.targets} is ambiguous, '
+            f'please specify one of the following using longer version ID:\n'
+            "\n".join([dataset.identifier for dataset in datasets]),
+        )
+    dataset = datasets[0]
+    dataset.publish()
 
 
 def ls(args):
@@ -35,21 +56,16 @@ def ls(args):
             )
 
 
-def update(args):
-    repo = Repo()
-    dataset = Dataset(name=args.name, repo=repo)
-    dataset.update()
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('DataCI dataset')
     subparser = parser.add_subparsers()
-    publish_parser = subparser.add_parser('save', help='Save dataset')
-    publish_parser.add_argument(
+    save_parser = subparser.add_parser('save', help='Save dataset')
+    save_parser.add_argument(
         '-n', '--name', type=str, required=True, help='Dataset name'
     )
-    publish_parser.add_argument('targets', type=str, help='Path to dataset base directory.')
-    publish_parser.set_defaults(func=save)
+    save_parser.add_argument('targets', type=str, help='Path to dataset base directory.')
+    save_parser.set_defaults(func=save)
+
     list_parser = subparser.add_parser('ls', help='List dataset')
     list_parser.add_argument(
         'targets', type=str, nargs='?', default=None,
@@ -57,8 +73,11 @@ if __name__ == '__main__':
     )
     list_parser.set_defaults(func=ls)
 
-    update_parser = subparser.add_parser('update', help='Update dataset')
-    update_parser.add_argument('-n', '--name', type=str, required=True, help='Dataset name.')
-    update_parser.set_defaults(func=update)
+    publish_parser = subparser.add_parser('publish', help='Update dataset')
+    publish_parser.add_argument(
+        'targets', type=str,
+        help='Dataset identifier. E.g., workspace.dataset_name@saved_version'
+    )
+    publish_parser.set_defaults(func=publish)
     args_ = parser.parse_args()
     args_.func(args_)

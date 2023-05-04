@@ -261,27 +261,25 @@ def get_many_datasets(workspace, name, version=None):
             """, (workspace, name, version))
     dataset_dict_list = list()
     for dataset_po in dataset_po_iter:
-        workspace, name, version, yield_workflow_workspace, yield_workflow_name, yield_workflow_version, log_message, \
-        timestamp, id_column, size, filename, parent_dataset_workspace, parent_dataset_name, parent_dataset_version = \
-            dataset_po
         dataset_dict = {
-            'name': name,
-            'version': version,
+            'workspace': dataset_po[0],
+            'name': dataset_po[1],
+            'version': dataset_po[2],
             'yield_workflow': {
-                'workspace': yield_workflow_workspace,
-                'name': yield_workflow_name,
-                'version': yield_workflow_version,
+                'workspace': dataset_po[3],
+                'name': dataset_po[4],
+                'version': dataset_po[5],
             },
-            'log_message': log_message,
-            'timestamp': timestamp,
-            'id_column': id_column,
-            'size': size,
-            'filename': filename,
+            'log_message': dataset_po[6],
+            'timestamp': dataset_po[7],
+            'id_column': dataset_po[8],
+            'size': dataset_po[9],
+            'filename': dataset_po[10],
             'parent_dataset': {
-                'workspace': parent_dataset_workspace,
-                'name': parent_dataset_name,
-                'version': parent_dataset_version,
-            }
+                'workspace': dataset_po[11],
+                'name': dataset_po[12],
+                'version': dataset_po[13],
+            },
         }
         dataset_dict_list.append(dataset_dict)
     return dataset_dict_list
@@ -295,6 +293,7 @@ def get_next_version_id(workspace, name):
             FROM   dataset
             WHERE  workspace = ?
             AND    name = ?
+            AND    length(version) < 32
             ;
             """, (workspace, name,))
         result = list(result_iter)[0][0]
