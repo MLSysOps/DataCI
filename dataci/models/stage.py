@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING
 from dataci.config import DEFAULT_WORKSPACE
 from dataci.db.stage import create_one_stage, exist_stage, update_one_stage, get_one_stage, get_next_stage_version_id
 from dataci.decorators.event import event
-from dataci.utils import GET_DATA_MODEL_IDENTIFIER_PATTERN
 from . import WORKFLOW_CONTEXT
 from .base import BaseModel
 from .workspace import Workspace
@@ -198,22 +197,7 @@ class Stage(BaseModel, ABC):
     @classmethod
     def get(cls, name, version=None):
         """Get the stage from the workspace."""
-        # If version is provided along with name
-        matched = GET_DATA_MODEL_IDENTIFIER_PATTERN.match(str(name))
-        if not matched:
-            raise ValueError(f'Invalid data identifier {name}')
-        # Parse name and version
-        workspace, name, version_ = matched.groups()
-        workspace = workspace or DEFAULT_WORKSPACE
-        # Only one version is allowed to be provided, either in name or in version
-        if version and version_:
-            raise ValueError('Only one version is allowed to be provided by name or version.')
-        version = version or version_
-        if version:
-            version = str(version).lower()
-            if version == 'none':
-                version = None
-
+        workspace, name, version = cls.parse_data_model_get_identifier(name, version)
         stage_config = get_one_stage(workspace, name, version)
         stage = cls.from_dict(stage_config)
         return stage

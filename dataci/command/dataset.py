@@ -1,14 +1,13 @@
 import argparse
 
-from dataci.dataset import Dataset
+from dataci.models import Dataset
 
 
 def save(args):
     """
     Publish a dataset to the repo.
     1. Generate dataset schema based on dataset files and perform schema checking
-    1. dvc add targets with DataCI added meta (versions, create date)
-    3. copy content of every <targets>.dvc file to .dataci/dataset with versioning
+    2. copy content of every <targets>.dvc file to .dataci/dataset with versioning
     
     Command syntax:
         -n/--name: dataset name

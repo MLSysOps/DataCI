@@ -23,8 +23,6 @@ from dataci.db.workflow import (
     get_next_workflow_version_id,
 )
 from dataci.decorators.event import event
-from dataci.utils import GET_DATA_MODEL_IDENTIFIER_PATTERN, LIST_DATA_MODEL_IDENTIFIER_PATTERN
-from dataci.utils import NAME_PATTERN
 from . import WORKFLOW_CONTEXT
 from .base import BaseModel
 from .stage import Stage
@@ -206,7 +204,7 @@ class Workflow(BaseModel):
     def save(self):
         """Save the models to the workspace."""
         # Check if the models name is valid
-        if NAME_PATTERN.match(f'{self.workspace.name}.{self.name}') is None:
+        if self.NAME_PATTERN.match(f'{self.workspace.name}.{self.name}') is None:
             raise ValueError(f'Workflow name {self.workspace}.{self.name} is not valid.')
         # Save the used stages (only if the stage is not saved)
         for stage in self.stages:
@@ -249,43 +247,14 @@ class Workflow(BaseModel):
     @classmethod
     def get(cls, name: str, version: str = None):
         """Get a models from the workspace."""
-        # If version is provided along with name
-        matched = GET_DATA_MODEL_IDENTIFIER_PATTERN.match(str(name))
-        if not matched:
-            raise ValueError(f'Invalid data identifier {name}')
-        # Parse name and version
-        workspace, name, version_ = matched.groups()
-        workspace = workspace or DEFAULT_WORKSPACE
-        # Only one version is allowed to be provided, either in name or in version
-        if version and version_:
-            raise ValueError('Only one version is allowed to be provided by name or version.')
-
-        version = version or version_
-        if version:
-            version = str(version).lower()
-            if version == 'none':
-                version = None
+        workspace, name, version = cls.parse_data_model_get_identifier(name, version)
 
         config = get_one_workflow(workspace, name, version)
         return cls.from_dict(config)
 
     @classmethod
     def find(cls, workflow_identifier: str = None, tree_view: bool = False):
-        workflow_identifier = workflow_identifier or '*'
-
-        matched = LIST_DATA_MODEL_IDENTIFIER_PATTERN.match(workflow_identifier)
-        if not matched:
-            raise ValueError(f'Invalid pipeline identifier {workflow_identifier}')
-        workspace, name, version = matched.groups()
-        workspace = workspace or DEFAULT_WORKSPACE
-        # Case                      Provided        Matched    Action
-        # version is not provided   ws.name         None       Get all versions
-        # version is None           ws.name@None    'None'     Get version = NULL
-        # version is provided       ws.name@version 'version'  Get version = version
-        if version and version.lower() == 'none':
-            version = None
-        else:
-            version = str(version or '*').lower()
+        workspace, name, version = cls.parse_data_model_list_identifier(workflow_identifier)
 
         # Check matched pipeline
         workflow_dict_list = get_many_workflow(workspace, name, version)

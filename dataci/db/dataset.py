@@ -62,6 +62,67 @@ def create_dataset_tag(dataset_name, dataset_version, tag_name, tag_version):
         )
 
 
+def exists_dataset(workspace, name, version):
+    with db_connection:
+        cur = db_connection.cursor()
+        cur = cur.execute(
+            """
+            SELECT 1
+            FROM   dataset
+            WHERE  workspace = ?
+            AND    name = ?
+            AND    version = ?
+            ;
+            """,
+            (workspace, name, version)
+        )
+        return cur.fetchone() is not None
+
+
+def update_one_dataset(dataset_dict):
+    yield_workflow_dict = dataset_dict['yield_workflow']
+    parent_dataset_dict = dataset_dict['parent_dataset']
+    with db_connection:
+        cur = db_connection.cursor()
+        cur.execute(
+            """
+            UPDATE dataset
+            SET    yield_workflow_workspace = ?
+            ,      yield_workflow_name = ?
+            ,      yield_workflow_version = ?
+            ,      log_message = ?
+            ,      timestamp = ?
+            ,      id_column = ?
+            ,      size = ?
+            ,      filename = ?
+            ,      parent_dataset_workspace = ?
+            ,      parent_dataset_name = ?
+            ,      parent_dataset_version = ?
+            WHERE  workspace = ?
+            AND    name = ?
+            AND    version = ?
+            ;
+            """,
+            (
+                yield_workflow_dict['workspace'],
+                yield_workflow_dict['name'],
+                yield_workflow_dict['version'],
+                dataset_dict['log_message'],
+                dataset_dict['timestamp'],
+                dataset_dict['id_column'],
+                dataset_dict['size'],
+                dataset_dict['filename'],
+                parent_dataset_dict['workspace'],
+                parent_dataset_dict['name'],
+                parent_dataset_dict['version'],
+                dataset_dict['workspace'],
+                dataset_dict['name'],
+                dataset_dict['version'],
+            )
+        )
+        return cur.rowcount
+
+
 def get_one_dataset(workspace, name, version='latest'):
     with db_connection:
         if version != 'latest':

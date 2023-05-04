@@ -72,7 +72,7 @@ def connect(key=None, secret=None, endpoint_url=None, **kwargs):
     return fs
 
 
-def mount_bucket(bucket_name: str, local_dir: str, mount_ok: bool = False, region: str = None):
+def mount_bucket(bucket_name: str, local_dir: str, mount_ok: bool = False, region: str = 'ap-southeast-1'):
     """Mount the bucket to local data directory
     """
     mounted = os.path.ismount(local_dir)
@@ -83,9 +83,10 @@ def mount_bucket(bucket_name: str, local_dir: str, mount_ok: bool = False, regio
         logger.info(f'Bucket {bucket_name} is already mounted to local data directory {local_dir}')
     else:
         # Step 2: mount the bucket to local data directory
+        # Need to add -o url=xxx, this is a known bug of s3 https://github.com/s3fs-fuse/s3fs-fuse/issues/666
         cmd = [
             's3fs', f'{bucket_name}', f'{local_dir}', '-o', f'passwd_file={CACHE_ROOT / ".passwd-s3fs"}',
-            # '-o', f'url=https://s3-{region}.amazonaws.com',
+            '-o', f'url=https://s3-{region}.amazonaws.com',
         ]
         logger.info(f'Running command: {" ".join(cmd)}')
         subprocess.run(cmd, check=True)
