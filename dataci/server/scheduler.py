@@ -8,6 +8,7 @@ Date: May 03, 2023
 import logging
 from threading import Thread
 
+from dataci.models import Workflow
 from dataci.server import EXECUTION_QUEUE, QUEUE_END
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,9 @@ class Scheduler(object):
             workflow_identifier = EXECUTION_QUEUE.get()
             if workflow_identifier is QUEUE_END:
                 break
-            # do some task scheduling
+            # Very simple implementation, run one workflow at a time.
+            logger.info(f'Running workflow: {workflow_identifier}')
+            Workflow.get(workflow_identifier)()
 
     def start(self):
         logger.info('DataCI Scheduler start')
