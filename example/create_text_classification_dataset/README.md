@@ -53,7 +53,7 @@ bash 1.1.publish_raw_data.sh
 Add this dataset into the data repository.
 
 ```shell
-python dataci/command/dataset.py save -n text_raw_train s3://dataci-shared/text_cls_v1/train.csv
+python dataci/command/dataset.py save -n text_raw_raw s3://dataci-shared/text_cls_v1/train.csv
 ```
 
 ## 1.2 Build a dataset for text classification
@@ -67,32 +67,62 @@ python 1.2.build_text_classification_dataset_v1.py
 1. Build train dataset v1
 
 ```python
-import augly.text as txtaugs
+from dataci.decorators.stage import stage
+from dataci.decorators.workflow import workflow
 
-from dataci.pipeline import Pipeline, stage
+
+@stage()
+def get_dataset(**context):
+    from dataci.models import Dataset
+    import pandas as pd
+
+    version = context['params'].get('version', None)
+    dataset = Dataset.get(name='text_cls_raw', version=version)
+    df = pd.read_csv(dataset.dataset_files)
+    return df, 'product_name'
 
 
-# Data processing: text augmentation
-@stage(inputs='text_raw_train', outputs='text_aug.csv')
-def text_augmentation(inputs):
+@stage(symbolize='text_augmentation')
+def process(inputs):
+    import augly.text as txtaugs
+
+    df, text_col = inputs
+
     transform = txtaugs.InsertPunctuationChars(
         granularity="all",
         cadence=5.0,
         vary_chars=True,
     )
-    inputs['product_name'] = inputs['product_name'].map(transform)
-    return inputs
+
+    outputs = transform(df[text_col].tolist())
+    df[text_col] = outputs
+    return df
 
 
-# Define data pipeline
-train_data_pipeline = Pipeline(name='train_data_pipeline', stages=[text_augmentation])
-train_data_pipeline.build()
+@stage()
+def save(inputs, **context):
+    from dataci.models import Dataset
+
+    if context['flag']['debug']:
+        print(f'Workflow output is {inputs}, skip saving.')
+        return
+    dataset = Dataset(
+        name=...,
+        dataset_files=...,
+        parent_dataset=...,
+    )
+    dataset.save()
+
+
+@workflow(name='c123', params={'version': 1}, schedule=['@event testspace.text_cls_raw dataset_publish success'])
+def main():
+    get_dataset >> process >> save
 ```
 
 Debug/test run the train data pipeline:
 
 ```python
-train_data_pipe_run = train_data_pipeline()
+main()
 ```
 
 The output `text_aug.csv` will be used as train dataset.
