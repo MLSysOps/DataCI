@@ -134,6 +134,69 @@ def get_one_stage(workspace, name, version=None):
     return dict(zip(['workspace', 'name', 'version', 'script_path', 'timestamp', 'symbolize'], po))
 
 
+def get_many_stages(workspace, name, version=None):
+    # replace None with '', since None will lead to issues in SQL
+    version = version or ''
+    with db_connection:
+        cur = db_connection.cursor()
+        if version == '':
+            # Get the head version
+            cur.execute(
+                """
+                SELECT workspace, name, version, script_path, timestamp, symbolize
+                FROM   stage 
+                WHERE  workspace=:workspace 
+                AND    name=:name
+                AND    version =:version
+                """,
+                {
+                    'workspace': workspace,
+                    'name': name,
+                    'version': version,
+                }
+            )
+            po = cur.fetchall()
+            if po is None:
+                # If there is no head version, get the latest version (by set version to None)
+                version = 'latest'
+        if version == 'latest':
+            # Get the latest version
+            cur.execute(
+                """
+                SELECT workspace, name, version, script_path, timestamp, symbolize
+                FROM   stage 
+                WHERE  workspace=:workspace 
+                AND    name=:name
+                AND    version <> ''
+                ORDER BY version DESC
+                LIMIT 1
+                """,
+                {
+                    'workspace': workspace,
+                    'name': name,
+                }
+            )
+            po = cur.fetchall()
+        elif version != '':
+            cur.execute(
+                """
+                SELECT workspace, name, version, script_path, timestamp, symbolize
+                FROM   stage 
+                WHERE  workspace=:workspace 
+                AND    name=:name 
+                AND    version GLOB :version
+                """,
+                {
+                    'workspace': workspace,
+                    'name': name,
+                    'version': version,
+                }
+            )
+            po = cur.fetchall()
+
+    return [dict(zip(['workspace', 'name', 'version', 'script_path', 'timestamp', 'symbolize'], p)) for p in po]
+
+
 def get_next_stage_version_id(workspace, name, version):
     version = version or ''
     with db_connection:

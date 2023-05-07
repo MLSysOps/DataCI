@@ -281,6 +281,7 @@ def get_many_workflow(workspace, name, version=None):
                 FROM   workflow
                 WHERE  workspace=:workspace
                 AND    name GLOB :name
+                AND    length(version) < 32
                 ORDER BY version DESC
                 LIMIT 1
                 ;
@@ -379,7 +380,9 @@ def get_next_workflow_version_id(workspace, name):
             """
             SELECT COALESCE(MAX(version), 0) + 1
             FROM   workflow
-            WHERE  workspace=:workspace AND name=:name
+            WHERE  workspace=:workspace 
+            AND    name=:name
+            AND    length(version) < 32
             ;
             """,
             {

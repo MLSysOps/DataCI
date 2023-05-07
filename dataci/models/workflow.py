@@ -6,14 +6,15 @@ Email: yuanmingleee@gmail.com
 Date: Feb 23, 2023
 """
 import itertools
+import json
 import logging
+import re
 from collections import defaultdict
 from datetime import datetime
 from typing import TYPE_CHECKING
 
 import networkx as nx
 
-from dataci.config import DEFAULT_WORKSPACE
 from dataci.db.workflow import (
     create_one_workflow,
     exist_workflow,
@@ -26,8 +27,8 @@ from dataci.decorators.event import event
 from . import WORKFLOW_CONTEXT
 from .base import BaseModel
 from .stage import Stage
-
 # from dataci.run import Run
+from ..utils import hash_binary
 
 if TYPE_CHECKING:
     from typing import List, Optional
@@ -36,6 +37,13 @@ logger = logging.getLogger(__name__)
 
 
 class Workflow(BaseModel):
+    GET_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
+        r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|[a-f\d]{32}|\d+))?$', flags=re.IGNORECASE
+    )
+    LIST_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
+        r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|[a-f\d]{1,32}))?$', re.IGNORECASE
+    )
+
     def __init__(
             self,
             name: str,
@@ -226,13 +234,35 @@ class Workflow(BaseModel):
             logger.info(f'Updated models: {self}')
         return self.reload(config)
 
+    def cache(self):
+        """Cache the models to the workspace with a version. This is a temp function for CI.
+
+        Refer to how to make DAG versioning: https://cwiki.apache.org/confluence/display/AIRFLOW/AIP-36+DAG+Versioning
+        """
+        config = self.dict()
+        # We generate the fingerprint for the workflow
+        version_generate_config = {
+            'workspace': config['workspace'],
+            'name': config['name'],
+            'dag': config['dag'],
+            'schedule': config['schedule'],
+            'params': config['params'],
+            'flag': config['flag'],
+        }
+        fingerprint_bin = json.dumps(version_generate_config, sort_keys=True).encode('utf-8')
+        config['version'] = hash_binary(fingerprint_bin)
+        create_one_workflow(config)
+        self.reload(config)
+        logger.info(f'Cached models: {self}')
+        return self
+
     @event(name='workflow_publish')
     def publish(self):
         """Publish the models to the workspace."""
         # TODO: use DB transaction / data object lock
         # Save models first
         self.save()
-        # Save the used stages (only if the stage is not saved)
+        # Publish the used stages (only if the stage is not published)
         for stage in self.stages:
             if stage.version is None:
                 stage.publish()
@@ -264,7 +294,7 @@ class Workflow(BaseModel):
         if tree_view:
             workflow_dict = defaultdict(dict)
             for workflow in workflow_list:
-                workflow_dict[f'{workflow.name}.{workflow.name}'][workflow.version] = workflow
+                workflow_dict[workflow.full_name][workflow.version] = workflow
             return workflow_dict
 
         return workflow_list

@@ -9,8 +9,6 @@ import hashlib
 import os
 from contextlib import contextmanager
 
-from dataci.config import DEFAULT_WORKSPACE
-
 
 @contextmanager
 def cwd(path):
@@ -64,5 +62,24 @@ def hash_file(filepath):
                 if not buf:
                     break
                 sha_hash.update(buf)
+
+    return sha_hash.hexdigest()
+
+
+def hash_binary(b: bytes):
+    """
+    Compute the hash of a binary.
+
+    Args:
+        b: file binary
+
+    Returns:
+        The hash of the directory tree.
+
+    References:
+        https://stackoverflow.com/a/24937710
+    """
+    sha_hash = hashlib.md5()
+    sha_hash.update(b)
 
     return sha_hash.hexdigest()

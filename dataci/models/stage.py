@@ -9,11 +9,12 @@ import inspect
 import logging
 import shutil
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from dataci.config import DEFAULT_WORKSPACE
-from dataci.db.stage import create_one_stage, exist_stage, update_one_stage, get_one_stage, get_next_stage_version_id
+from dataci.db.stage import create_one_stage, exist_stage, update_one_stage, get_one_stage, get_next_stage_version_id, \
+    get_many_stages
 from dataci.decorators.event import event
 from . import WORKFLOW_CONTEXT
 from .base import BaseModel
@@ -201,3 +202,17 @@ class Stage(BaseModel, ABC):
         stage_config = get_one_stage(workspace, name, version)
         stage = cls.from_dict(stage_config)
         return stage
+
+    @classmethod
+    def find(cls, stage_identifier, tree_view=False):
+        """Find the stage from the workspace."""
+        workspace, name, version = cls.parse_data_model_list_identifier(stage_identifier)
+        stage_configs = get_many_stages(workspace, name, version)
+        stages = [cls.from_dict(stage_config) for stage_config in stage_configs]
+        if tree_view:
+            stage_dict = defaultdict(dict)
+            for stage in stages:
+                stage_dict[stage.full_name][stage.version] = stage
+            return stage_dict
+
+        return stages
