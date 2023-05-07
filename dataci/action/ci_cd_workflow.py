@@ -11,17 +11,25 @@ from dataci.decorators.workflow import workflow, Workflow
 
 @stage()
 def execute_workflow(**context):
-    workflow_identifier = context['params']['workflow']
+    workflow_identifier = context['params']['config']['workflow']
+    dataset_identifier = context['params']['config']['dataset']
+
     workflow_obj = Workflow.get(workflow_identifier)
-    # Reset workflow params
-    workflow_obj.params['input_version'] = context['params']['input_version']
-    workflow_obj.params['output_version'] = context['params']['output_version']
+    # set workflow params
+    workflow_obj.params['version'] = dataset_identifier.split('@')[1]
     workflow_obj()
+
+    return workflow_obj.outputs
 
 
 @stage()
 def data_quality_check(**context):
-    pass
+    from dataci.models import Workflow
+
+    workflow = Workflow.get('official/data_quality_check@1')
+    workflow()
+
+    return workflow.outputs
 
 
 @stage()
