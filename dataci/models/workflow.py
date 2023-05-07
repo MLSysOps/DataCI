@@ -103,6 +103,9 @@ class Workflow(BaseModel):
                 inputs = [t._output for t in stage.ancestors if t._output is not None]
                 stage(*inputs)
                 self.logger.info(f'Finished stage: {stage}')
+            # Get the output of the last stage
+            # TODO: support multiple outputs
+            return stages[-1]._output
 
         # # Create a Run
         # run = Run(pipeline=self, run_num=self.get_next_run_num())
