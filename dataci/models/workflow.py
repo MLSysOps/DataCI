@@ -72,6 +72,9 @@ class Workflow(BaseModel):
             'params': self.params,
             'dag': self.dag,
             'flag': self.flag,
+            'workflow': self,
+            'input_dataset': None,  # Wait to be set by dataset read hook
+            'output_dataset': None,  # Wait to be set by dataset save hook
         }
 
     @property
@@ -130,7 +133,9 @@ class Workflow(BaseModel):
     def __exit__(self, exc_type, exc_val, exc_tb):
         WORKFLOW_CONTEXT.reset(self.context_token)
 
-    def dict(self):
+    def dict(self, id_only=False):
+        if id_only:
+            return {'workspace': self.workspace.name, 'name': self.name, 'version': self.version}
         # export the dag as a dict
         # 1. convert the dag to a list of edges
         # 2. convert each node from Stage to an id

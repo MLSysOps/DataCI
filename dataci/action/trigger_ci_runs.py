@@ -49,6 +49,9 @@ def run(job_configs, **context):
         ci_workflow()
 
 
-@workflow(name='text_dataset_ci_config')
+@workflow(
+    name='text_dataset_ci_config',
+    schedule=['@event text_raw_train dataset_publish success', '@event text_aug stage_publish success'],
+)
 def trigger_ci_cd():
     config_ci_runs >> run

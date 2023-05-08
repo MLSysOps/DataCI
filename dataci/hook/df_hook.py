@@ -13,11 +13,13 @@ from dataci.models.workspace import Workspace
 
 class DataFrameHook(object):
     @staticmethod
-    def read(dataset_identifier, **kwargs):
+    def read(dataset_identifier, **context):
         import pandas as pd
 
         dataset = Dataset.get(dataset_identifier)
         df_path = dataset.dataset_files
+        # Set the dataset as the input datasets
+        context['input_dataset'] = dataset
         return pd.read_csv(df_path)
 
     @staticmethod
@@ -28,7 +30,13 @@ class DataFrameHook(object):
         with NamedTemporaryFile('w', suffix='.csv', delete=False, dir=workspace.tmp_dir) as f:
             df.to_csv(f, index=False)
             dataset = Dataset(
-                name, dataset_files=f.name, yield_workflow=..., parent_dataset=...
+                name,
+                dataset_files=f.name,
+                yield_workflow=context['workflow'],
+                parent_dataset=context['input_dataset'],
             ).save()
+
+        # Set the dataset as the output datasets
+        context['output_dataset'] = dataset
 
         return dataset.identifier
