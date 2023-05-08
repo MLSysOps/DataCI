@@ -30,10 +30,11 @@ logger = logging.getLogger(__name__)
 
 class Stage(BaseModel, ABC):
     def __init__(
-            self, name: str, symbolize: str = None, **kwargs,
+            self, name: str, symbolize: str = None, params: dict = None, **kwargs,
     ) -> None:
         super().__init__(name, **kwargs)
         self.symbolize = symbolize
+        self.params = params or dict()
         self.create_date: 'Optional[datetime]' = None
         # Output is saved after the stage is run, this is for the descendant stages to use
         self._output = None
@@ -120,7 +121,10 @@ class Stage(BaseModel, ABC):
     @property
     def context(self):
         # Get context from contextvars, this will be set within the context of a models
-        return WORKFLOW_CONTEXT.get()
+        ctx = WORKFLOW_CONTEXT.get()
+        # update local context
+        ctx['params'].update(self.params)
+        return ctx
 
     @property
     def ancestors(self):

@@ -39,13 +39,31 @@ def config_ci_runs(**context):
 
 @stage()
 def run(job_configs, **context):
+    import re
     from dataci.models import Workflow
 
     ci_workflow_name = context['params']['name']
     for job_config in job_configs:
         ci_workflow = Workflow.get(ci_workflow_name)
-        # Set workflow running parameters
-        ci_workflow.params['config'] = job_config
+        # Set workflow running parameters, resolve variables
+        for k, v in ci_workflow.params.items():
+            # Locate variable
+            matched = re.match(r'{{(.*)}}', v)
+            if matched:
+                # Resolve variable
+                v = matched.group(1)
+                # TODO: Resolve variable
+                if v == 'config.workflow':
+                    v = job_config['workflow']
+                elif v == 'config.dataset':
+                    v = job_config['dataset']
+                elif v == 'config.dataset.version':
+                    v = job_config['dataset'].split('@')[1]
+                elif v == 'config.stage':
+                    v = job_config['stage']
+                else:
+                    raise ValueError(f'Fail to parse variable: {v}')
+            ci_workflow.params[k] = v
         ci_workflow()
 
 
