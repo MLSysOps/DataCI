@@ -3,7 +3,7 @@ on:
   dataset_publish: text_raw_train
   stage_publish: text_aug
 config:
-  workflow: testspace/build_text_dataset@latest
+  workflow: build_text_dataset@latest
   dataset: raw_dataset@*
   stage: text_aug@*
 jobs:
@@ -13,13 +13,12 @@ jobs:
       with:
         version: ${{ config.dataset.version }}
     - name: Data Quality Check
-      uses: official/data_qc@v1
+      uses: official/stages/data_qc@v1
     - name: Data-centric Benchmark
-      uses: official/dc_bench@v1
+      uses: official/stages/dc_bench@v1
       with:
         type: data_aug
         ml_task: text_classification
         pass_condition: metrics.acc > 0.75
     - name: Publish Dataset
-      run: |
-        dataci publish ${{ inputs[0] }}
+      run: dataci publish ${{ inputs[0] }}
