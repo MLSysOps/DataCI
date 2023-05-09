@@ -15,10 +15,10 @@ bash 0.prerequisites.sh
 
 ## Initialize DataCI
 
-1. Create Workspace
+1. Init DataCI
 
 ```shell
-python dataci/command/workspace.py use testspace
+python dataci/command/init.py init
 ```
 
 2. Connect Cloud Services
@@ -28,7 +28,20 @@ python dataci/command/connect.py s3 -k <your_s3_key> -p
 # Your password will be prompted to input
 ```
 
-## Obtain Sample Raw Data
+3. Create a workspace `testspace`
+
+```shell
+python dataci/command/workspace.py use testspace
+```
+
+4. Load some public data workflows
+```shell
+python dataci/command/workflow.py publish action_hub.data_qc:data_quality_check
+python dataci/command/workflow.py publish action_hub.ci_cd_trigger:trigger_ci_cd
+#python dataci/command/workflow.py publish action_hub.benchmark.dc_bench:data_centric_benchmark
+```
+
+## Check Sample Raw Data
 
 Assume we have sampled 20K raw data from online product database, and hand over these raw data to annotators for
 verify their product category which are filled by sellers and contains some noise. Now, the first batch of
@@ -50,11 +63,13 @@ The scripts for this section is in `1.1.publish_raw_data.sh`, you can run in one
 bash 1.1.publish_raw_data.sh
 ```
 
-Add this dataset into the data repository.
+Publish the text dataset from the s3 data file URL.
 
 ```shell
-python dataci/command/dataset.py save -n text_raw_raw s3://dataci-shared/text_cls_v1/train.csv
+python dataci/command/dataset.py publish -n text_raw_raw s3://dataci-shared/text_cls_v1/train.csv
 ```
+The dataset is automatically versioned as `text_raw_raw:1`,
+and saved in `testspace` workspace.
 
 ## 1.2 Build a dataset for text classification
 
@@ -69,21 +84,18 @@ python 1.2.build_text_classification_dataset_v1.py
 ```python
 from dataci.decorators.stage import stage
 from dataci.decorators.workflow import workflow
+from dataci.hooks.df_hook import DataFrameHook
 
 
 @stage()
-def get_dataset(**context):
-    from dataci.models import Dataset
-    import pandas as pd
-
+def data_read(**context):
     version = context['params'].get('version', None)
-    dataset = Dataset.get(name='text_cls_raw', version=version)
-    df = pd.read_csv(dataset.dataset_files)
+    df = DataFrameHook.read(dataset_identifier=f'text_raw_train@{version}')
     return df, 'product_name'
 
 
-@stage(symbolize='text_augmentation')
-def process(inputs):
+@stage()
+def text_aug(inputs):
     import augly.text as txtaugs
 
     df, text_col = inputs
@@ -100,35 +112,43 @@ def process(inputs):
 
 
 @stage()
-def save(inputs, **context):
-    from dataci.models import Dataset
-
-    if context['flag']['debug']:
-        print(f'Workflow output is {inputs}, skip saving.')
-        return
-    dataset = Dataset(
-        name=...,
-        dataset_files=...,
-        parent_dataset=...,
-    )
-    dataset.save()
+def data_save(inputs, **context):
+    return DataFrameHook.save(name='text_aug_dataset', df=inputs, **context)
 
 
-@workflow(name='c123', params={'version': 1}, schedule=['@event testspace.text_cls_raw dataset_publish success'])
+@workflow(
+   name='build_train_dataset', 
+   params={'version': 1},
+)
 def main():
-    get_dataset >> process >> save
+    data_read >> text_aug >> data_save
 ```
 
-Debug/test run the train data pipeline:
+Test the train data workflow:
+```python
+main = ...
+
+dataset_identifier = main()
+```
+
+The output DataFrame will be automatically saved as a temp dataset into the workspace.
+We can further check the temp dataset. 
+
+2. Quality Check for the Dataset
 
 ```python
-main()
+dataset_identifier = ...
+
+from dataci.models import Stage
+
+data_qc = Stage.get('official.data_quality_check@latest')
+try:
+    data_qc(dataset_identifier=dataset_identifier)
+except Exception as e:
+    print('Data Quality Check Failed!', e)
 ```
 
-The output `text_aug.csv` will be used as train dataset.
-
-2. Run training with the built train dataset v1
-   Now you can simply train a pre-trained BERT on this text classification dataset v1:
+4. Train using the Dataset
 
 ```shell
 python example/create_text_classification_dataset/train.py \
@@ -141,24 +161,17 @@ python example/create_text_classification_dataset/train.py \
 
 For demonstration purpose, we only train and validation the dataset for a few steps and obtain the results.
 
-3. Save data pipeline
+4. Publish data workflow
 
-You can now publish your data pipeline for a better management.
+It looks great for the data workflow, we can publish it to the workspace for knowledge sharing.
 
-```python
-train_data_pipeline.publish()
+```shell
+python dataci/command/workflow.py publish example.create_text_classification_dataset:main
 ```
 
-4. Publish first version of text dataset
+5. Publish first version of text dataset
 
-Run the published pipeline `train_data_pipeline`, its final output `text_aug.csv` will be
-automatically published as a dataset: `train_data_pipeline:text_aug`.
-
-```python
-train_data_pipeline()
-```
-
-# 2. Try with New Data Augmentation Method
+# 2. Let's automate the data checking process as a CI/CD pipeline
 
 The scripts for this section is in `2.try_with_new_data_augmentation_method.py`, you can run in one click with:
 
@@ -218,7 +231,7 @@ train_data_pipeline_v2()
 # [text_raw_train@v1] >>> train_data_pipeline@v2.run1 >>> [text_classification@v2]
 ```
 
-# 3. Try with more raw data
+# 3.Now let's use knowledge from teammates to improve the dataset
 
 The scripts for this section is in `3.try_with_more_raw_data.sh`, you can run in one click with:
 
@@ -256,7 +269,9 @@ dataci dataset update -n train_data_pipeline:text_aug
 # To run all pipeline versions, please add `--all`.
 ```
 
-# 4. Summary
+# 4. Try with more data
+
+# 5. Summary
 
 The scripts for this section is in `4.summary.sh`, you can run in one click with:
 

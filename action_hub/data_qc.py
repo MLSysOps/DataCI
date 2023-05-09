@@ -6,7 +6,7 @@ Email: yuanming.li@alibaba-inc.com
 Date: May 08, 2023
 """
 from dataci.decorators.stage import stage
-from dataci.hook.df_hook import DataFrameHook
+from dataci.hooks.df_hook import DataFrameHook
 
 
 @stage(name='official.data_qc')
