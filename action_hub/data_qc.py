@@ -6,12 +6,13 @@ Email: yuanming.li@alibaba-inc.com
 Date: May 08, 2023
 """
 from dataci.decorators.stage import stage
-from dataci.hooks.df_hook import DataFrameHook
 
 
 @stage(name='official.data_qc')
 def data_quality_check(dataset_identifier, **context):
     """Check dataset quality."""
+    from dataci.hooks.df_hook import DataFrameHook
+
     df = DataFrameHook.read(dataset_identifier, **context)
     # If data have duplicated rows, raise error
     if df.duplicated().any():

@@ -1,6 +1,6 @@
 import argparse
 
-from dataci.workspace import Workspace
+from dataci.models import Workspace
 
 
 def use(args):

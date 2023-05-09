@@ -101,14 +101,15 @@ class Workflow(BaseModel):
             # Execute the models from the root stage
             stages = nx.topological_sort(self.dag)
             # Skip the root stage, since it is a virtual stage
+            outputs = None
             for stage in stages:
                 self.logger.info(f'Executing stage: {stage}')
                 inputs = [t._output for t in stage.ancestors if t._output is not None]
-                stage(*inputs)
+                outputs = stage(*inputs)
                 self.logger.info(f'Finished stage: {stage}')
             # Get the output of the last stage
-            # TODO: support multiple outputs
-            return stages[-1]._output
+            # TODO: support outputs from different stages? or explicit set workflow output
+            return outputs
 
         # # Create a Run
         # run = Run(pipeline=self, run_num=self.get_next_run_num())

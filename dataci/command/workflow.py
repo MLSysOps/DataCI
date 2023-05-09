@@ -40,8 +40,8 @@ def publish(args):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    workflow = getattr(module, workflow_var)
-    if workflow is None or isinstance(workflow, Workflow):
+    workflow = getattr(module, workflow_var, None)
+    if workflow is None or not isinstance(workflow, Workflow):
         raise ValueError(f'Cannot find workflow variable: {workflow_var} at module {module_name}')
     workflow.publish()
 

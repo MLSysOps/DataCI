@@ -190,12 +190,12 @@ class Stage(BaseModel, ABC):
         # Copy the script path from save version dir to the workspace publish version dir
         publish_dir = self.workspace.stage_dir / str(config['name']) / config['version']
         save_dir = self.workspace.stage_dir / str(config['name']) / 'HEAD'
-        shutil.rmtree(publish_dir)
-        publish_dir.mkdir(parents=True, exist_ok=True)
+        if publish_dir.exists():
+            shutil.rmtree(publish_dir)
         shutil.copytree(save_dir, publish_dir)
 
         # Update the script path in the config
-        config['script_path'] = str(publish_dir / 'script.py')
+        config['script_path'] = str((publish_dir / 'script.py').relative_to(self.workspace.stage_dir))
         create_one_stage(config)
         return self.reload(config)
 

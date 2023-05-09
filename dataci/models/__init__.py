@@ -7,12 +7,16 @@ Date: Feb 20, 2023
 """
 import contextvars
 
-WORKFLOW_CONTEXT = contextvars.ContextVar('workflow_context', default={})
+WORKFLOW_CONTEXT = contextvars.ContextVar(
+    'workflow_context',
+    default={'params': dict()}
+)
 
+from .workspace import Workspace
 from .stage import Stage
 from .workflow import Workflow
 from .dataset import Dataset
 
 __all__ = [
-    'Dataset', 'Workflow', 'Stage', 'WORKFLOW_CONTEXT'
+    'Workspace', 'Dataset', 'Workflow', 'Stage', 'WORKFLOW_CONTEXT'
 ]
