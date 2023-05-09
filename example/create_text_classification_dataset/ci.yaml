@@ -20,5 +20,7 @@ jobs:
         type: data_aug
         ml_task: text_classification
         pass_condition: metrics.acc > 0.75
+    - name: Publish Workflow
+      run: dataci workflow publish ${{ inputs[0] }}
     - name: Publish Dataset
-      run: dataci publish ${{ inputs[0] }}
+      run: dataci dataset publish ${{ inputs[0] }}

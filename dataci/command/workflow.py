@@ -43,7 +43,7 @@ def publish(args):
     workflow = getattr(module, workflow_var, None)
     if workflow is None or not isinstance(workflow, Workflow):
         raise ValueError(f'Cannot find workflow variable: {workflow_var} at module {module_name}')
-    workflow.publish()
+    print(workflow.publish())
 
 
 if __name__ == '__main__':
