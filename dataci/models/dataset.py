@@ -82,19 +82,10 @@ class Dataset(BaseModel):
     @classmethod
     def from_dict(cls, config):
         # Build parent_dataset
-        if all(config['parent_dataset'].values()):
-            config['parent_dataset'] = {
-                'name': config['parent_dataset_name'], 'version': config['parent_dataset_version']
-            }
-        else:
+        if not all(config['parent_dataset'].values()):
             config['parent_dataset'] = None
         # Build yield_workflow
-        if all(config['yield_workflow'].values()):
-            config['yield_workflow'] = {
-                'workspace': config['workspace'], 'name': config['yield_workflow_name'],
-                'version': config['yield_workflow_version']
-            }
-        else:
+        if not all(config['yield_workflow'].values()):
             config['yield_workflow'] = None
         config['name'] = f'{config["workspace"]}.{config["name"]}'
         dataset_obj = cls(**config)

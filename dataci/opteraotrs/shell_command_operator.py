@@ -5,7 +5,6 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: May 08, 2023
 """
-import re
 
 from dataci.models import Stage
 
@@ -19,7 +18,7 @@ class ShellCommandOperator(Stage):
             params=params,
             **kwargs,
         )
-        self.command = command
+        self.params['command'] = command
 
     def run(self, *inputs, **kwargs):
         import subprocess
@@ -29,9 +28,6 @@ class ShellCommandOperator(Stage):
         # 2. Replace all variables with values
         # 3. Run command
 
-        groups = re.findall(r'\${{.*}}', self.command, re.M | re.I)
-        for group in groups:
-            var = group.strip('${').strip('}')
-            self.command = self.command.replace(group, eval(var))
-
-        subprocess.run(self.command, shell=True)
+        command = self.params['command']
+        print('Executing command: ', command)
+        subprocess.run(command, shell=True)

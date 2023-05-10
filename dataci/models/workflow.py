@@ -32,7 +32,7 @@ from ..config import DEFAULT_WORKSPACE
 from ..utils import hash_binary
 
 if TYPE_CHECKING:
-    from typing import List, Optional
+    from typing import List, Optional, Iterable
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ class Workflow(BaseModel):
         self._schedule = new_schedule
 
     @property
-    def stages(self):
+    def stages(self) -> 'Iterable[Stage]':
         return self.dag.nodes
 
     def validate(self):
@@ -254,13 +254,13 @@ class Workflow(BaseModel):
         config['version'] = None
         # Update create date
         config['timestamp'] = int(datetime.now().timestamp())
-        # Save the models
+        # Save the workflow
         if not exist_workflow(config['workspace'], config['name'], config['version']):
             create_one_workflow(config)
-            logger.info(f'Saved models: {self}')
+            logger.info(f'Saved workflows: {self}')
         else:
             update_one_workflow(config)
-            logger.info(f'Updated models: {self}')
+            logger.info(f'Updated workflows: {self}')
         return self.reload(config)
 
     def cache(self):
@@ -280,9 +280,24 @@ class Workflow(BaseModel):
         }
         fingerprint_bin = json.dumps(version_generate_config, sort_keys=True).encode('utf-8')
         config['version'] = hash_binary(fingerprint_bin)
-        create_one_workflow(config)
+        # Save the workflow
+        if not exist_workflow(config['workspace'], config['name'], config['version']):
+            create_one_workflow(config)
+        else:
+            update_one_workflow(config)
         self.reload(config)
-        logger.info(f'Cached models: {self}')
+        logger.info(f'Cached workflow: {self}')
+        return self
+
+    def patch(self, stage: Stage):
+        """Patch the new stage to the same name stage in workflow."""
+        patch_mapping = dict()
+        for s in self.stages:
+            if s.full_name == stage.full_name:
+                patch_mapping[s] = stage
+
+        # Relabel the graph
+        self.dag = nx.relabel_nodes(self.dag, patch_mapping, copy=True)
         return self
 
     @event(name='workflow_publish')
@@ -293,7 +308,7 @@ class Workflow(BaseModel):
         self.save()
         # Publish the used stages (only if the stage is not published)
         for stage in self.stages:
-            if stage.version is None:
+            if stage.version is None or stage.version == '':
                 stage.publish()
                 logger.info(f'Published stage: {stage}')
 

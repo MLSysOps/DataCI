@@ -40,7 +40,7 @@ def build_ci_workflow(config: dict):
             ) is not None:  # uses is a variable
                 var_name = matched.group(1)
                 if var_name == 'config.workflow':
-                    step = ExecuteWorkflowOperator(name=step_name, workflow_identifier=var_name)
+                    step = ExecuteWorkflowOperator(name=step_name, workflow_identifier=step_config['uses'])
                     # Update parameters
                     step.params.update(step_config.get('with', dict()))
                 else:
@@ -82,7 +82,12 @@ def build_ci_trigger_workflow(ci_config: dict):
         workflow_template.schedule += [f'@event {producer} {event} success']
 
     # Config params
-    workflow_template.params = ci_config['config']
+    workflow_template.params = {
+        'workflow': ci_config['config']['workflow'],
+        'dataset': ci_config['config']['dataset'],
+        'stage': ci_config['config']['stage'],
+        'ci_name': ci_config['name'],
+    }
 
     # Publish workflow
     workflow_template.publish()
