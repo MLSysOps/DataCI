@@ -236,6 +236,7 @@ def get_many_datasets(workspace, name, version=None):
                 WHERE  workspace = ?
                 AND    name GLOB ?
                 AND    version GLOB ?
+                AND    length(version) < 32
             )
             SELECT d.workspace,
                    d.name,
@@ -301,91 +302,3 @@ def get_next_version_id(workspace, name):
             return 1
         else:
             return result
-
-
-def get_many_dataset_update_plan(name):
-    with db_connection:
-        result_iter = db_connection.execute(
-            """
-            --- beginsql
-            WITH base AS 
-            (
-
-                SELECT  d.version
-                        ,parent_dataset_name
-                        ,parent_dataset_version
-                        ,yield_workflow_name
-                        ,yield_workflow_version
-                FROM    dataset d
-                WHERE   d.name GLOB ?
-            )
-            ,dataset_list AS 
-            (
-                SELECT  dataset.*
-                FROM    dataset
-                JOIN    (
-                            SELECT      parent_dataset_name
-                            FROM        base
-                            GROUP BY    parent_dataset_name
-                        ) cur_dataset
-                ON      cur_dataset.parent_dataset_name = name
-            )
-            ,workflow_list AS 
-            (
-                SELECT  workflow.*
-                FROM    workflow
-                JOIN    (
-                            SELECT      yield_workflow_name
-                            FROM        base
-                            GROUP BY    yield_workflow_name
-                        ) 
-                ON      yield_workflow_name = name
-            )
-            SELECT  dataset_list.name
-                    ,dataset_list.version
-                    ,dataset_list.yield_workflow_name
-                    ,dataset_list.yield_workflow_version
-                    ,dataset_list.log_message
-                    ,dataset_list.timestamp
-                    ,dataset_list.id_column
-                    ,dataset_list.size
-                    ,dataset_list.filename
-                    ,dataset_list.parent_dataset_name
-                    ,dataset_list.parent_dataset_version
-                    ,workflow_list.name
-                    ,workflow_list.version
-                    ,workflow_list.timestamp
-            FROM    dataset_list
-            CROSS JOIN workflow_list
-            LEFT JOIN base
-            ON      dataset_list.name = base.parent_dataset_name
-            AND     dataset_list.version = base.parent_dataset_version
-            AND     workflow_list.name = base.yield_workflow_name
-            AND     workflow_list.version = base.yield_workflow_version
-            WHERE   base.version IS NULL
-            ;
-            -- endsql
-            """,
-            (name,),
-        )
-
-    update_plans = list()
-    for result in result_iter:
-        name, version, yield_workflow_name, yield_workflow_version, log_message, timestamp, id_column, size, \
-        file_config, filename, parent_dataset_name, parent_dataset_version = result[:12]
-        dataset_dict = {
-            'name': name, 'version': version,
-            'yield_workflow': {'name': yield_workflow_name, 'version': yield_workflow_version},
-            'log_message': log_message, 'timestamp': timestamp, 'id_column': id_column, 'size': size,
-            'filename': filename, 'file_config': file_config,
-            'parent_dataset_name': parent_dataset_name, 'parent_dataset_version': parent_dataset_version,
-        }
-        name, version, timestamp = result[12:]
-        workflow_dict = {
-            'name': name, 'version': version, 'timestamp': timestamp,
-        }
-        update_plans.append({
-            'parent_dataset': dataset_dict,
-            'workflow': workflow_dict,
-        })
-    return update_plans

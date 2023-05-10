@@ -72,7 +72,7 @@ class Workflow(BaseModel):
     @property
     def context(self):
         return {
-            'params': self.params,
+            'params': self.params.copy(),
             'dag': self.dag,
             'flag': self.flag,
             'workflow': self,
