@@ -378,7 +378,7 @@ def get_next_workflow_version_id(workspace, name):
         cur = db_connection.cursor()
         cur.execute(
             """
-            SELECT COALESCE(MAX(version), 0) + 1
+            SELECT COALESCE(MAX(CAST(version AS INTEGER)), 0) + 1
             FROM   workflow
             WHERE  workspace=:workspace 
             AND    name=:name

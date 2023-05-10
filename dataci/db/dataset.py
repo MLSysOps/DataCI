@@ -289,7 +289,7 @@ def get_next_version_id(workspace, name):
     with db_connection:
         result_iter = db_connection.execute(
             """
-            SELECT COALESCE(MAX(version), 0) + 1
+            SELECT COALESCE(MAX(CAST(version AS INTEGER)), 0) + 1
             FROM   dataset
             WHERE  workspace = ?
             AND    name = ?
