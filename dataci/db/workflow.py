@@ -214,7 +214,7 @@ def get_one_workflow(workspace, name, version=None):
             'timestamp': workflow[3],
             'params': json.loads(workflow[4]),
             'flag': json.loads(workflow[5]),
-            'schedule': workflow[6].split(','),  # schedule is a list
+            'schedule': workflow[6].split(',') if workflow[6] != '' else list(),  # schedule is a list
             'dag': {
                 'edge': json.loads(workflow[7]),
             }
@@ -316,7 +316,7 @@ def get_many_workflow(workspace, name, version=None):
                 'timestamp': workflow[3],
                 'params': json.loads(workflow[4]),
                 'flag': json.loads(workflow[5]),
-                'schedule': workflow[6].split(','),  # schedule is a list
+                'schedule': workflow[6].split(',') if workflow[6] != '' else list(),  # schedule is a list
                 'dag': {
                     'edge': json.loads(workflow[7]),
                 }
@@ -368,7 +368,7 @@ def get_all_latest_workflow_schedule():
                 'workspace': workflow[0],
                 'name': workflow[1],
                 'version': workflow[2] if workflow[2] != '' else None,
-                'schedule': workflow[3].split(','),
+                'schedule': workflow[3].split(',') if workflow[3] != '' else list(),  # schedule is a list
             } for workflow in cur.fetchall()
         ]
 

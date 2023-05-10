@@ -36,7 +36,7 @@ class Dataset(BaseModel):
         r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|[a-f\d]{32}|\d+))?$', flags=re.IGNORECASE
     )
     LIST_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
-        r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|[a-f\d]{1,32}))?$', re.IGNORECASE
+        r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|[a-f\d]{1,32}|\*))?$', re.IGNORECASE
     )
 
     def __init__(

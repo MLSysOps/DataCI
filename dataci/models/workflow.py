@@ -28,6 +28,7 @@ from . import WORKFLOW_CONTEXT
 from .base import BaseModel
 from .stage import Stage
 # from dataci.run import Run
+from ..config import DEFAULT_WORKSPACE
 from ..utils import hash_binary
 
 if TYPE_CHECKING:
@@ -41,7 +42,7 @@ class Workflow(BaseModel):
         r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|[a-f\d]{32}|\d+))?$', flags=re.IGNORECASE
     )
     LIST_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
-        r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|[a-f\d]{1,32}))?$', re.IGNORECASE
+        r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|[a-f\d]{1,32}|\*))?$', re.IGNORECASE
     )
 
     def __init__(
@@ -60,7 +61,9 @@ class Workflow(BaseModel):
         # e.g., ['@daily', '@event producer name status']
         if isinstance(schedule, str):
             schedule = [schedule]
-        self.schedule = schedule or list()
+        schedule = schedule or list()
+        self._schedule = list()
+        self.schedule = schedule
         self.dag = nx.DiGraph()
         self.context_token = None
         self.create_date: 'Optional[datetime]' = datetime.now()
@@ -76,6 +79,27 @@ class Workflow(BaseModel):
             'input_dataset': None,  # Wait to be set by dataset read hook
             'output_dataset': None,  # Wait to be set by dataset save hook
         }
+
+    @property
+    def schedule(self):
+        return self._schedule.copy()
+
+    @schedule.setter
+    def schedule(self, new_schedule):
+        # append schedule producer name with workspace name
+        for i, s in enumerate(new_schedule):
+            if s.startswith('@event'):
+                if len(splits := s.split(' ')) == 4:
+                    producer_name, event_name, status = splits[1:]
+                    if '.' not in producer_name:
+                        # Add default workspace
+                        producer_name = '{}.{}'.format(DEFAULT_WORKSPACE, producer_name)
+                    new_schedule[i] = '@event {} {} {}'.format(producer_name, event_name, status)
+                else:
+                    raise ValueError('Invalid schedule expression: {}'.format(s))
+            else:
+                raise ValueError('Invalid schedule expression: {}'.format(s))
+        self._schedule = new_schedule
 
     @property
     def stages(self):
@@ -152,11 +176,7 @@ class Workflow(BaseModel):
         # Translate the schedule list to a list of event string
         schedule_list = list()
         for e in self.schedule:
-            if e.startswith('@event'):
-                # @event producer name status -> producer:name:status
-                schedule_list.append(':'.join(e.split(' ')[1:]))
-            else:
-                raise ValueError(f'Invalid event expression: {e}')
+            schedule_list.append(':'.join(e.split(' ')[1:]))
         return {
             'workspace': self.workspace.name,
             'name': self.name,

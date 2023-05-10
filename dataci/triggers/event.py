@@ -31,10 +31,10 @@ class Event(object):
             r = requests.get(f'http://{self.server_address}:{self.server_port}/live')
             if r.status_code == 200:
                 self._server_live = True
-                logger.info(f'DataCI server is live: {self.server_address}:{self.server_port}')
+                logger.debug(f'DataCI server is live: {self.server_address}:{self.server_port}')
             logger.debug(f'DataCI server response: {r.status_code}')
         except requests.exceptions.ConnectionError:
-            logger.error(f'DataCI server is not live: {self.server_address}:{self.server_port}')
+            logger.warning(f'DataCI server is not live: {self.server_address}:{self.server_port}')
 
     def __repr__(self):
         return f'<Event {self.producer}:{self.name}:{self.status}>'

@@ -19,7 +19,7 @@ class BaseModel(abc.ABC):
         r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|none|\d+))?$', flags=re.IGNORECASE
     )
     LIST_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
-        r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|none))?$', re.IGNORECASE
+        r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|none|\*))?$', re.IGNORECASE
     )
 
     def __init__(self, name, **kwargs):

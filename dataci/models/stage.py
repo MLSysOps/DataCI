@@ -121,7 +121,7 @@ class Stage(BaseModel, ABC):
     @property
     def context(self):
         # Get context from contextvars, this will be set within the context of a models
-        ctx = WORKFLOW_CONTEXT.get()
+        ctx = WORKFLOW_CONTEXT.get().copy()
         # update local context
         ctx['params'].update(self.params)
         return ctx
