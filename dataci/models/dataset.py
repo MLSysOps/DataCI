@@ -231,7 +231,7 @@ class Dataset(BaseModel):
         return cls.from_dict(dataset_dict)
 
     @classmethod
-    def find(cls, dataset_identifier=None, tree_view=False):
+    def find(cls, dataset_identifier=None, tree_view=False, all=False):
         """
         List dataset with optional dataset identifier to query.
 
@@ -243,6 +243,7 @@ class Dataset(BaseModel):
                     all matched versions of this dataset. Default to list all versions.
             tree_view (bool): View the queried dataset as a 3-level-tree, level 1 is dataset name, level 2 is split tag,
                 and level 3 is version.
+            all (bool): List all datasets. If False, only list published datasets. Default to False.
 
         Returns:
             A dict (tree_view=True, default) or a list (tree_view=False) of dataset information.
@@ -264,7 +265,7 @@ class Dataset(BaseModel):
         if version and '*' not in version:
             version += '*'
 
-        dataset_dict_list = get_many_datasets(workspace=workspace, name=name, version=version)
+        dataset_dict_list = get_many_datasets(workspace=workspace, name=name, version=version, all=all)
         dataset_list = list()
         for dataset_dict in dataset_dict_list:
             dataset_list.append(cls.from_dict(dataset_dict))

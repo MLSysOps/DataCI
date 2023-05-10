@@ -27,7 +27,7 @@ def publish(args):
     Command syntax:
         targets: dataset identifier, including workspace, dataset name and version.
     """
-    datasets = Dataset.find(dataset_identifier=args.targets, tree_view=False)
+    datasets = Dataset.find(dataset_identifier=args.targets, tree_view=False, all=True)
     if len(datasets) == 0:
         raise ValueError(f'No dataset found for {args.targets}')
     if len(datasets) > 1:

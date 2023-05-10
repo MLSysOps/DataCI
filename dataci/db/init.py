@@ -16,7 +16,6 @@ with db_connection:
     db_connection.executescript("""
     DROP TABLE IF EXISTS benchmark;
     DROP TABLE IF EXISTS run;
-    DROP TABLE IF EXISTS dataset_tag;
     DROP TABLE IF EXISTS dataset;
     DROP TABLE IF EXISTS workflow_dag_node;
     DROP TABLE IF EXISTS stage;
@@ -46,6 +45,7 @@ with db_connection:
         workspace   TEXT,
         name        TEXT,
         version     TEXT,
+        params      TEXT,
         script_path TEXT,
         timestamp   INTEGER,
         symbolize   TEXT,
@@ -92,16 +92,6 @@ with db_connection:
             REFERENCES dataset (workspace, name, version),
         PRIMARY KEY (workspace, name, version),
         UNIQUE (workspace, name, version)
-    );
-    
-    CREATE TABLE dataset_tag
-    (
-        dataset_name    TEXT,
-        dataset_version TEXT,
-        tag_name        TEXT,
-        tag_version     TEXT,
-        FOREIGN KEY (dataset_name, dataset_version) REFERENCES dataset (name, version),
-        PRIMARY KEY (tag_name, tag_version)
     );
 
     CREATE TABLE run

@@ -49,7 +49,7 @@ class PasswordPromptAction(argparse.Action):
             help=help)
 
     def __call__(self, parser, args, values, option_string=None):
-        password = getpass(prompt='Secret:')
+        password = getpass(prompt='Access Key Secret:')
         if len(password) == 0:
             password = None
         setattr(args, self.dest, password)
@@ -59,9 +59,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser('DataCI Cloud Service Connector')
     subparser = parser.add_subparsers()
     s3_parser = subparser.add_parser('s3', help='Connect S3')
-    s3_parser.add_argument('-k', '--key', type=str, help='Access ID for S3')
+    s3_parser.add_argument('-k', '--key', type=str, help='Access Key ID for S3')
     s3_parser.add_argument(
-        '-p', '--secret', action=PasswordPromptAction, type=str, help='Access key for S3'
+        '-p', '--secret', action=PasswordPromptAction, type=str, help='Access key Secret for S3'
     )
     s3_parser.add_argument('-u', '--endpoint-url', type=str, help='S3 endpoint url')
     s3_parser.set_defaults(func=s3)

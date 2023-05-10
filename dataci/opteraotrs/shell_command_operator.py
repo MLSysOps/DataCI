@@ -18,7 +18,8 @@ class ShellCommandOperator(Stage):
             params=params,
             **kwargs,
         )
-        self.params['command'] = command
+        if command:
+            self.params['command'] = command
 
     def run(self, *inputs, **kwargs):
         import subprocess

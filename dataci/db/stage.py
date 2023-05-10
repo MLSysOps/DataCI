@@ -5,18 +5,22 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: May 01, 2023
 """
+import json
+
 from . import db_connection
 
 
 def create_one_stage(stage_dict):
+    stage_dict = stage_dict.copy()
     stage_dict['version'] = stage_dict['version'] or ''
+    stage_dict['params'] = json.dumps(stage_dict['params'])
 
     with db_connection:
         cur = db_connection.cursor()
         cur.execute(
             """
-            INSERT INTO stage (workspace, name, version, script_path, timestamp, symbolize)
-            VALUES (:workspace, :name, :version, :script_path, :timestamp, :symbolize)
+            INSERT INTO stage (workspace, name, version, params, script_path, timestamp, symbolize)
+            VALUES (:workspace, :name, :version, :params, :script_path, :timestamp, :symbolize)
             """,
             stage_dict
         )
@@ -46,13 +50,15 @@ def exist_stage(workspace, name, version):
 
 
 def update_one_stage(stage_dict):
+    stage_dict = stage_dict.copy()
     stage_dict['version'] = stage_dict['version'] or ''
+    stage_dict['params'] = json.dumps(stage_dict['params'])
     with db_connection:
         cur = db_connection.cursor()
         cur.execute(
             """
             UPDATE stage
-            SET timestamp=:timestamp, symbolize=:symbolize
+            SET timestamp=:timestamp, params = :params, symbolize=:symbolize
             WHERE workspace=:workspace AND name=:name AND version=:version
             """,
             stage_dict
@@ -80,7 +86,7 @@ def get_one_stage(workspace, name, version=None):
             # Get the head version
             cur.execute(
                 """
-                SELECT workspace, name, version, script_path, timestamp, symbolize
+                SELECT workspace, name, version, params, script_path, timestamp, symbolize
                 FROM   stage 
                 WHERE  workspace=:workspace 
                 AND    name=:name
@@ -100,7 +106,7 @@ def get_one_stage(workspace, name, version=None):
             # Get the latest version
             cur.execute(
                 """
-                SELECT workspace, name, version, script_path, timestamp, symbolize
+                SELECT workspace, name, version, params, script_path, timestamp, symbolize
                 FROM   stage 
                 WHERE  workspace=:workspace 
                 AND    name=:name
@@ -117,7 +123,7 @@ def get_one_stage(workspace, name, version=None):
         elif version != '':
             cur.execute(
                 """
-                SELECT workspace, name, version, script_path, timestamp, symbolize
+                SELECT workspace, name, version, params, script_path, timestamp, symbolize
                 FROM   stage 
                 WHERE  workspace=:workspace 
                 AND    name=:name 
@@ -131,7 +137,15 @@ def get_one_stage(workspace, name, version=None):
             )
             po = cur.fetchone()
 
-    return dict(zip(['workspace', 'name', 'version', 'script_path', 'timestamp', 'symbolize'], po))
+    return {
+        'workspace': po[0],
+        'name': po[1],
+        'version': po[2],
+        'params': json.loads(po[3]),
+        'script_path': po[4],
+        'timestamp': po[5],
+        'symbolize': po[6],
+    }
 
 
 def get_many_stages(workspace, name, version=None):
@@ -143,7 +157,7 @@ def get_many_stages(workspace, name, version=None):
             # Get the head version
             cur.execute(
                 """
-                SELECT workspace, name, version, script_path, timestamp, symbolize
+                SELECT workspace, name, version, params, script_path, timestamp, symbolize
                 FROM   stage 
                 WHERE  workspace=:workspace 
                 AND    name=:name
@@ -163,7 +177,7 @@ def get_many_stages(workspace, name, version=None):
             # Get the latest version
             cur.execute(
                 """
-                SELECT workspace, name, version, script_path, timestamp, symbolize
+                SELECT workspace, name, version, params, script_path, timestamp, symbolize
                 FROM   stage 
                 WHERE  workspace=:workspace 
                 AND    name=:name
@@ -180,7 +194,7 @@ def get_many_stages(workspace, name, version=None):
         elif version != '':
             cur.execute(
                 """
-                SELECT workspace, name, version, script_path, timestamp, symbolize
+                SELECT workspace, name, version, params, script_path, timestamp, symbolize
                 FROM   stage 
                 WHERE  workspace=:workspace 
                 AND    name=:name 
@@ -194,7 +208,18 @@ def get_many_stages(workspace, name, version=None):
             )
             po = cur.fetchall()
 
-    return [dict(zip(['workspace', 'name', 'version', 'script_path', 'timestamp', 'symbolize'], p)) for p in po]
+    return [
+        {
+            'workspace': p[0],
+            'name': p[1],
+            'version': p[2],
+            'params': json.loads(p[3]),
+            'script_path': p[4],
+            'timestamp': p[5],
+            'symbolize': p[6],
+        }
+        for p in po
+    ]
 
 
 def get_next_stage_version_id(workspace, name):

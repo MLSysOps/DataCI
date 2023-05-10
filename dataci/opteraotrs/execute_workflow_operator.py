@@ -16,11 +16,13 @@ class ExecuteWorkflowOperator(Stage):
             params=params,
             **kwargs,
         )
-        self.params['workflow'] = workflow_identifier
+        if workflow_identifier is not ...:
+            self.params['workflow'] = workflow_identifier
 
     def run(self, **context):
         from dataci.models import Workflow
 
+        print(f'Execute workflow: {self.params["workflow"]}')
         workflow_obj = Workflow.get(self.params['workflow'])
         # set workflow params
         workflow_obj.params = context['params']

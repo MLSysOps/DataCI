@@ -50,18 +50,6 @@ def create_one_dataset(dataset_dict):
         )
 
 
-def create_dataset_tag(dataset_name, dataset_version, tag_name, tag_version):
-    with db_connection:
-        db_connection.execute(
-            """
-            INSERT INTO dataset_tag (dataset_name, dataset_version, tag_name, tag_version)
-            VALUES (?,?,?,?)
-            ;
-            """,
-            (dataset_name, dataset_version, tag_name, tag_version)
-        )
-
-
 def exists_dataset(workspace, name, version):
     with db_connection:
         cur = db_connection.cursor()
@@ -130,12 +118,6 @@ def get_one_dataset(workspace, name, version='latest'):
                 """
                 --beginsql
                 WITH selected_dataset AS (
-                    -- SELECT dataset_name    AS name,                      
-                    --        dataset_version AS version
-                    -- FROM  dataset_tag
-                    -- WHERE tag_name = ?
-                    -- AND   tag_version = ?
-                    -- UNION ALL
                     SELECT workspace
                          , name
                          , version
@@ -218,17 +200,11 @@ def get_one_dataset(workspace, name, version='latest'):
     }
 
 
-def get_many_datasets(workspace, name, version=None):
+def get_many_datasets(workspace, name, version=None, all=False):
     with db_connection:
-        dataset_po_iter = db_connection.execute("""
+        dataset_po_iter = db_connection.execute(f"""
             --beginsql
             WITH selected_dataset AS (
-                -- SELECT dataset_name    AS name,                      
-                --        dataset_version AS version
-                -- FROM  dataset_tag
-                -- WHERE tag_name GLOB ?
-                -- AND   tag_version GLOB ?
-                -- UNION ALL
                 SELECT workspace
                      , name
                      , version
@@ -236,7 +212,7 @@ def get_many_datasets(workspace, name, version=None):
                 WHERE  workspace = ?
                 AND    name GLOB ?
                 AND    version GLOB ?
-                AND    length(version) < 32
+                {"AND    length(version) < 32" if not all else ""}
             )
             SELECT d.workspace,
                    d.name,

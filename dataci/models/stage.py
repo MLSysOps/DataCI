@@ -75,6 +75,7 @@ class Stage(BaseModel, ABC):
             'name': self.name,
             'workspace': self.workspace.name,
             'version': self.version,
+            'params': self.params,
             'script': self.script,
             'timestamp': self.create_date.timestamp() if self.create_date else None,
             'symbolize': self.symbolize,
@@ -121,7 +122,7 @@ class Stage(BaseModel, ABC):
     @property
     def context(self):
         # Get context from contextvars, this will be set within the context of a models
-        ctx = WORKFLOW_CONTEXT.get().copy()
+        ctx = WORKFLOW_CONTEXT.get()
         # update local context
         ctx['params'].update(self.params)
         return ctx
@@ -149,6 +150,7 @@ class Stage(BaseModel, ABC):
     def reload(self, config):
         """Reload the stage from the config."""
         self.version = config['version']
+        self.params = config['params']
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
         # Manual set the script to the stage object, as the script is not available in the exec context
         self._script = config['script']
