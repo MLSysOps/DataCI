@@ -43,7 +43,7 @@ def data_save(inputs, **context):
 
 
 @workflow(
-    name='build_train_dataset',
+    name='build_text_dataset',
     params={'version': 1},
 )
 def main():

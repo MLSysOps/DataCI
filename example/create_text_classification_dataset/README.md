@@ -44,7 +44,7 @@ python dataci/server/main.py
 
 ```shell
 python dataci/command/stage.py publish action_hub.data_qc:data_quality_check
-#python dataci/command/stage.py publish action_hub.benchmark.dc_bench:data_centric_benchmark
+python dataci/command/stage.py publish action_hub.benchmark.dc_bench:data_centric_benchmark
 python dataci/command/workflow.py publish action_hub.ci_cd_trigger:trigger_ci_cd
 ```
 
@@ -135,20 +135,20 @@ def data_save(inputs, **context):
 
 
 @workflow(
-   name='build_train_dataset', 
+   name='build_text_dataset', 
    params={'version': 1},
 )
 def main():
     data_read >> text_aug >> data_save
 ```
 
-Save the pipeline definition files at `example/create_text_classification_dataset/build_train_dataset.py`.
+Save the pipeline definition files at `example/create_text_classification_dataset/build_text_dataset.py`.
 
 Test the train data workflow:
 
 ```python
 import random
-from example.create_text_classification_dataset.build_train_dataset import main
+from example.create_text_classification_dataset.build_text_dataset import main
 
 # Set seed for reproducibility
 random.seed(42)
@@ -175,15 +175,15 @@ except Exception as e:
     print('Data Quality Check Failed!', e)
 ```
 
-3. Train using the Dataset
+3. Dataset benchmark
 
-```shell
-python example/create_text_classification_dataset/train.py \
-  --train_dataset=train_data_pipeline/latest/runs/1/feat/text_aug.csv \
-  --test_dataset=../data/text_raw/val.csv \
-  -b4 \
-  --max_train_steps_per_epoch=20 \
-  --max_val_steps_per_epoch=20
+```python
+dataset_identifier = ...
+
+from dataci.models import Stage
+
+dc_benchmark = Stage.get('official.dc_bench@latest')
+benchmark_result = dc_benchmark(dataset_identifier=dataset_identifier)
 ```
 
 For demonstration purpose, we only train and validation the dataset for a few steps and obtain the results.
@@ -193,7 +193,7 @@ For demonstration purpose, we only train and validation the dataset for a few st
 It looks great for the data workflow, we can publish it to the workspace for knowledge sharing.
 
 ```shell
-python dataci/command/workflow.py publish example.create_text_classification_dataset.build_train_dataset:main
+python dataci/command/workflow.py publish example.create_text_classification_dataset.build_text_dataset:main
 ```
 
 5. Publish first version of text dataset
@@ -281,13 +281,23 @@ We combine 2.1 ~ 2.3 together and save the CI/CD workflow definition file at
 We can build and publish the CI/CD workflow with:
 
 ```shell
-python dataci/command/ci.py publish ci.yaml
+python dataci/command/ci.py publish example/create_text_classification_dataset/ci.yaml
 ```
 
 We can see two workflows related to this CI/CD workflow are published to the workspace:
 
-1. `text_dataset_ci_config` - the auto-search combination of workflow / dataset versions
-2. `text_dataset_ci` - the CI/CD workflow using the configured workflow / dataset versions
+1. `text_dataset_ci_trigger` - trigger CI/CD, and auto-search combination of workflow / dataset versions to perform
+   CI/CD jobs
+2. `text_dataset_ci` - the CI/CD job workflow using the configured workflow / dataset versions
+
+It takes about 1 minute for the CI/CD trigger in effect.  
+Or you can restart DataCI server to make it effective immediately:
+
+```shell
+# Go to the terminal runs DataCI server, press Ctrl+C to stop the server
+# Then run the following command to restart the server
+python dataci/server/main.py
+```
 
 # 3.Now let's use knowledge from teammates to improve the dataset
 
@@ -296,11 +306,17 @@ different data augmentation method to improve the model performance.
 
 ## 3.1 Write a second version train data pipeline
 
-We design a better data augmentation method for `train_data_pipeline_v2`:
+We design another text augmentation method:
 
 ```python
-@stage(inputs='text_raw_train', outputs='text_aug.csv')
-def text_augmentation(inputs):
+from dataci.decorators.stage import stage
+
+@stage()
+def text_aug(inputs):
+    import augly.text as txtaugs
+    
+    df, text_col = inputs
+
     transform = txtaugs.Compose(
         [
             txtaugs.InsertWhitespaceChars(p=0.5),
@@ -311,11 +327,21 @@ def text_augmentation(inputs):
             )
         ]
     )
-    inputs['product_name'] = inputs['product_name'].map(transform)
-    return inputs
-
-train_data_pipeline_v2 = Pipeline(name='train_data_pipeline', stages=[text_augmentation])
+    outputs = transform(df[text_col].tolist())
+    df[text_col] = outputs
+    return outputs
 ```
+
+Upon the new data augmentation method `text_aug` is published to the workspace, the CI/CD workflow will
+be automatically triggered:
+
+```python
+text_aug = ...
+
+text_aug.publish()
+```
+
+Note that you should save the `text_aug` stage in a file, otherwise publish will not work.
 
 ## 3.2 Test the pipeline v2 and publish
 

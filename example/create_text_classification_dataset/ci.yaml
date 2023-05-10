@@ -1,10 +1,10 @@
 name: text_dataset_ci
-on:
-  dataset_publish: text_raw_train
+"on":
+  dataset_publish: text_cls_raw
   stage_publish: text_aug
 config:
   workflow: build_text_dataset@latest
-  dataset: raw_dataset@*
+  dataset: text_cls_raw@*
   stage: text_aug@*
 jobs:
   steps:
@@ -21,6 +21,6 @@ jobs:
         ml_task: text_classification
         pass_condition: metrics.acc > 0.75
     - name: Publish Workflow
-      run: dataci workflow publish ${{ inputs[0] }}
+      run: dataci workflow publish ${{ config.workflow }}
     - name: Publish Dataset
-      run: dataci dataset publish ${{ inputs[0] }}
+      run: dataci dataset publish ${{ config.dataset }}
