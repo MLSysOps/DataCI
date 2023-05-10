@@ -7,3 +7,4 @@ requests==2.30.0
 fastapi==0.95.1
 networkx==3.1
 uvicorn==0.15.0
+click==8.1.3
