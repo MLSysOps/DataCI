@@ -6,3 +6,4 @@ s3fs==2023.5.0
 requests==2.30.0
 fastapi==0.95.1
 networkx==3.1
+uvicorn==0.15.0
