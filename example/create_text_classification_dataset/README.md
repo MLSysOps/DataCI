@@ -329,11 +329,12 @@ def text_aug(inputs):
     )
     outputs = transform(df[text_col].tolist())
     df[text_col] = outputs
-    return outputs
+    return df
 ```
 
-Upon the new data augmentation method `text_aug` is published to the workspace, the CI/CD workflow will
-be automatically triggered:
+Note that you should save the `text_aug` v2 in a file, otherwise stage publish will not work.
+
+## 3.2 Publish text augmentation method v2
 
 ```python
 text_aug = ...
@@ -341,33 +342,10 @@ text_aug = ...
 text_aug.publish()
 ```
 
-Note that you should save the `text_aug` stage in a file, otherwise publish will not work.
+Note that you should save the `text_aug` v2 in a file, otherwise stage publish will not work.
 
-## 3.2 Test the pipeline v2 and publish
-
-```python
-train_data_pipeline_v2()
-train_data_pipeline_v2.publish()
-```
-
-Now, let's check our pipeline `train_data_pipeline`:
-
-```shell
-python dataci/command/pipeline.py ls train_data_pipeline
-# train_data_pipeline
-# | - v1
-# |    | - run1
-# | - v2
-```
-
-## 3.3 Publish text classification dataset v2
-
-It is easy to update output dataset once our data pipeline have new version:
-
-```python
-train_data_pipeline_v2()
-# [text_raw_train@v1] >>> train_data_pipeline@v2.run1 >>> [text_classification@v2]
-```
+Upon the new data augmentation method `text_aug` is published to the workspace, the CI/CD workflow will
+be automatically triggered. You can check the output at terminal running DataCI server.
 
 # 4. Try with more data
 
@@ -377,35 +355,16 @@ The scripts for this section is in `3.try_with_more_raw_data.sh`, you can run in
 bash 3.try_with_more_raw_data.sh
 ```
 
-Our human annotators have finished the 2nd batch 10K data labelling. We publish the combined two batches of
-labeled raw data as v2:
+Our human annotators have finished the 2nd batch 10K data labelling. We publish the v2 20K raw dataset directly from S3
+file:
 
 ```shell
-# Download text_raw_v2
-cp -rf dataset/text_cls_v2 data/text_raw_v2/
+python dataci/command/dataset.py save -n text_cls_raw s3://dataci-shared/text_cls_v2/train.csv
+python dataci/command/dataset.py publish text_cls_raw@v2
 ```
 
-Publish raw data v2:
-
-```shell
-python dataci/command/dataset.py publish -n text_raw_train data/text_raw_v2/train.csv
-```
-
-We can easily update our text classification dataset:
-
-```shell
-dataci dataset update -n train_data_pipeline:text_aug
-# Searching changes...
-# - pairwise_raw@v1 -> pairwise_raw@v2
-# - train_data_pipeline -
-# - val_data_pipeline -
-# Found new verion of parent dataset: pairwise_raw@v2
-# Trigger dataset update
-# [D] pairwise_raw@v2[train] >>> train_data_pipeline@v2.run2 >>> [D] text_classification@v3[train]
-# Finish 1/1!
-# Run with latest data pipeline version only by default. 
-# To run all pipeline versions, please add `--all`.
-```
+As we have defined the CI/CD workflow, the workflow will be triggered automatically upon the new dataset is published.
+You can check the output at terminal running DataCI server.
 
 # 5. Summary
 
