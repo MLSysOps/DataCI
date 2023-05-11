@@ -34,6 +34,9 @@ def config_ci_runs(**context):
                     'workflow': w.identifier,
                     'dataset': d.identifier,
                 })
+    print(f'Find job configs:')
+    for job_config in job_configs:
+        print(job_config)
 
     return job_configs
 
@@ -61,6 +64,9 @@ def run(job_configs, **context):
                 value = job_config['dataset'].split('@')[1]
             elif match == 'config.stage':
                 value = job_config['stage']
+            elif match.startswith('steps.'):
+                # Runtime variable to be determined
+                value = '${' + match.split('.', maxsplit=1)[1] + '}'
             else:
                 raise ValueError(f'Fail to parse variable: {replaceable}')
             var = var.replace(replaceable, value)

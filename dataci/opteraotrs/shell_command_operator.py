@@ -5,7 +5,6 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: May 08, 2023
 """
-
 from dataci.models import Stage
 
 
@@ -21,8 +20,9 @@ class ShellCommandOperator(Stage):
         if command:
             self.params['command'] = command
 
-    def run(self, *inputs, **kwargs):
+    def run(self, *inputs, **context):
         import subprocess
+        import re
 
         # parse variables ${{ }} in command
         # 1. Locate all variables
@@ -30,5 +30,16 @@ class ShellCommandOperator(Stage):
         # 3. Run command
 
         command = self.params['command']
+        # Locate runtime variables
+        matched = re.findall(r'\$\{.*?}', command)
+        for var in matched:
+            var_name = var[2:-1].strip()
+            # get stage name
+            stage_name = var_name.split('.')[0]
+            # get variable value
+            value = context.get('outputs', dict()).get(stage_name, dict())
+            command = command.replace(var, value)
         print('Executing command: ', command)
-        subprocess.run(command, shell=True)
+        ret = subprocess.run(command, shell=True)
+        if ret.returncode != 0:
+            raise Exception(f'Failed to execute command: {command}')

@@ -68,6 +68,8 @@ class Workflow(BaseModel):
         self.context_token = None
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.logger = logging.getLogger(__name__)
+        # set during runtime
+        self._outputs = dict()
 
     @property
     def context(self):
@@ -78,6 +80,7 @@ class Workflow(BaseModel):
             'workflow': self,
             'input_dataset': None,  # Wait to be set by dataset read hook
             'output_dataset': None,  # Wait to be set by dataset save hook
+            'outputs': self._outputs,
         }
 
     @property
@@ -130,26 +133,11 @@ class Workflow(BaseModel):
                 self.logger.info(f'Executing stage: {stage}')
                 inputs = [t._output for t in stage.ancestors if t._output is not None]
                 outputs = stage(*inputs)
-                self.logger.info(f'Finished stage: {stage}')
+                # Record output
+                self.context['outputs'][stage.name] = outputs
             # Get the output of the last stage
             # TODO: support outputs from different stages? or explicit set workflow output
             return outputs
-
-        # # Create a Run
-        # run = Run(pipeline=self, run_num=self.get_next_run_num())
-        # run.prepare()
-        # with cwd(run.workdir):
-        #     # dvc repo
-        #     cmd = ['dvc', 'repro', str(run.workdir / 'dvc.yaml')]
-        #     subprocess.call(cmd)
-        #     if auto_save and self.is_published:
-        #         run.save()
-        #         self.logger.info(
-        #             f'{",".join(map(str, self.inputs))} '
-        #             f'>>> {str(run)} '
-        #             f'>>> {",".join(map(str, self.outputs))}')
-        #
-        # return run
 
     def __enter__(self):
         self.context_token = WORKFLOW_CONTEXT.set(self.context)

@@ -72,6 +72,7 @@ def build_ci_workflow(config: dict):
 def build_ci_trigger_workflow(ci_config: dict):
     # Obtain CI config workflow template
     workflow_template = Workflow.get('official.ci_cd_trigger@latest')
+    logger.info(f'Use CI/CD trigger workflow template {workflow_template}')
 
     # Config workflow name
     workflow_template.name = ci_config['name'] + '_trigger'

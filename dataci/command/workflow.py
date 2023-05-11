@@ -42,9 +42,12 @@ def ls(targets):
 
 @workflow.command()
 @click.argument(
-    'targets', type=str, required=True,
+    'module_path', type=str, required=True,
 )
-def publish(targets):
+@click.argument(
+    'workflow_var', type=str, required=False,
+)
+def publish(module_path, workflow_var):
     """Publish a workflow.
 
     Commands:
@@ -52,11 +55,23 @@ def publish(targets):
              For example, your workflow wf_1 is written at file "dir1/dir2/file.py", the target is:
              "dir1.dir2.file:wf_1"
     """
-    module_name, workflow_var = targets.split(':')
+    if workflow_var is None:
+        # module path is a workflow_identifier
+        workflows = Workflow.find(module_path)
+        if len(workflows) == 0:
+            raise ValueError(f'Cannot find workflow with identifier: {module_path}')
+        elif len(workflows) > 1:
+            raise ValueError(f'Find multiple workflows with identifier.'
+                             f'Please specify workflow variable name from one of them:\n'
+                             + "\n".join(workflows))
+        workflow_obj = workflows[0]
+        click.echo(workflow_obj.publish())
+        return
 
-    spec = importlib.util.find_spec(module_name)
+    module_name = f'__{workflow_var}__'
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
     if spec is None:
-        raise ValueError(f'Cannot find module with name: {module_name}')
+        raise ValueError(f'Cannot find module with path: {module_path}')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
