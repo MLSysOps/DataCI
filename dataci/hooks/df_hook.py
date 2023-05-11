@@ -28,7 +28,7 @@ class DataFrameHook(object):
         workspace = Workspace(workspace)
         # Save tmp dataset files to workspace tmp dir
         with NamedTemporaryFile('w', suffix='.csv', delete=False, dir=workspace.tmp_dir) as f:
-            df.to_csv(f, index=False)
+            df.to_csv(f, index=False, line_terminator='\n')
             dataset = Dataset(
                 name,
                 dataset_files=f.name,
