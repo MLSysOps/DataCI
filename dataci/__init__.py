@@ -5,4 +5,4 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Feb 20, 2023
 """
-
+__version__ = '0.0.1'

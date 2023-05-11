@@ -52,5 +52,9 @@ def shutdown_event():
     scheduler.join()
 
 
-if __name__ == '__main__':
+def main():
     uvicorn.run(app, host=SERVER_ADDRESS, port=SERVER_PORT)
+
+
+if __name__ == '__main__':
+    main()
