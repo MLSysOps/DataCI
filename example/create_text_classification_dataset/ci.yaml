@@ -23,4 +23,4 @@ jobs:
     - name: Publish Workflow
       run: dataci workflow publish ${{ config.workflow }}
     - name: Publish Dataset
-      run: dataci dataset publish ${{ config.dataset }}
+      run: dataci dataset publish ${{ steps.Execute_Workflow.output }}

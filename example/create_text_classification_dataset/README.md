@@ -13,39 +13,47 @@ The scripts for this section is in `0.prerequisites.sh`, you can run in one clic
 bash 0.prerequisites.sh
 ```
 
-## Initialize DataCI
+## 0.1 Initialize DataCI
+
+One-click initialization and start DataCI:
+
+```shell
+dataci standalone
+```
+
+We also provide a step-by-step initialization:
 
 1. Init DataCI
 
 ```shell
-python dataci/command/init.py init
+dataci init
 ```
 
 2. Connect Cloud Services
 
 ```shell
-python dataci/command/connect.py s3 -k <your_s3_key> -p
+dataci connect s3 -k <your_s3_key> -p
 # Your password will be prompted to input
 ```
 
 3. Create a workspace `testspace`
 
 ```shell
-python dataci/command/workspace.py use testspace
+dataci workspace use testspace
 ```
 
 4. Start DataCI server
 
 ```shell
-python dataci/server/main.py
+dataci start
 ```
 
-6. Load some public data stages and workflows
+## 1.2 Publish official stages and workflows
 
 ```shell
-python dataci/command/stage.py publish action_hub.data_qc:data_quality_check
-python dataci/command/stage.py publish action_hub.benchmark.dc_bench:data_centric_benchmark
-python dataci/command/workflow.py publish action_hub.ci_cd_trigger:trigger_ci_cd
+dataci stage publish action_hub/data_qc.py data_quality_check
+dataci stage publish action_hub/benchmark/dc_bench.py data_centric_benchmark
+dataci workflow publish action_hub/ci_cd_trigger.py trigger_ci_cd
 ```
 
 ## Check Sample Raw Data
@@ -62,6 +70,8 @@ This dataset contains train and val splits. Each split contains a CSV file with 
 
 # 1. Build Text Classification Dataset
 
+Go to `example/create_text_classification_dataset` folder.
+
 ## 1.1 Publish raw data
 
 The scripts for this section is in `1.1.publish_raw_data.sh`, you can run in one click with:
@@ -75,13 +85,13 @@ Publish the text dataset from the s3 data file URL.
 Save the dataset to `testspace` workspace with name `text_raw_raw`:
 
 ```shell
-python dataci/command/dataset.py save -n text_cls_raw s3://dataci-shared/text_cls_v1/train.csv
+dataci dataset save -n text_cls_raw s3://dataci-shared/text_cls_v1/train.csv
 ```
 
 And publish the just saved dataset using its identifier:
 
 ```shell
-python dataci/command/dataset.py publish text_cls_raw@1b
+dataci dataset publish text_cls_raw@1b
 ```
 
 The dataset is automatically versioned as `text_cls_raw@1`.
@@ -147,8 +157,10 @@ Save the pipeline definition files at `example/create_text_classification_datase
 Test the train data workflow:
 
 ```python
+# workflow 'main' from previous code
+main = ...
+
 import random
-from example.create_text_classification_dataset.build_text_dataset import main
 
 # Set seed for reproducibility
 random.seed(42)
@@ -163,6 +175,7 @@ We can further check the temp dataset.
 2. Quality Check for the Dataset
 
 ```python
+# dataset_identifier from previous code
 dataset_identifier = ...
 
 from dataci.models import Stage
@@ -178,6 +191,7 @@ except Exception as e:
 3. Dataset benchmark
 
 ```python
+# dataset_identifier from previous code
 dataset_identifier = ...
 
 from dataci.models import Stage
@@ -193,10 +207,15 @@ For demonstration purpose, we only train and validation the dataset for a few st
 It looks great for the data workflow, we can publish it to the workspace for knowledge sharing.
 
 ```shell
-python dataci/command/workflow.py publish example.create_text_classification_dataset.build_text_dataset:main
+# Make sure you are in the example/create_text_classification_dataset folder
+dataci workflow publish build_text_dataset.py main
 ```
 
 5. Publish first version of text dataset
+
+```shell
+dataci dataset publish text_aug_dataset@d6
+```
 
 # 2. Let's automate the data checking process as a CI/CD pipeline
 
@@ -250,7 +269,7 @@ are passed through the `config`. Therefore, we define a CI/CD workflow same as i
 2. Data Quality Check using the `official.data_qc` stage
 3. Data-centric Benchmark using the `official.dc_bench` stage
 4. Publish the workflow `${{ config.workflow }}` to the workspace
-5. Publish the dataset `${{ config.dataset.name }}` to the workspace
+5. Publish the dataset from Step Execute Workflow output `${{ steps.Execute_Workflow.output }}` to the workspace
 
 ```yaml
 jobs:
@@ -270,7 +289,7 @@ jobs:
     - name: Publish Workflow
       run: dataci workflow publish ${{ config.workflow }}
     - name: Publish Dataset
-      run: dataci dataset publish ${{ config.dataset.name }}
+      run: dataci dataset publish ${{ steps.Execute_Workflow.output }}
 ```
 
 We combine 2.1 ~ 2.3 together and save the CI/CD workflow definition file at
@@ -281,7 +300,7 @@ We combine 2.1 ~ 2.3 together and save the CI/CD workflow definition file at
 We can build and publish the CI/CD workflow with:
 
 ```shell
-python dataci/command/ci.py publish example/create_text_classification_dataset/ci.yaml
+dataci ci publish ci.yaml
 ```
 
 We can see two workflows related to this CI/CD workflow are published to the workspace:
@@ -296,7 +315,7 @@ Or you can restart DataCI server to make it effective immediately:
 ```shell
 # Go to the terminal runs DataCI server, press Ctrl+C to stop the server
 # Then run the following command to restart the server
-python dataci/server/main.py
+dataci start
 ```
 
 # 3.Now let's use knowledge from teammates to improve the dataset
@@ -336,10 +355,8 @@ Note that you should save the `text_aug` v2 in a file, otherwise stage publish w
 
 ## 3.2 Publish text augmentation method v2
 
-```python
-text_aug = ...
-
-text_aug.publish()
+```shell
+dataci stage publish text_aug_stage_v2.py text_aug
 ```
 
 Note that you should save the `text_aug` v2 in a file, otherwise stage publish will not work.
@@ -359,8 +376,8 @@ Our human annotators have finished the 2nd batch 10K data labelling. We publish 
 file:
 
 ```shell
-python dataci/command/dataset.py save -n text_cls_raw s3://dataci-shared/text_cls_v2/train.csv
-python dataci/command/dataset.py publish text_cls_raw@v2
+dataci dataset save -n text_cls_raw s3://dataci-shared/text_cls_v2/train.csv
+dataci dataset publish text_cls_raw@2d
 ```
 
 As we have defined the CI/CD workflow, the workflow will be triggered automatically upon the new dataset is published.
@@ -381,7 +398,7 @@ Luckily, when we're developing our data pipelines, DataCI helps in managing and 
 ## 4.1 How many datasets are built?
 
 ```shell
-python dataci/command/dataset.py ls
+dataci dataset ls
 
 pairwise_raw
 |  [train] <<< Manual Upload
@@ -437,7 +454,7 @@ View detailed compare result at https://localhost:8888/dataset/text_classificati
 ## 4.3 How many pipelines are built?
 
 ```shell
-python dataci/command/pipeline.py ls
+dataci workflow ls
 
 train_data_pipeline
 text_classification[train] <<< train_data_pipeline <<< pairwise_raw[train]
