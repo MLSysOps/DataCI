@@ -5,6 +5,7 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Feb 20, 2023
 """
+
 import click
 
 import dataci
@@ -41,6 +42,7 @@ def standalone():
     from dataci.config import init as init_config
     from dataci.connector.s3 import connect as s3_connect
     from dataci.models import Workspace
+    from dataci.server.main import main
 
     click.echo('Initializing DataCI...')
     init_config()
@@ -68,6 +70,9 @@ def standalone():
     workspace_name = click.prompt(
         'Workspace name', type=str, default='workspace', show_default=True, confirmation_prompt=False)
     Workspace(workspace_name).use()
+
+    click.echo('Start DataCI server...')
+    main()
 
 
 cli.add_command(dataset.dataset)

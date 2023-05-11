@@ -145,7 +145,7 @@ class Stage(BaseModel, ABC):
         return self.add_downstream(other)
 
     def __repr__(self):
-        return f'{self.__class__.__name__}(name={self.workspace.name}.{self.name})'
+        return f'{self.__class__.__name__}(name={self.workspace.name}.{self.name}@{self.version})'
 
     def reload(self, config):
         """Reload the stage from the config."""
@@ -210,10 +210,10 @@ class Stage(BaseModel, ABC):
         return stage
 
     @classmethod
-    def find(cls, stage_identifier, tree_view=False):
+    def find(cls, stage_identifier, tree_view=False, all=False):
         """Find the stage from the workspace."""
         workspace, name, version = cls.parse_data_model_list_identifier(stage_identifier)
-        stage_configs = get_many_stages(workspace, name, version)
+        stage_configs = get_many_stages(workspace, name, version, all=all)
         stages = [cls.from_dict(stage_config) for stage_config in stage_configs]
         if tree_view:
             stage_dict = defaultdict(dict)

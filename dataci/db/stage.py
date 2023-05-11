@@ -148,7 +148,7 @@ def get_one_stage(workspace, name, version=None):
     }
 
 
-def get_many_stages(workspace, name, version=None):
+def get_many_stages(workspace, name, version=None, all=False):
     # replace None with '', since None will lead to issues in SQL
     version = version or ''
     with db_connection:
@@ -193,12 +193,13 @@ def get_many_stages(workspace, name, version=None):
             po = cur.fetchall()
         elif version != '':
             cur.execute(
-                """
+                f"""
                 SELECT workspace, name, version, params, script_path, timestamp, symbolize
                 FROM   stage 
                 WHERE  workspace=:workspace 
                 AND    name=:name 
                 AND    version GLOB :version
+                {"AND    version <> ''" if not all else ''}
                 """,
                 {
                     'workspace': workspace,

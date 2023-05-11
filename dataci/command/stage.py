@@ -20,7 +20,7 @@ def stage():
 
 @stage.command()
 @click.argument(
-    'targets', type=str, required=False, default=None,
+    'targets', type=str, nargs=2
 )
 def publish(targets):
     """Publish a stage.
@@ -31,11 +31,12 @@ def publish(targets):
             For example, your workflow stage_1 is written at file "dir1/dir2/file.py", the target is:
             "dir1.dir2.file:stage_1".
     """
-    module_name, workflow_var = targets.split(':')
+    module_path, workflow_var = targets
 
-    spec = importlib.util.find_spec(module_name)
+    module_name = f'__{workflow_var}__'
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
     if spec is None:
-        raise ValueError(f'Cannot find module with name: {module_name}')
+        raise ValueError(f'Cannot find module with path: {module_path}')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
