@@ -19,7 +19,7 @@ def workflow():
 
 
 @workflow.command()
-@click.argument('targets', type=str, nargs='?', default=None)
+@click.argument('targets', type=str, required=False, default=None)
 def ls(targets):
     """List workflow.
 
@@ -42,7 +42,7 @@ def ls(targets):
 
 @workflow.command()
 @click.argument(
-    'targets', type=str, nargs='?', default=None
+    'targets', type=str, required=True,
 )
 def publish(targets):
     """Publish a workflow.

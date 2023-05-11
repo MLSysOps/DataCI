@@ -20,7 +20,7 @@ def stage():
 
 @stage.command()
 @click.argument(
-    'targets', type=str, nargs='?', default=None,
+    'targets', type=str, required=False, default=None,
 )
 def publish(targets):
     """Publish a stage.
