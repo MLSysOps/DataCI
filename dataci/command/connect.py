@@ -22,13 +22,13 @@ def connect():
 @click.option('-k', '--key', type=str, help='Access Key ID for S3')
 @click.password_option(
     '-p', '--secret', prompt=True, hide_input=True,
-    confirmation_prompt=True, help='Access key Secret for S3'
+    confirmation_prompt=False, help='Access key Secret for S3'
 )
 @click.option('-u', '--endpoint-url', type=str, help='S3 endpoint url')
-def s3(args):
+def s3(key, secret, endpoint_url):
     """CLI for connect to S3."""
     s3_connect(
-        key=args.key,
-        secret=args.secret,
-        endpoint_url=args.endpoint_url,
+        key=key,
+        secret=secret,
+        endpoint_url=endpoint_url,
     )
