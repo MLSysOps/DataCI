@@ -19,7 +19,7 @@ class DataFrameHook(object):
         dataset = Dataset.get(dataset_identifier)
         df_path = dataset.dataset_files
         # Set the dataset as the input datasets
-        context['input_dataset'] = dataset
+        context['input_dataset'].append(dataset)
         return pd.read_csv(df_path)
 
     @staticmethod
@@ -28,12 +28,12 @@ class DataFrameHook(object):
         workspace = Workspace(workspace)
         # Save tmp dataset files to workspace tmp dir
         with NamedTemporaryFile('w', suffix='.csv', delete=False, dir=workspace.tmp_dir) as f:
-            df.to_csv(f, index=False, line_terminator='\n')
+            df.to_csv(f, index=False)
             dataset = Dataset(
                 name,
                 dataset_files=f.name,
                 yield_workflow=context['workflow'],
-                parent_dataset=context['input_dataset'],
+                parent_dataset=context['input_dataset'][0] if context['input_dataset'] else None,
             ).save()
 
         # Set the dataset as the output datasets

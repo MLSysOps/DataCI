@@ -70,6 +70,8 @@ class Workflow(BaseModel):
         self.logger = logging.getLogger(__name__)
         # set during runtime
         self._outputs = dict()
+        self._input_dataset = list()
+        self._output_dataset = list()
 
     @property
     def context(self):
@@ -78,8 +80,8 @@ class Workflow(BaseModel):
             'dag': self.dag,
             'flag': self.flag,
             'workflow': self,
-            'input_dataset': None,  # Wait to be set by dataset read hook
-            'output_dataset': None,  # Wait to be set by dataset save hook
+            'input_dataset': self._input_dataset,  # Wait to be set by dataset read hook
+            'output_dataset': self._output_dataset,  # Wait to be set by dataset save hook
             'outputs': self._outputs,
         }
 

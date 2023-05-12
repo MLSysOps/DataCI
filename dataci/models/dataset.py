@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 
 
 class Dataset(BaseModel):
-
     VERSION_PATTERN = re.compile(r'latest|[a-f\d]{32}|\d+', flags=re.IGNORECASE)
     GET_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
         r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|[a-f\d]{32}|\d+))?$', flags=re.IGNORECASE
@@ -75,7 +74,9 @@ class Dataset(BaseModel):
         self.create_date: 'Optional[datetime]' = None
         # TODO: improve this get size of dataset
         if self.dataset_files and self.dataset_files.suffix == '.csv':
-            self.size = len(pd.read_csv(self.dataset_files))
+            with open(self.dataset_files) as f:
+                print(self.dataset_files)
+                self.size = sum(1 for _ in f) - 1  # exclude header
         else:
             self.size = None
 
