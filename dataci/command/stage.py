@@ -43,4 +43,4 @@ def publish(targets):
     stage = getattr(module, workflow_var, None)
     if stage is None or not isinstance(stage, Stage):
         raise ValueError(f'Cannot find stage variable: {workflow_var} at module {module_name}')
-    stage.publish()
+    click.echo(stage.publish().identifier)

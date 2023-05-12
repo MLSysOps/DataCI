@@ -58,7 +58,7 @@ def ls(targets, all):
     """
     List all datasets or a specific dataset.
     """
-    dataset_version_dict = Dataset.find(dataset_identifier=targets, all=all)
+    dataset_version_dict = Dataset.find(dataset_identifier=targets, tree_view=True, all=all)
 
     for dataset_name, version_dict in dataset_version_dict.items():
         print(dataset_name)
@@ -68,6 +68,6 @@ def ls(targets, all):
             )
         for version, dataset in version_dict.items():
             print(
-                f'|- {version[:7]}\t{dataset.yield_pipeline or "N.A."}\t\t{dataset.parent_dataset or "N.A."}\t\t'
+                f'|- {version[:7]}\t{dataset.yield_workflow or "N.A."}\t\t{dataset.parent_dataset or "N.A."}\t\t'
                 f'{dataset.size or "N.A."}\t{dataset.create_date.strftime("%Y-%m-%d %H:%M:%S")}'
             )

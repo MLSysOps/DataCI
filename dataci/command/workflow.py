@@ -34,9 +34,14 @@ def ls(targets):
             click.echo(
                 f'|  Version\tCreate time'
             )
-        for version, pipeline in version_dict.items():
+        for version, workflow in version_dict.items():
+            create_time = workflow.create_date
+            if create_time is not None:
+                create_time = create_time.strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                create_time = 'N.A.'
             click.echo(
-                f'|- {version[:7]}\t{pipeline.create_date.strftime("%Y-%m-%d %H:%M:%S")}'
+                f'|- {(version or "")[:7]}\t{create_time}'
             )
 
 
@@ -65,7 +70,7 @@ def publish(module_path, workflow_var):
                              f'Please specify workflow variable name from one of them:\n'
                              + "\n".join(workflows))
         workflow_obj = workflows[0]
-        click.echo(workflow_obj.publish())
+        click.echo(workflow_obj.publish().identifier)
         return
 
     module_name = f'__{workflow_var}__'
@@ -78,4 +83,4 @@ def publish(module_path, workflow_var):
     workflow = getattr(module, workflow_var, None)
     if workflow is None or not isinstance(workflow, Workflow):
         raise ValueError(f'Cannot find workflow variable: {workflow_var} at module {module_name}')
-    click.echo(workflow.publish())
+    click.echo(workflow.publish().identifier)

@@ -68,7 +68,7 @@ def standalone():
 
     click.echo('Create a default workspace...')
     workspace_name = click.prompt(
-        'Workspace name', type=str, default='workspace', show_default=True, confirmation_prompt=False)
+        'Workspace name', type=str, default='testspace', show_default=True, confirmation_prompt=False)
     Workspace(workspace_name).use()
 
     click.echo('Start DataCI server...')
