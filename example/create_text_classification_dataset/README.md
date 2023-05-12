@@ -56,7 +56,11 @@ dataci stage publish action_hub/benchmark/dc_bench.py data_centric_benchmark
 dataci workflow publish action_hub/ci_cd_trigger.py trigger_ci_cd
 ```
 
-## Check Sample Raw Data
+# 1. Build Text Classification Dataset
+
+Go to `example/create_text_classification_dataset` folder.
+
+## 1.1 Check Sample Raw Data
 
 Assume we have sampled 20K raw data from online product database, and hand over these raw data to annotators for
 verify their product category which are filled by sellers and contains some noise. Now, the first batch of
@@ -68,16 +72,12 @@ This dataset contains train and val splits. Each split contains a CSV file with 
 `id`, `product_name` and `category_lv3`. We are going to build a pipeline to classify the product category
 (`category_lv3`) based on its dirty `product_name`.
 
-# 1. Build Text Classification Dataset
-
-Go to `example/create_text_classification_dataset` folder.
-
-## 1.1 Publish raw data
+## 1.2 Publish raw data
 
 The scripts for this section is in `1.1.publish_raw_data.sh`, you can run in one click with:
 
 ```
-bash 1.1.publish_raw_data.sh
+bash 1.2.publish_raw_data.sh
 ```
 
 Publish the text dataset from the s3 data file URL.
@@ -96,12 +96,12 @@ dataci dataset publish text_cls_raw@1b
 
 The dataset is automatically versioned as `text_cls_raw@1`.
 
-## 1.2 Build a dataset for text classification
+## 1.3 Build a dataset for text classification
 
-The scripts for this section is in `1.2.build_text_classification_dataset_v1.py`, you can run in one click with:
+The scripts for this section is in `1.3.build_text_classification_dataset.py`, you can run in one click with:
 
 ```
-python 1.2.build_text_classification_dataset_v1.py
+python 1.3.build_text_classification_dataset.py
 ```
 
 1. Build train dataset v1
@@ -116,7 +116,7 @@ def data_read(**context):
     from dataci.hooks.df_hook import DataFrameHook
 
     version = context['params'].get('version', None)
-    df = DataFrameHook.read(dataset_identifier=f'text_cls_raw@{version}')
+    df = DataFrameHook.read(dataset_identifier=f'text_cls_raw@{version}', **context)
     return df, 'product_name'
 
 
@@ -315,6 +315,7 @@ Or you can restart DataCI server to make it effective immediately:
 ```shell
 # Go to the terminal runs DataCI server, press Ctrl+C to stop the server
 # Then run the following command to restart the server
+# If the server is run at the background, you can use `ps aux | grep "dataci start"` to find the process id and kill it
 dataci start
 ```
 
@@ -366,12 +367,6 @@ be automatically triggered. You can check the output at terminal running DataCI 
 
 # 4. Try with more data
 
-The scripts for this section is in `3.try_with_more_raw_data.sh`, you can run in one click with:
-
-```
-bash 3.try_with_more_raw_data.sh
-```
-
 Our human annotators have finished the 2nd batch 10K data labelling. We publish the v2 20K raw dataset directly from S3
 file:
 
@@ -384,16 +379,6 @@ As we have defined the CI/CD workflow, the workflow will be triggered automatica
 You can check the output at terminal running DataCI server.
 
 # 5. Summary
-
-The scripts for this section is in `4.summary.sh`, you can run in one click with:
-
-```
-bash 4.summary.sh
-```
-
-That is a long journey! Wait, how many dataset we have and what are their performance?
-It seems quite messy after we publish many datasets and pipelines, run a lot of workflows.  
-Luckily, when we're developing our data pipelines, DataCI helps in managing and auditing all of them!
 
 ## 4.1 How many datasets are built?
 

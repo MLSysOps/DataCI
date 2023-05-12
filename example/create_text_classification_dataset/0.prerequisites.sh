@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-cd ${SCRIPT_DIR}/../..
+cd "${SCRIPT_DIR}/../.." || exit 1
 echo "Initialize DataCI"
-python dataci/command/init.py init
+dataci init
 
 echo "Connect to Cloud Services"
-#read -p "AWS S3 Access Key ID: " AWS_ACCESS_KEY_ID
-python dataci/command/connect.py s3 -k AKIAWCBW2AMEL7Q5YY2O -p
+read -r -p "AWS S3 Access Key ID: " AWS_ACCESS_KEY_ID
+dataci connect s3 -k "${AWS_ACCESS_KEY_ID}"
 
 echo "Create a new workspace"
-python dataci/command/workspace.py use testspace
+dataci workspace use testspace
 
 echo "Load some common stages and workflows"
-python dataci/command/stage.py publish action_hub.data_qc:data_quality_check
-python dataci/command/stage.py publish action_hub.benchmark.dc_bench:data_centric_benchmark
-python dataci/command/workflow.py publish action_hub.ci_cd_trigger:trigger_ci_cd
+dataci stage publish action_hub/data_qc.py data_quality_check
+dataci stage publish action_hub/benchmark/dc_bench.py data_centric_benchmark
+dataci workflow publish action_hub/ci_cd_trigger.py trigger_ci_cd
+
+echo "Start DataCI server at background"
+dataci start

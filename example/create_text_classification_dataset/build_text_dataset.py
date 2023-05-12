@@ -14,7 +14,7 @@ def data_read(**context):
     from dataci.hooks.df_hook import DataFrameHook
 
     version = context['params'].get('version', None)
-    df = DataFrameHook.read(dataset_identifier=f'text_cls_raw@{version}')
+    df = DataFrameHook.read(dataset_identifier=f'text_cls_raw@{version}', **context)
     return df, 'product_name'
 
 
@@ -48,3 +48,9 @@ def data_save(inputs, **context):
 )
 def main():
     data_read >> text_aug >> data_save
+
+
+import random
+
+random.seed(42)
+main()
