@@ -11,7 +11,7 @@ import networkx as nx
 import streamlit as st
 from streamlit_ace import st_ace
 
-from dataci.models import Workflow
+from dataci.models import Workflow, Stage
 
 if TYPE_CHECKING:
     from pygraphviz import AGraph
@@ -144,7 +144,12 @@ with config_col:
     #
     # st.dataframe(ci_run_result)
 
+
 # Configure Workflow Stage
+def on_click_close_edit():
+    st.session_state.edit_state = None
+
+
 with detail_col:
     if st.session_state.edit_state is not None:
         workflow = st.session_state.edit_state
@@ -153,8 +158,7 @@ with detail_col:
             with col1:
                 st.subheader('Edit Workflow')
             with col2:
-                if st.button('✖', use_container_width=True):
-                    st.session_state.edit_state = None
+                st.button('✖', use_container_width=True, key='close_edit_btn', on_click=on_click_close_edit)
             stage_dict = dict()
             for stage in workflow.stages:
                 stage_dict[f'{stage.name}@{stage.version}'] = stage
@@ -176,7 +180,16 @@ with detail_col:
                 # st.session_state.edit_state.publish()
                 st.session_state.edit_state = None
 
+
 # Configure Action Job
+def on_click_close_action_job():
+    st.session_state.action_job_state = {
+        'ready': False,
+        'name': None,
+        'version': None,
+    }
+
+
 with detail_col:
     if st.session_state.action_job_state['ready']:
         with st.expander('', expanded=True):
@@ -184,10 +197,10 @@ with detail_col:
             with col1:
                 st.subheader('Add Job to Actions')
             with col2:
-                if st.button('✖', use_container_width=True):
-                    st.session_state.action_job_state = {
-                        'ready': False,
-                        'name': None,
-                        'version': None,
-                    }
-            use = st.selectbox('Use from Action Hub', ['data_qc', 'dc_bench'])
+                st.button('✖', use_container_width=True, key='close_action_job_btn', on_click=on_click_close_action_job)
+            st.write('Create a job (CI/CD stage) from Action Hub')
+            st.caption(
+                'You can also create a custom job by publish a job/stage to Action Hub'
+            )
+            use = st.selectbox('Job Name', ['data_qc', 'dc_bench'])
+            stages = Stage.find(f'official.{use}@*')
