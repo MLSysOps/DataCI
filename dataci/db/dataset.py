@@ -202,40 +202,87 @@ def get_one_dataset(workspace, name, version='latest'):
 
 def get_many_datasets(workspace, name, version=None, all=False):
     with db_connection:
-        dataset_po_iter = db_connection.execute(f"""
-            --beginsql
-            WITH selected_dataset AS (
-                SELECT workspace
-                     , name
-                     , version
-                FROM   dataset
-                WHERE  workspace = ?
-                AND    name GLOB ?
-                AND    version GLOB ?
-                {"AND    length(version) < 32" if not all else ""}
-            )
-            SELECT d.workspace,
-                   d.name,
-                   d.version,
-                   yield_workflow_workspace,
-                   yield_workflow_name,
-                   yield_workflow_version,
-                   log_message,
-                   timestamp,
-                   id_column,
-                   size,
-                   filename,
-                   parent_dataset_workspace,
-                   parent_dataset_name,
-                   parent_dataset_version
-            FROM   dataset d
-            JOIN  selected_dataset sd
-            ON    d.workspace = sd.workspace
-            AND   d.name = sd.name
-            AND   d.version = sd.version
-            ;
-            --endsql
-            """, (workspace, name, version))
+        if version == 'latest':
+            dataset_po_iter = db_connection.execute(f"""
+                --beginsql
+                WITH selected_dataset AS (
+                    SELECT workspace
+                            , name
+                            , version
+                    FROM (
+                        SELECT workspace
+                                , name
+                                , version
+                                , ROW_NUMBER() OVER (PARTITION BY workspace, name ORDER BY version DESC) AS rk
+                        FROM (
+                            SELECT workspace
+                                    , name
+                                    , version
+                            FROM   dataset
+                            WHERE  workspace = ?
+                            AND    name GLOB ?
+                            AND    length(version) < 32
+                        )
+                    )
+                    WHERE rk = 1
+                )
+                SELECT d.workspace,
+                          d.name,
+                            d.version,
+                            yield_workflow_workspace,
+                            yield_workflow_name,
+                            yield_workflow_version,
+                            log_message,
+                            timestamp,
+                            id_column,
+                            size,
+                            filename,
+                            parent_dataset_workspace,
+                            parent_dataset_name,
+                            parent_dataset_version
+                FROM   dataset d
+                JOIN  selected_dataset sd
+                ON    d.workspace = sd.workspace
+                AND   d.name = sd.name
+                AND   d.version = sd.version
+                ;
+                --endsql
+                """, (workspace, name,))
+        else:
+            dataset_po_iter = db_connection.execute(f"""
+                --beginsql
+                WITH selected_dataset AS (
+                    SELECT workspace
+                         , name
+                         , version
+                    FROM   dataset
+                    WHERE  workspace = ?
+                    AND    name GLOB ?
+                    AND    version GLOB ?
+                    {"AND    length(version) < 32" if not all else ""}
+                )
+                SELECT d.workspace,
+                       d.name,
+                       d.version,
+                       yield_workflow_workspace,
+                       yield_workflow_name,
+                       yield_workflow_version,
+                       log_message,
+                       timestamp,
+                       id_column,
+                       size,
+                       filename,
+                       parent_dataset_workspace,
+                       parent_dataset_name,
+                       parent_dataset_version
+                FROM   dataset d
+                JOIN  selected_dataset sd
+                ON    d.workspace = sd.workspace
+                AND   d.name = sd.name
+                AND   d.version = sd.version
+                ;
+                --endsql
+                """, (workspace, name, version))
     dataset_dict_list = list()
     for dataset_po in dataset_po_iter:
         dataset_dict = {

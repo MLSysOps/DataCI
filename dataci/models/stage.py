@@ -119,6 +119,14 @@ class Stage(BaseModel, ABC):
 
         return stage
 
+    def add_self(self):
+        dag: DiGraph = self.context.get('dag')
+        if dag is None:
+            raise ValueError('DAG is not set in context.')
+        dag.add_node(self)
+
+        return self
+
     @property
     def context(self):
         # Get context from contextvars, this will be set within the context of a models
@@ -142,6 +150,8 @@ class Stage(BaseModel, ABC):
         return outputs
 
     def __rshift__(self, other):
+        if other is None:
+            return self.add_self()
         return self.add_downstream(other)
 
     def __repr__(self):

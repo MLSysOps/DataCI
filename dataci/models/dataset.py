@@ -263,7 +263,7 @@ class Dataset(BaseModel):
         """
         workspace, name, version = cls.parse_data_model_list_identifier(identifier=dataset_identifier)
         # Add * at the end of version for BLOB
-        if version and '*' not in version:
+        if version and '*' not in version and version != 'latest':
             version += '*'
 
         dataset_dict_list = get_many_datasets(workspace=workspace, name=name, version=version, all=all)
