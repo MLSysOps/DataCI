@@ -18,18 +18,26 @@ if TYPE_CHECKING:
 
 if 'workflow' not in st.session_state:
     st.session_state.workflow = None
-if 'ci_workflow' not in st.session_state:
-    st.session_state.ci_workflow = None
-if 'ci_workflow_select' not in st.session_state:
-    st.session_state.ci_workflow_select = None
 if 'input_data' not in st.session_state:
     st.session_state.input_data = False
 if 'edit_workflow' not in st.session_state:
     st.session_state.edit_workflow = False
 if 'add_action' not in st.session_state:
     st.session_state.add_action = False
+
+if 'ci_workflow' not in st.session_state:
+    st.session_state.ci_workflow = None
+if 'ci_workflow_select' not in st.session_state:
+    st.session_state.ci_workflow_select = None
+if 'ci_workflow_trigger' not in st.session_state:
+    st.session_state.ci_workflow_trigger = {
+        'status': False,
+        'on': None,
+    }
 if 'add_job' not in st.session_state:
     st.session_state.add_job = False
+if 'use_stage' not in st.session_state:
+    st.session_state.use_stage = None
 
 st.set_page_config(
     page_title='DataCI',
@@ -65,7 +73,44 @@ def generate_workflow_dag(workflow_dag: dict):
     return dag_agraph.to_string()
 
 
+# Info banner if workflow is triggered
+if st.session_state.ci_workflow is not None and st.session_state.ci_workflow_trigger['status']:
+    st.info(
+        f'CI/CD Action `{st.session_state.ci_workflow.identifier}` is triggered by '
+        f'{st.session_state.ci_workflow_trigger["on"]}.',
+        icon='🔍',
+    )
+
 config_col, detail_col = st.columns([1, 1])
+
+
+def on_change_workflow_select():
+    if st.session_state.workflow_select == '':
+        return
+
+    if st.session_state.workflow_select == '➕ Create New Workflow':
+        workflow = Workflow('default')
+    else:
+        workflow = Workflow.get(st.session_state.workflow_select)
+
+    st.session_state.workflow = workflow
+
+
+def on_click_input_data():
+    st.session_state.input_data = True
+
+
+def on_click_edit_workflow():
+    st.session_state.edit_workflow = True
+
+
+def on_click_add_action():
+    st.session_state.add_action = True
+
+
+def on_change_workflow():
+    st.session_state.workflow = workflow_dict[st.session_state.workflow_version_select]
+
 
 with config_col:
     st.header('Data Processing Workflow')
@@ -76,22 +121,26 @@ with config_col:
             workflow_name = st.selectbox('Select a workflow', [w.name for w in all_workflows])
 
         # Get version
-        workflows = Workflow.find(workflow_name)
+        workflow_dict = {w.version: w for w in Workflow.find(workflow_name)}
         with col2:
-            version = st.selectbox(
-                'Version', [w for w in workflows],
-                key='workflow', index=len(workflows) - 1, format_func=lambda w: w.version,
+            st.selectbox(
+                'Version', workflow_dict.keys(),
+                key='workflow_version_select', index=len(workflow_dict) - 1,
+                on_change=on_change_workflow,
             )
+            # Init set
+            if st.session_state.workflow is None:
+                on_change_workflow()
 
     with st.container():
         st.subheader('Workflow DAG Graph')
         _, col1, col2, col3 = st.columns([10, 5, 4, 5])
         with col1:
-            st.button('Input Data', use_container_width=True, key='input_data')
+            st.button('Input Data', use_container_width=True, on_click=on_click_input_data)
         with col2:
-            st.button('Edit', use_container_width=True, key='edit_workflow')
+            st.button('Edit', use_container_width=True, on_click=on_click_edit_workflow)
         with col3:
-            st.button('Add Action', type='primary', use_container_width=True, key='add_action')
+            st.button('Add Action', type='primary', use_container_width=True, on_click=on_click_add_action)
 
         if st.session_state.workflow is not None:
             st.graphviz_chart(
@@ -100,15 +149,12 @@ with config_col:
             )
 
 
-def on_change_ci_workflow_select():
-    if st.session_state.ci_workflow_select == '':
-        return
+def on_click_add_job():
+    st.session_state.add_job = True
 
-    if st.session_state.ci_workflow_select == '➕ Create New Workflow':
-        ci_workflow = Workflow('default_ci')
-    else:
-        ci_workflow = st.session_state.ci_workflow_select
-    st.session_state.ci_workflow = ci_workflow
+
+def on_change_ci_workflow_select():
+    st.session_state.ci_workflow = workflow_dict[st.session_state.ci_workflow_select]
 
 
 with config_col:
@@ -124,22 +170,27 @@ with config_col:
         with col3:
             st.text_input('Version', value=st.session_state.workflow.version, disabled=True)
 
-        ci_workflow_list = ['', '➕ Create New Action'] + Workflow.find('*ci@latest')
+        workflow_dict = {
+            '': None,
+            '➕ Create New Action': Workflow('default_ci'),
+        }
+        workflow_dict.update({w.name: w for w in Workflow.find('*ci@latest')})
         st.selectbox(
             'Select a CI Workflow',
-            ci_workflow_list,
+            workflow_dict.keys(),
             index=0,
             key='ci_workflow_select',
-            format_func=lambda w: w.name if isinstance(w, Workflow) else w,
             on_change=on_change_ci_workflow_select,
         )
         if st.session_state.ci_workflow:
             with st.container():
                 _, col2, col3 = st.columns([15, 4, 5])
                 with col2:
-                    st.button('Add Job', use_container_width=True, key='add_job')
+                    st.button('Add Job', use_container_width=True, on_click=on_click_add_job)
                 with col3:
-                    add_action_btn = st.button('Manual Run', type='primary', use_container_width=True)
+                    add_action_btn = st.button(
+                        'Manual Run', type='primary', use_container_width=True,
+                    )
                 st.graphviz_chart(
                     generate_workflow_dag(st.session_state.ci_workflow.dict()['dag']),
                     use_container_width=True,
@@ -157,8 +208,14 @@ def on_click_close_input_btn():
     st.session_state.input_data = False
 
 
-def on_click_set_input_data_btn():
+def on_click_use_input_data_btn():
     st.session_state.workflow.params['input_data'] = f'{input_data}@{version}'
+    # If CI workflow is setup, trigger CI workflow
+    if st.session_state.ci_workflow:
+        st.session_state.ci_workflow_trigger.update({
+            'status': True,
+            'on': 'Input Data Changed',
+        })
     st.session_state.input_data = False
 
 
@@ -181,7 +238,7 @@ with detail_col:
             dataset = next(filter(lambda d: d.version == version, versions))
             st.dataframe(pd.read_csv(dataset.dataset_files, nrows=10))
             st.write(f'Size: {dataset.size}')
-            st.button('Use This Dataset', use_container_width=True, on_click=on_click_set_input_data_btn)
+            st.button('Use This Dataset', use_container_width=True, on_click=on_click_use_input_data_btn)
 
 
 # Configure Edit Workflow Stage
@@ -189,8 +246,13 @@ def on_click_close_edit_btn():
     st.session_state.edit_workflow = False
 
 
-def on_click_publish_stage_btn():
+def on_click_use_stage_btn():
     st.session_state.workflow.patch(STAGE)
+    if st.session_state.ci_workflow:
+        st.session_state.ci_workflow_trigger.update({
+            'status': True,
+            'on': f'stage &nbsp;`{STAGE.name}`&nbsp; changed',
+        })
     st.session_state.edit_workflow = False
 
 
@@ -222,9 +284,19 @@ with detail_col:
             st.code(STAGE.script, language='python')
 
             st.button(
-                'Use This Stage', disabled=stage_version == stage_dict[stage_name],  # current version, don't publish
-                on_click=on_click_publish_stage_btn, use_container_width=True
+                'Use This Stage',
+                disabled=stage_version == stage_dict[stage_name],  # current version, don't allow use
+                on_click=on_click_use_stage_btn, use_container_width=True
             )
+
+
+def on_click_close_action_btn():
+    st.session_state.add_job = False
+
+
+def on_change_use_stage_name():
+    st.session_state.use_stage = stage_dict[st.session_state.use_stage_name]
+
 
 # Configure Action Job
 with detail_col:
@@ -234,11 +306,22 @@ with detail_col:
             with col1:
                 st.subheader('Add Job to Actions')
             with col2:
-                if st.button('✖', use_container_width=True, key='close_action_job_btn'):
-                    ADD_ACTION = False
+                st.button(
+                    '✖', use_container_width=True, key='close_action_job_btn',
+                    on_click=on_click_close_action_btn,
+                )
             st.write('Create a job (CI/CD stage) from Action Hub')
             st.caption(
                 'You can also create a custom job by publish a job/stage to Action Hub'
             )
-            use = st.selectbox('Job Name', ['data_qc', 'dc_bench'])
-            stages = Stage.find(f'official.{use}@*')
+            stage_dict = {s.name: s for s in Stage.find(f'official.*@latest')}
+            st.selectbox(
+                'Job Name', stage_dict.keys(), index=0, key='use_stage_name',
+                on_change=on_change_use_stage_name,
+            )
+            # Initialize use_stage
+            if st.session_state.use_stage is None:
+                st.session_state.use_stage = stage_dict[st.session_state.use_stage_name]
+
+            st.code(st.session_state.use_stage.script, language='python')
+            st.button('Add This Job to Actions', use_container_width=True)

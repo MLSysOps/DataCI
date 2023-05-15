@@ -178,12 +178,19 @@ def get_many_stages(workspace, name, version=None, all=False):
             cur.execute(
                 """
                 SELECT workspace, name, version, params, script_path, timestamp, symbolize
-                FROM   stage 
-                WHERE  workspace=:workspace 
-                AND    name=:name
-                AND    version <> ''
-                ORDER BY version DESC
-                LIMIT 1
+                FROM   (
+                    SELECT *
+                           ,ROW_NUMBER() OVER (PARTITION BY workspace, name ORDER BY version DESC) AS _rn
+                    FROM   (
+                        SELECT workspace, name, version, params, script_path, timestamp, symbolize
+                        FROM   stage 
+                        WHERE  workspace=:workspace 
+                        AND    name GLOB :name
+                        AND    version <> ''
+                    )
+                )
+                WHERE _rn = 1
+                ;
                 """,
                 {
                     'workspace': workspace,
@@ -197,7 +204,7 @@ def get_many_stages(workspace, name, version=None, all=False):
                 SELECT workspace, name, version, params, script_path, timestamp, symbolize
                 FROM   stage 
                 WHERE  workspace=:workspace 
-                AND    name=:name 
+                AND    name GLOB :name 
                 AND    version GLOB :version
                 {"AND    version <> ''" if not all else ''}
                 """,

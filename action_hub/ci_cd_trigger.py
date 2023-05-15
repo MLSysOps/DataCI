@@ -112,3 +112,13 @@ def run(job_configs, **context):
 )
 def trigger_ci_cd():
     config_ci_runs >> run
+
+
+if __name__ == '__main__':
+    trigger_ci_cd.params = {
+        'ci_name': 'text_dataset_ci',
+        'workflow': 'build_text_dataset@latest',
+        'dataset': 'text_cls_raw@*',
+        'stage': 'text_aug@*'
+    }
+    trigger_ci_cd()
