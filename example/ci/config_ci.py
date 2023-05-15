@@ -38,6 +38,8 @@ if 'add_job' not in st.session_state:
     st.session_state.add_job = False
 if 'use_stage' not in st.session_state:
     st.session_state.use_stage = None
+if 'ci_workflow_runs' not in st.session_state:
+    st.session_state.ci_workflow_runs = list()
 
 st.set_page_config(
     page_title='DataCI',
@@ -157,6 +159,7 @@ def on_change_ci_workflow_select():
     st.session_state.ci_workflow = workflow_dict[st.session_state.ci_workflow_select]
 
 
+# Configure CI/CD Actions
 with config_col:
     if st.session_state.add_action and st.session_state.workflow is not None:
         st.header('CI/CD Actions')
@@ -195,6 +198,16 @@ with config_col:
                     generate_workflow_dag(st.session_state.ci_workflow.dict()['dag']),
                     use_container_width=True,
                 )
+
+# Run CI/CD workflow, show CI/CD Runs
+with config_col:
+    if st.session_state.ci_workflow is not None:
+        st.subheader('CI/CD Runs')
+        if st.session_state.ci_workflow_trigger['status']:
+            # Run CI workflow
+            with st.spinner('Running CI/CD workflow...'):
+                st.session_state.ci_workflow()
+            st.session_state.ci_workflow_trigger['status'] = False
         # ci_run_result = pd.DataFrame([
         #     {'id': 'run1', 'Execute_Workflow': 'success', 'Benchmark_Dataset': 'success', 'Publish_Dataset': 'success',
         #      'time': '2021-05-14 10:00:00', 'Action': ''},
