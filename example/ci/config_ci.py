@@ -29,14 +29,13 @@ if 'add_action' not in st.session_state:
 
 if 'ci_workflow' not in st.session_state:
     st.session_state.ci_workflow = None
-if 'ci_workflow_dag' not in st.session_state:
-    st.session_state.ci_workflow_dag = None
 if 'ci_workflow_select' not in st.session_state:
     st.session_state.ci_workflow_select = None
 if 'ci_workflow_trigger' not in st.session_state:
     st.session_state.ci_workflow_trigger = {
         'status': False,
         'on': None,
+        'params': dict(),
     }
 if 'add_job' not in st.session_state:
     st.session_state.add_job = False
@@ -79,8 +78,6 @@ def generate_workflow_dag(workflow_dag: dict):
     for agraph_node in dag_agraph.nodes_iter():
         node_id = int(agraph_node.name)
         agraph_node.attr['label'] = dag_nodes[node_id]['name'] + '@' + dag_nodes[node_id]['version']
-
-    print(dag_agraph.to_string())
 
     return dag_agraph.to_string()
 
@@ -145,8 +142,9 @@ with config_col:
                 on_change_workflow()
 
     with st.container():
-        st.subheader('Workflow DAG Graph')
-        _, col1, col2, col3 = st.columns([10, 5, 4, 5])
+        col0, col1, col2, col3 = st.columns([10, 5, 4, 5])
+        with col0:
+            st.subheader('Workflow DAG Graph')
         with col1:
             st.button('Input Data', use_container_width=True, on_click=on_click_input_data)
         with col2:
@@ -172,13 +170,15 @@ def on_change_ci_workflow_select():
         st.session_state.ci_workflow = Workflow('default_ci')
     else:
         st.session_state.ci_workflow = workflow_dict[st.session_state.ci_workflow_select]
-    st.session_state.ci_workflow_dag = st.session_state.ci_workflow.dict()['dag']
 
 
 def on_click_ci_workflow_manual_trigger():
     st.session_state.ci_workflow_trigger = {
         'status': True,
         'on': 'manual',
+        'params': {
+            'workflow': st.session_state.workflow,
+        }
     }
 
 
@@ -206,9 +206,11 @@ with config_col:
             key='ci_workflow_select',
             on_change=on_change_ci_workflow_select,
         )
-        if st.session_state.ci_workflow_dag is not None:
+        if st.session_state.ci_workflow is not None:
             with st.container():
-                _, col2, col3 = st.columns([15, 4, 5])
+                col1, col2, col3 = st.columns([15, 4, 5])
+                with col1:
+                    st.subheader('CI/CD DAG Graph')
                 with col2:
                     st.button('Add Job', use_container_width=True, on_click=on_click_add_job)
                 with col3:
@@ -217,7 +219,7 @@ with config_col:
                         on_click=on_click_ci_workflow_manual_trigger,
                     )
                 st.graphviz_chart(
-                    generate_workflow_dag(st.session_state.ci_workflow_dag),
+                    generate_workflow_dag(st.session_state.ci_workflow.dict()['dag']),
                     use_container_width=True,
                 )
 
@@ -236,6 +238,7 @@ with config_col:
                     # Add each job status
                     for stage in st.session_state.ci_workflow.stages:
                         ci_run_result[stage.name] = 'pending'
+                    st.session_state.ci_workflow.params = st.session_state.ci_workflow_trigger['params']
                     st.session_state.ci_workflow()
                     ci_run_result['status'] = 'success'
                     ci_run_result['msg'] = 'CI/CD workflow run successfully.'
@@ -266,18 +269,21 @@ def on_click_close_input_btn():
 
 
 def on_click_use_input_data_btn():
-    st.session_state.workflow.params['input_data'] = f'{input_data}@{version}'
+    st.session_state.workflow.params['input_data'] = dataset.identifier
     # If CI workflow is setup, trigger CI workflow
     if st.session_state.ci_workflow:
         st.session_state.ci_workflow_trigger.update({
             'status': True,
             'on': 'Input Data Changed',
+            'params': {
+                'workflow': st.session_state.workflow,
+            }
         })
     st.session_state.input_data = False
 
 
 with detail_col:
-    if st.session_state.input_data:
+    if st.session_state.input_data and st.session_state.workflow is not None:
         with st.expander('', expanded=True):
             col1, col2 = st.columns([23, 1])
             with col1:
@@ -285,20 +291,32 @@ with detail_col:
             with col2:
                 st.button('✖', use_container_width=True, key='close_input_btn', on_click=on_click_close_input_btn)
 
+            cur_dataset_str = st.session_state.workflow.params.get('input_data', None)
+            cur_dataset = Dataset.find(cur_dataset_str)[0]
             col1, col2 = st.columns([18, 6])
             datasets = Dataset.find('*@latest')
             with col1:
-                input_data = st.selectbox('Input Dataset', [d.name for d in datasets])
-            versions = Dataset.find(f'{input_data}@*')
-            with col2:
-                version = st.selectbox('Version', [v.version for v in versions])
-            dataset = next(filter(lambda d: d.version == version, versions))
-            st.dataframe(pd.read_csv(dataset.dataset_files, nrows=10))
-            st.write(f'Size: {dataset.size}')
-            st.button('Use This Dataset', use_container_width=True, on_click=on_click_use_input_data_btn)
+                input_data = st.selectbox(
+                    'Input Dataset', datasets,
+                    format_func=lambda d: d.name if d.name != cur_dataset.name else f'{d.name} (current)',
+                    index=list(map(lambda d: d.name, datasets)).index(cur_dataset.name)
+                )
+                versions = Dataset.find(f'{input_data.full_name}@*')
+                with col2:
+                    dataset = st.selectbox(
+                        'Version', versions,
+                        format_func=lambda
+                            d: d.version if d.version != cur_dataset.version else f'{d.version} (current)',
+                        index=list(map(lambda d: d.version, versions)).index(cur_dataset.version)
+                    )
+                st.dataframe(pd.read_csv(dataset.dataset_files, nrows=10))
+                st.write(f'Size: {dataset.size}')
+                st.button(
+                    'Use This Dataset', use_container_width=True, on_click=on_click_use_input_data_btn,
+                    disabled=dataset.identifier == cur_dataset.identifier,
+                )
 
 
-# Configure Edit Workflow Stage
 def on_click_close_edit_btn():
     st.session_state.edit_workflow = False
 
@@ -309,6 +327,9 @@ def on_click_use_stage_btn():
         st.session_state.ci_workflow_trigger.update({
             'status': True,
             'on': f'stage &nbsp;`{STAGE.name}`&nbsp; changed',
+            'params': {
+                'workflow': st.session_state.workflow,
+            }
         })
     st.session_state.edit_workflow = False
 
@@ -334,7 +355,7 @@ with detail_col:
                 versions = [s.version for s in Stage.find(f'{stage_name}@*')]
                 preselect_idx = versions.index(stage_dict[stage_name])
                 stage_version = st.selectbox(
-                    'Version', versions, index=preselect_idx,
+                    'Version', versions, index=preselect_idx, key='stage_version_select',
                     format_func=lambda v: v if v != stage_dict[stage_name] else f'{v} (current)',
                 )
             STAGE = Stage.get(f'{stage_name}@{stage_version}')
@@ -367,7 +388,7 @@ def on_click_add_job_to_action():
         else:
             last_job.add_downstream(st.session_state.use_stage)
     # Refresh ci workflow dag
-    st.session_state.ci_workflow_dag = st.session_state.ci_workflow.dict()['dag']
+    # st.session_state.ci_workflow_dag = st.session_state.ci_workflow.dict()['dag']
     # Close Add Job Modal
     st.session_state.add_job = False
 

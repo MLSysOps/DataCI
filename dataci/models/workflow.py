@@ -162,6 +162,9 @@ class Workflow(BaseModel):
         dag_edge_list = [
             (stage_mapping[source], stage_mapping[target], data) for source, target, data in dag_edge_list
         ]
+        # Also add other nodes
+        for stage in self.dag.nodes:
+            _ = stage_mapping[stage]
 
         # Translate the schedule list to a list of event string
         schedule_list = list()
