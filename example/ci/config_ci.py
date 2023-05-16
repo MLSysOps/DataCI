@@ -5,6 +5,8 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: May 14, 2023
 """
+import traceback
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 import networkx as nx
@@ -27,6 +29,8 @@ if 'add_action' not in st.session_state:
 
 if 'ci_workflow' not in st.session_state:
     st.session_state.ci_workflow = None
+if 'ci_workflow_dag' not in st.session_state:
+    st.session_state.ci_workflow_dag = None
 if 'ci_workflow_select' not in st.session_state:
     st.session_state.ci_workflow_select = None
 if 'ci_workflow_trigger' not in st.session_state:
@@ -52,7 +56,11 @@ st.set_page_config(
 def generate_workflow_dag(workflow_dag: dict):
     dag_edgelist = workflow_dag['edge']
     dag_nodes = workflow_dag['node']
-    dag_agraph: 'AGraph' = nx.nx_agraph.to_agraph(nx.DiGraph(dag_edgelist))
+    g = nx.DiGraph(dag_edgelist)
+    # Add standalone nodes
+    for node_id, node in dag_nodes.items():
+        g.add_node(node_id)
+    dag_agraph: 'AGraph' = nx.nx_agraph.to_agraph(g)
     dag_agraph.graph_attr['rankdir'] = 'LR'
     dag_agraph.node_attr.update({
         'shape': 'record',
@@ -71,6 +79,8 @@ def generate_workflow_dag(workflow_dag: dict):
     for agraph_node in dag_agraph.nodes_iter():
         node_id = int(agraph_node.name)
         agraph_node.attr['label'] = dag_nodes[node_id]['name'] + '@' + dag_nodes[node_id]['version']
+
+    print(dag_agraph.to_string())
 
     return dag_agraph.to_string()
 
@@ -156,7 +166,20 @@ def on_click_add_job():
 
 
 def on_change_ci_workflow_select():
-    st.session_state.ci_workflow = workflow_dict[st.session_state.ci_workflow_select]
+    if st.session_state.ci_workflow_select == '':
+        st.session_state.ci_workflow = None
+    elif st.session_state.ci_workflow_select == '➕ Create New Action':
+        st.session_state.ci_workflow = Workflow('default_ci')
+    else:
+        st.session_state.ci_workflow = workflow_dict[st.session_state.ci_workflow_select]
+    st.session_state.ci_workflow_dag = st.session_state.ci_workflow.dict()['dag']
+
+
+def on_click_ci_workflow_manual_trigger():
+    st.session_state.ci_workflow_trigger = {
+        'status': True,
+        'on': 'manual',
+    }
 
 
 # Configure CI/CD Actions
@@ -174,46 +197,67 @@ with config_col:
             st.text_input('Version', value=st.session_state.workflow.version, disabled=True)
 
         workflow_dict = {
-            '': None,
-            '➕ Create New Action': Workflow('default_ci'),
+            w.name: w for w in Workflow.find('*ci@latest')
         }
-        workflow_dict.update({w.name: w for w in Workflow.find('*ci@latest')})
         st.selectbox(
             'Select a CI Workflow',
-            workflow_dict.keys(),
+            ['', '➕ Create New Action'] + list(workflow_dict.keys()),
             index=0,
             key='ci_workflow_select',
             on_change=on_change_ci_workflow_select,
         )
-        if st.session_state.ci_workflow:
+        if st.session_state.ci_workflow_dag is not None:
             with st.container():
                 _, col2, col3 = st.columns([15, 4, 5])
                 with col2:
                     st.button('Add Job', use_container_width=True, on_click=on_click_add_job)
                 with col3:
-                    add_action_btn = st.button(
+                    st.button(
                         'Manual Run', type='primary', use_container_width=True,
+                        on_click=on_click_ci_workflow_manual_trigger,
                     )
                 st.graphviz_chart(
-                    generate_workflow_dag(st.session_state.ci_workflow.dict()['dag']),
+                    generate_workflow_dag(st.session_state.ci_workflow_dag),
                     use_container_width=True,
                 )
 
 # Run CI/CD workflow, show CI/CD Runs
 with config_col:
-    if st.session_state.ci_workflow is not None:
+    if st.session_state.ci_workflow is not None and st.session_state.workflow is not None:
         st.subheader('CI/CD Runs')
         if st.session_state.ci_workflow_trigger['status']:
             # Run CI workflow
             with st.spinner('Running CI/CD workflow...'):
-                st.session_state.ci_workflow()
-            st.session_state.ci_workflow_trigger['status'] = False
-        # ci_run_result = pd.DataFrame([
-        #     {'id': 'run1', 'Execute_Workflow': 'success', 'Benchmark_Dataset': 'success', 'Publish_Dataset': 'success',
-        #      'time': '2021-05-14 10:00:00', 'Action': ''},
-        # ])
-        #
-        # st.dataframe(ci_run_result)
+                ci_run_result = dict()
+                try:
+                    ci_run_result['time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    ci_run_result['workflow'] = str(st.session_state.workflow.dict())
+                    ci_run_result['triggered by'] = st.session_state.ci_workflow_trigger['on']
+                    # Add each job status
+                    for stage in st.session_state.ci_workflow.stages:
+                        ci_run_result[stage.name] = 'pending'
+                    st.session_state.ci_workflow()
+                    ci_run_result['status'] = 'success'
+                    ci_run_result['msg'] = 'CI/CD workflow run successfully.'
+                except Exception as e:
+                    error_stack = traceback.format_exc()
+                    ci_run_result['status'] = 'failed'
+                    ci_run_result['msg'] = f'{e}\n' + error_stack
+                finally:
+                    # if a stage runs successfully, there's some output
+                    # if a stage fails, output = ...
+                    # if a stage not run, no output
+                    for name, output in st.session_state.ci_workflow._outputs.items():
+                        if output is ...:
+                            ci_run_result[name] = 'failed'
+                        else:
+                            ci_run_result[name] = 'success'
+                    st.session_state.ci_workflow._outputs = dict()
+                    st.session_state.ci_workflow_runs.append(ci_run_result)
+                    # Reset trigger
+                    st.session_state.ci_workflow_trigger['status'] = False
+        if st.session_state.ci_workflow_runs:
+            st.dataframe(st.session_state.ci_workflow_runs)
 
 
 # Configure Input Data
@@ -311,6 +355,23 @@ def on_change_use_stage_name():
     st.session_state.use_stage = stage_dict[st.session_state.use_stage_name]
 
 
+def on_click_add_job_to_action():
+    last_job = None
+    # Iterate through stages to find the last job
+    for s in st.session_state.ci_workflow.stages:
+        last_job = s
+    # If last job is None, add a new job to workflow
+    with st.session_state.ci_workflow:
+        if last_job is None:
+            st.session_state.use_stage.add_self()
+        else:
+            last_job.add_downstream(st.session_state.use_stage)
+    # Refresh ci workflow dag
+    st.session_state.ci_workflow_dag = st.session_state.ci_workflow.dict()['dag']
+    # Close Add Job Modal
+    st.session_state.add_job = False
+
+
 # Configure Action Job
 with detail_col:
     if st.session_state.add_job:
@@ -337,4 +398,4 @@ with detail_col:
                 st.session_state.use_stage = stage_dict[st.session_state.use_stage_name]
 
             st.code(st.session_state.use_stage.script, language='python')
-            st.button('Add This Job to Actions', use_container_width=True)
+            st.button('Add This Job to Actions', use_container_width=True, on_click=on_click_add_job_to_action)
