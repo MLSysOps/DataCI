@@ -77,7 +77,10 @@ def generate_workflow_dag(workflow_dag: dict):
     })
     for agraph_node in dag_agraph.nodes_iter():
         node_id = int(agraph_node.name)
-        agraph_node.attr['label'] = dag_nodes[node_id]['name'] + '@' + dag_nodes[node_id]['version']
+        version = dag_nodes[node_id]['version']
+        if version.isdigit():
+            version = f'v{version}'
+        agraph_node.attr['label'] = dag_nodes[node_id]['name'] + '@' + version
 
     return dag_agraph.to_string()
 
