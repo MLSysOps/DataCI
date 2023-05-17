@@ -40,7 +40,7 @@ python build_workflow_v1.py
 streamlit run config_ci.py
 ```
 
-[![Add CI to Existing workflow](https://clipchamp.com/watch/6LETyy5UnZO)]
+[![Add CI to Existing workflow]](https://github.com/MLSysOps/DataCI/assets/36268431/36e3bf70-b678-4fd9-945b-196afb829f79)
 
 4. A new version of input dataset or augmentation method will trigger the CI automatically
 
