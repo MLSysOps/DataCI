@@ -45,10 +45,12 @@ if 'ci_workflow_runs' not in st.session_state:
     st.session_state.ci_workflow_runs = list()
 
 st.set_page_config(
-    page_title='DataCI',
+    page_title='DataCI Demo Playground',
     page_icon='🧊',
     layout='wide',
 )
+
+st.title('DataCI Demo Playground')
 
 
 @st.cache_data
@@ -125,18 +127,17 @@ def on_change_workflow():
 
 
 with config_col:
-    st.header('Data Processing Workflow')
     with st.container():
         col1, col2 = st.columns([18, 6])
         all_workflows = Workflow.find('*@latest')
         with col1:
-            workflow_name = st.selectbox('Select a workflow', [w.name for w in all_workflows])
+            workflow_name = st.selectbox('Select an ML workflow', [w.name for w in all_workflows])
 
         # Get version
         workflow_dict = {w.version: w for w in Workflow.find(workflow_name)}
         with col2:
             st.selectbox(
-                'Version', workflow_dict.keys(),
+                'Workflow version', workflow_dict.keys(),
                 key='workflow_version_select', index=len(workflow_dict) - 1,
                 on_change=on_change_workflow,
             )
@@ -147,7 +148,7 @@ with config_col:
     with st.container():
         col0, col1, col2, col3 = st.columns([10, 5, 4, 5])
         with col0:
-            st.subheader('Workflow DAG Graph')
+            st.write('### Workflow DAG')
         with col1:
             st.button('Input Data', use_container_width=True, on_click=on_click_input_data)
         with col2:
@@ -188,16 +189,16 @@ def on_click_ci_workflow_manual_trigger():
 # Configure CI/CD Actions
 with config_col:
     if st.session_state.add_action and st.session_state.workflow is not None:
-        st.header('CI/CD Actions')
+        st.write('## CI/CD Actions')
         # if add_action_btn:
         # Display CI Actions configuration
         col1, col2, col3 = st.columns([3, 15, 6])
         with col1:
             st.write('Actions apply to')
         with col2:
-            st.text_input('Workflow', value=st.session_state.workflow.name, disabled=True)
+            st.text_input('ML Workflow', value=st.session_state.workflow.name, disabled=True)
         with col3:
-            st.text_input('Version', value=st.session_state.workflow.version, disabled=True)
+            st.text_input('Workflow version', value=st.session_state.workflow.version, disabled=True)
 
         workflow_dict = {
             w.name: w for w in Workflow.find('*ci@latest')
@@ -213,7 +214,7 @@ with config_col:
             with st.container():
                 col1, col2, col3 = st.columns([15, 4, 5])
                 with col1:
-                    st.subheader('CI/CD DAG Graph')
+                    st.write('### CI/CD DAG')
                 with col2:
                     st.button('Add Job', use_container_width=True, on_click=on_click_add_job)
                 with col3:
@@ -229,7 +230,7 @@ with config_col:
 # Run CI/CD workflow, show CI/CD Runs
 with config_col:
     if st.session_state.ci_workflow is not None and st.session_state.workflow is not None:
-        st.subheader('CI/CD Runs')
+        st.write('### CI/CD Runs')
         if st.session_state.ci_workflow_trigger['status']:
             # Run CI workflow
             with st.spinner('Running CI/CD workflow...'):
@@ -307,7 +308,7 @@ with detail_col:
                 versions = Dataset.find(f'{input_data.full_name}@*')
                 with col2:
                     dataset = st.selectbox(
-                        'Version', versions,
+                        'Data Version', versions,
                         format_func=lambda
                             d: d.version if d.version != cur_dataset.version else f'{d.version} (current)',
                         index=list(map(lambda d: d.version, versions)).index(cur_dataset.version)
@@ -358,7 +359,7 @@ with detail_col:
                 versions = [s.version for s in Stage.find(f'{stage_name}@*')]
                 preselect_idx = versions.index(stage_dict[stage_name])
                 stage_version = st.selectbox(
-                    'Version', versions, index=preselect_idx, key='stage_version_select',
+                    'Stage Version', versions, index=preselect_idx, key='stage_version_select',
                     format_func=lambda v: v if v != stage_dict[stage_name] else f'{v} (current)',
                 )
             STAGE = Stage.get(f'{stage_name}@{stage_version}')
