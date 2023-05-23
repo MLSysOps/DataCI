@@ -89,6 +89,6 @@ if __name__ == '__main__':
         'RS': 'RandomSampling',
     }
 
-    df_ = read_dataset(start_date=data_start_date, end_date=data_end_date)
-    selected_df = select_data(df_, num_samples=50_000, strategy=strategy_name_mapper[data_selection_method])
+    df_ = read_dataset(start_date=data_start_date, end_date=data_end_date).head(100)
+    selected_df = select_data(df_, num_samples=10, strategy=strategy_name_mapper[data_selection_method])
     save_dataset(selected_df, f'processed/data_select_{exp_time}_{data_selection_method}.csv')
