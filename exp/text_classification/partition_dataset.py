@@ -14,6 +14,8 @@ import pandas as pd
 
 print_freq = 100000
 BASE_DIR = Path(r'C:\Users\test\Downloads\yelp')
+OUTPUT_DIR = Path('data')
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def partition_dataset_stat():
@@ -60,6 +62,28 @@ def partition_dataset_by_month(start_month='202010'):
         df.to_csv(f'reviews_{month}.csv', index=False)
 
 
+def split_train_val(yr_quarter='2020Q4'):
+    year, month = yr_quarter[:4], int(yr_quarter[5:]) * 3
+    # We leave last half month of the quarter for offline evaluation
+    df = pd.read_csv(OUTPUT_DIR / f'reviews_{year}{month:02}.csv')
+    # Select the last half month of the quarter as training set
+    print(f'Date after {year}-{month:02}-16 00:00:00 will be in the validation set')
+    df_val = df[df['date'] >= f'{year}-{month:02}-16 00:00:00']
+
+    # Use the first 2 + 1/2 months of this quarter as training set
+    df_train = []
+    for i in (-2, -1):
+        df_train.append(pd.read_csv(OUTPUT_DIR / f'reviews_{year}{month + i}.csv'))
+    df_train.append(df[df['date'] < f'{year}-{month:02}-16 00:00:00'])
+    df_train = pd.concat(df_train)
+    print(len(df_train), len(df_val))
+
+    # Save to file
+    df_train.to_csv(OUTPUT_DIR / f'reviews_{yr_quarter}_train.csv', index=False)
+    df_val.to_csv(OUTPUT_DIR / f'reviews_{yr_quarter}_val.csv', index=False)
+
+
 if __name__ == '__main__':
-    partition_dataset_stat()
-    partition_dataset_by_month()
+    # partition_dataset_stat()
+    # partition_dataset_by_month()
+    split_train_val()

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Author: Li Yuanming
-Email: yuanming.li@alibaba-inc.com
+Email: yuanmingleee@gmail.com
 Date: May 23, 2023
 """
 from pathlib import Path
@@ -21,7 +21,6 @@ def text_augmentation(df):
         textaugs.SimulateTypos(),
     ])
     df['text'] = aug_function(df['text'].tolist())
-    print(df['text'].tolist()[:10])
 
     return df
 
