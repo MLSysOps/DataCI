@@ -30,8 +30,10 @@ def save_dataset(df, file_path):
 
 
 if __name__ == '__main__':
-    exp_time = '2021Q1'
-    data_select_strategy = 'RS'
-    df = read_dataset(f'processed/data_select_{exp_time}_{data_select_strategy}.csv')
+    exp_time = '2021Q4'
+    prefix = ''
+    SAVE_DATASET_BASE_PATH = prefix + 'processed/'
+    data_select_strategy = 'LC'
+    df = read_dataset(SAVE_DATASET_BASE_PATH + f'data_select_{exp_time}_{data_select_strategy}.csv')
     df = text_augmentation(df)
-    save_dataset(df, f'processed/data_aug_{exp_time}_aug1.csv')
+    save_dataset(df, SAVE_DATASET_BASE_PATH + f'data_aug_{exp_time}_{data_select_strategy}.csv')

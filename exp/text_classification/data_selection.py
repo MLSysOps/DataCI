@@ -9,16 +9,17 @@ Date: May, 23, 2023
 2. Unzip dataset to current directory / dataset base directory
 """
 import logging
-from datetime import datetime
+import os
 from pathlib import Path
 
 import pandas as pd
 from alaas.server.executors import TorchALWorker
 from docarray import Document, DocumentArray
-
-DATASET_BASE_PATH = 'data/reviews_{}_train.csv'
+from transformers import pipeline, AutoTokenizer
 
 logger = logging.getLogger(__name__)
+
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 
 def read_dataset(exp_time):
@@ -34,13 +35,22 @@ def select_data(df, num_samples: int, strategy: str = 'RandomSampling'):
     # Start ALaaS server in a separate process
     logger.info('Start AL Worker')
     al_worker = TorchALWorker(
-        model_name="bert-base-uncased",
+        model_name=MODEL_NAME,
         model_repo="huggingface/pytorch-transformers",
         device='cuda',
         strategy=strategy,
-        minibatch_size=8,
+        minibatch_size=1024,
         tokenizer_model="bert-base-uncased",
-        task="text-classification"
+        task="text-classification",
+    )
+    # Monkey patch the model
+    tokenizer = AutoTokenizer.from_pretrained(al_worker._tokenizer_model)
+    al_worker._model = pipeline(
+        al_worker._task,
+        model=al_worker._model_name,
+        tokenizer=tokenizer,
+        device=al_worker._convert_torch_device(),
+        padding=True, truncation=True, max_length=256, return_all_scores=True
     )
 
     # Prepare data for ALWorker
@@ -67,16 +77,19 @@ def save_dataset(df, file_path):
 
 
 if __name__ == '__main__':
-    exp_time = '2021Q1'
+    exp_time = '2021Q4'
+    prefix = ''
+    DATASET_BASE_PATH = prefix + 'data/reviews_{}_train.csv'
+    MODEL_NAME = prefix + 'out/2021Q3_LC_Token_lr=1.00E-05_b=128_j=4/model/'
+    SAVE_DATASET_BASE_PATH = prefix + 'processed/'
     cur_year, cur_quarter = exp_time.split('Q')
     last_quarter = f'{int(cur_year) - 1}Q4' if cur_quarter == '1' else f'{cur_year}Q{int(cur_quarter) - 1}'
-    data_start_date = '202010'
-    data_end_date = '202012'
-    data_selection_method = 'RS'
+    data_selection_method = 'LC'
     strategy_name_mapper = {
         'RS': 'RandomSampling',
+        'LC': 'LeastConfidence',
     }
 
     df_ = read_dataset(last_quarter)
-    selected_df = select_data(df_, num_samples=50_000, strategy=strategy_name_mapper[data_selection_method])
-    save_dataset(selected_df, f'processed/data_select_{exp_time}_{data_selection_method}.csv')
+    selected_df = select_data(df_, num_samples=5000, strategy=strategy_name_mapper[data_selection_method])
+    save_dataset(selected_df, SAVE_DATASET_BASE_PATH + f'data_select_{exp_time}_{data_selection_method}.csv')
