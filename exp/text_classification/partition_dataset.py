@@ -73,7 +73,7 @@ def split_train_val(yr_quarter='2020Q4'):
     # Use the first 2 + 1/2 months of this quarter as training set
     df_train = []
     for i in (-2, -1):
-        df_train.append(pd.read_csv(OUTPUT_DIR / f'reviews_{year}{month + i}.csv'))
+        df_train.append(pd.read_csv(OUTPUT_DIR / f'reviews_{year}{month + i:02}.csv'))
     df_train.append(df[df['date'] < f'{year}-{month:02}-16 00:00:00'])
     df_train = pd.concat(df_train)
     print(len(df_train), len(df_val))
@@ -86,4 +86,7 @@ def split_train_val(yr_quarter='2020Q4'):
 if __name__ == '__main__':
     # partition_dataset_stat()
     # partition_dataset_by_month()
-    split_train_val()
+    split_train_val('2021Q1')
+    split_train_val('2021Q2')
+    split_train_val('2021Q3')
+    split_train_val('2021Q4')
