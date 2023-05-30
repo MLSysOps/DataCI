@@ -71,3 +71,7 @@ def offline_evaluation(model):
 sentiment_analysis_workflow = Workflow('sentiment_analysis')
 with sentiment_analysis_workflow:
     data_selection >> text_augmentation >> model_training >> offline_evaluation
+
+
+if __name__ == '__main__':
+    sentiment_analysis_workflow.publish()

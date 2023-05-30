@@ -278,12 +278,24 @@ def get_many_workflow(workspace, name, version=None):
             cur.execute(
                 """
                 SELECT workspace, name, version, timestamp, params, flag, schedule, dag
-                FROM   workflow
-                WHERE  workspace=:workspace
-                AND    name GLOB :name
-                AND    length(version) < 32
-                ORDER BY version DESC
-                LIMIT 1
+                FROM (
+                    SELECT workspace
+                         , name
+                         , version
+                         , timestamp
+                         , params
+                         , flag
+                         , schedule
+                         , dag
+                         , row_number() OVER (PARTITION BY workspace, name ORDER BY version DESC) AS rk
+                    FROM (
+                        SELECT * FROM workflow
+                        WHERE  workspace=:workspace
+                        AND    name GLOB :name
+                        AND    length(version) < 32
+                    )
+                )
+                WHERE rk = 1
                 ;
                 """,
                 {
