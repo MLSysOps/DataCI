@@ -80,8 +80,9 @@ DEFAULT_BORDER_COLOR_SEQUENCE = [
     GEEKBLUE_BORDER_COLOR,
 ]
 
-text_uncolorable_format_template = "<span style='background-color:{background_color};" \
-                                   "border:2px solid;border-color:{border_color}'>{text}</span>"
+text_uncolorable_format_template = "<span style='color:{color};background-color:{background_color};" \
+                                   "border:2px solid;border-color:{border_color};border-radius:2px;" \
+                                   "padding:1px 8px;'>{text}</span>"
 
 
 def tag(text=None, variation='green'):

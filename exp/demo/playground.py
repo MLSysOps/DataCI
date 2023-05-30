@@ -10,8 +10,11 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+import dateutil
 import networkx as nx
 import streamlit as st
+from streamlit_extras.mandatory_date_range import date_range_picker
+from streamlit_toggle import st_toggle_switch
 
 from dataci.models import Workflow, Stage
 from exp.demo.tag_visualizer import tag
@@ -81,12 +84,12 @@ def generate_workflow_dag(workflow_dag: dict):
 # Info banner if workflow is triggered
 if st.session_state.workflow is not None and st.session_state.ci_workflow_trigger['status']:
     st.info(
-        f'DataCI Pipeline `{st.session_state.workflow.identifier}` is triggered by '
+        f'DataCI Pipeline `{st.session_state.workflow.name}@v{st.session_state.workflow.version}` is triggered by '
         f'{st.session_state.ci_workflow_trigger["on"]}.',
         icon='🔍',
     )
 
-config_col, detail_col = st.columns([1, 1])
+config_col, detail_col = st.columns([2, 1])
 
 
 def on_change_workflow_name():
@@ -132,7 +135,7 @@ def on_click_workflow_manual_trigger():
 def on_click_workflow_save():
     st.session_state.ci_workflow_trigger = {
         'status': True,
-        'on': 'pipeline save',
+        'on': 'pipeline update',
         'params': {
             'workflow': st.session_state.workflow,
         }
@@ -142,19 +145,22 @@ def on_click_workflow_save():
 with config_col:
     # Set input streaming data range
     with st.container():
-        col1, col2 = st.columns([18, 6])
+        col1, col2 = st.columns([2, 1])
         with col1:
-            input_data = st.selectbox('Select streaming data name', ['Yelp Review'])
+            input_data = st.selectbox('Select Streaming Data Name', ['yelp_review'])
         with col2:
-            input_data_range = st.selectbox('Select streaming data range',
-                                            ['Last day', 'Last week', 'Last month', 'Last 3 months'])
+            # 3 months ago as default start date
+            default_start_date = datetime.now() - dateutil.relativedelta.relativedelta(months=3)
+            input_data_range = date_range_picker(
+                'Data range', default_start=default_start_date, default_end=datetime.now(),
+            )
 
     with st.container():
-        col1, col2 = st.columns([18, 6])
+        col1, col2 = st.columns([2, 1])
         all_workflows = Workflow.find('*@latest')
         with col1:
             st.selectbox(
-                'Select a DataCI Pipeline', [w.name for w in all_workflows],
+                'Select a Pipeline', [w.name for w in all_workflows],
                 key='workflow_name', on_change=on_change_workflow_name,
             )
 
@@ -172,14 +178,23 @@ with config_col:
                 on_change_workflow()
 
     with st.container():
-        col0, col1, col2, col3 = st.columns([11, 4, 5, 4])
+        col0, col1, col2, col3, col4 = st.columns([6, 6, 4, 4, 4])
         with col0:
             st.write('### Pipeline DAG')
         with col1:
-            st.button('Edit', use_container_width=True, on_click=on_click_edit_workflow)
+            st_toggle_switch(
+                label="Enable DataCI",
+                key="enable_dataci",
+                default_value=True,
+                # inactive_color="#D3D3D3",  # optional
+                active_color="#FF4B4B",  # optional
+                track_color="#FFCBCB",  # optional
+            )
         with col2:
-            st.button('Manual Run', use_container_width=True, on_click=on_click_workflow_manual_trigger)
+            st.button('Edit', use_container_width=True, on_click=on_click_edit_workflow)
         with col3:
+            st.button('Manual Run', use_container_width=True, on_click=on_click_workflow_manual_trigger)
+        with col4:
             st.button('Save', type='primary', use_container_width=True, on_click=on_click_workflow_save)
 
         if st.session_state.workflow is not None:
@@ -188,16 +203,26 @@ with config_col:
                 use_container_width=True,
             )
 
+with config_col:
+    st.divider()
+
 # Run CI/CD workflow, show CI/CD Runs
 with config_col:
     if st.session_state.workflow is not None:
-        st.write('## Workflow Runs')
+        col0, col1, col2, col3 = st.columns([9, 3, 5, 8])
+        with col0:
+            st.write('### DataCI Pipeline Run')
+        with col2:
+            st.button('Detailed Result')
+        with col3:
+            st.button('View in Experiment Tracker', type='primary')
         if st.session_state.ci_workflow_trigger['status']:
             # Run CI workflow
             st.session_state.run_result = {
-                'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'input_data': f'{input_data} ({input_data_range})',
-                'workflow': st.session_state.workflow.identifier,
+                'time': datetime.now(),
+                'input_data_name': input_data,
+                'input_data_range': input_data_range,
+                'workflow': f'{st.session_state.workflow.name}@v{st.session_state.workflow.version}',
                 'triggered by': st.session_state.ci_workflow_trigger['on'],
                 'status': 'pending',
                 'stage_status': {
@@ -233,21 +258,48 @@ with config_col:
                     st.session_state.ci_workflow_trigger['status'] = False
 
             # Visualize run result
-            col1, col2 = st.columns([1, 3])
+            col1, col2, col3, col4 = st.columns([1, 3, 1, 2])
             with col1:
-                st.write(f'Run ID')
+                st.write(f'Run ID:')
             with col2:
-                st.code(uuid.uuid4().hex)
-            st.write('Run time: ', st.session_state.run_result['time'])
-            st.write('Input data: ', st.session_state.run_result['input_data'])
-            st.write('Workflow: ', st.session_state.run_result['workflow'])
-            st.write('Triggered by: ', st.session_state.run_result['triggered by'])
-            st.markdown('Status: ' + tag(st.session_state.run_result['status']))
-            with st.expander('Run Details', expanded=True):
-                st.write('Message: ', st.session_state.run_result['msg'])
-                st.write('Stage Status: ')
-                for stage_name, stage_status in st.session_state.run_result['stage_status'].items():
-                    st.write(f'- {stage_name}: {stage_status}')
+                st.write(tag(uuid.uuid4().hex, variation='blue'), unsafe_allow_html=True)
+            with col3:
+                st.write('Submit Time:')
+            with col4:
+                st.write(st.session_state.run_result['time'].strftime('%Y/%m/%d %H:%M:%S'))
+
+            with col1:
+                st.write('Triggered by:')
+            with col2:
+                st.write(tag(st.session_state.run_result['triggered by'], variation='gold'), unsafe_allow_html=True)
+            with col3:
+                st.write('Status:')
+            with col4:
+                st.markdown(tag(st.session_state.run_result['status']), unsafe_allow_html=True)
+
+            with col1:
+                st.write('Input Data:')
+            with col2:
+                st.markdown(
+                    tag(st.session_state.run_result['input_data_name'], variation='orange') + ' ' + \
+                    tag(st.session_state.run_result['input_data_range'][0].strftime('%Y/%m/%d') + ' - ' + \
+                        st.session_state.run_result['input_data_range'][1].strftime('%Y/%m/%d'), variation='geekblue'),
+                    unsafe_allow_html=True
+                )
+
+            with col3:
+                st.write('Data Duration:')
+            with col4:
+                input_date_range_days = (st.session_state.run_result['input_data_range'][1] -
+                                         st.session_state.run_result['input_data_range'][0]).days
+                st.write(tag(f'{input_date_range_days} days', variation='volcano'), unsafe_allow_html=True)
+
+            with col1:
+                st.write('Workflow:')
+            with col2:
+                st.write(tag(st.session_state.run_result['workflow'], variation='cyan'), unsafe_allow_html=True)
+
+            col1, col2, col3, col4 = st.columns([1, 3, 1, 2])
 
 
 # Configure Input Data
@@ -270,18 +322,18 @@ def on_click_use_stage_btn():
 with detail_col:
     if st.session_state.edit_workflow and st.session_state.workflow is not None:
         with st.expander('', expanded=True):
-            col1, col2 = st.columns([23, 1])
-            with col1:
-                st.subheader('Edit Workflow')
-            with col2:
-                st.button('✖', use_container_width=True, key='close_edit_btn', on_click=on_click_close_edit_btn)
+            header_col1, header_col2, header_col3 = st.columns([12, 10, 2])
+            with header_col1:
+                st.subheader('Edit Pipeline')
+            with header_col3:
+                st.button('x', use_container_width=True, key='close_edit_btn', on_click=on_click_close_edit_btn)
             # Record current stage version
             stage_dict = dict()
             for stage in st.session_state.workflow.stages:
                 stage_dict[stage.name] = stage.version
 
             # Stage selection
-            col1, col2 = st.columns([18, 6])
+            col1, col2 = st.columns([2, 1])
             with col1:
                 stage_name = st.selectbox('Stage', [s for s in stage_dict.keys()])
             with col2:
@@ -293,6 +345,14 @@ with detail_col:
                 )
             STAGE = Stage.get(f'{stage_name}@{stage_version}')
             st.code(STAGE.script, language='python')
+
+            with header_col2:
+                # Set save button on the header
+                st.button(
+                    'Use This Stage',
+                    disabled=stage_version == stage_dict[stage_name],  # current version, don't allow use
+                    on_click=on_click_use_stage_btn, use_container_width=True
+                )
 
             st.button(
                 'Use This Stage',
