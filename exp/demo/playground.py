@@ -295,7 +295,7 @@ with config_col:
                 st.write(tag(f'{input_date_range_days} days', variation='volcano'), unsafe_allow_html=True)
 
             with col1:
-                st.write('Workflow:')
+                st.write('Pipeline:')
             with col2:
                 st.write(tag(st.session_state.run_result['workflow'], variation='cyan'), unsafe_allow_html=True)
 
