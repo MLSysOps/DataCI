@@ -39,12 +39,12 @@ if 'run_result' not in st.session_state:
     st.session_state.run_result = dict()
 
 st.set_page_config(
-    page_title='DataCI Demo Playground',
+    page_title='DataCI Playground',
     page_icon='🧊',
     layout='wide',
 )
 
-st.title('DataCI Demo Playground')
+st.title('DataCI Playground')
 
 
 @st.cache_data
@@ -60,16 +60,17 @@ def generate_workflow_dag(workflow_dag: dict):
     dag_agraph.node_attr.update({
         'shape': 'record',
         'style': 'rounded',
-        'color': 'gray80',
+        'color': 'blue',
         'fontname': 'Helvetica,Arial,sans-serif',
         'ixedsize': 'true',
-        'height': '0.5'
+        'fontsize': '12',
+        'height': '1'
     })
     dag_agraph.edge_attr.update({
         'fontname': 'Helvetica,Arial,sans-serif',
         'color': 'royalblue1',
         'arrowsize': '0.5',
-        'penwidth': '1.0'
+        'penwidth': '2.0'
     })
     for agraph_node in dag_agraph.nodes_iter():
         node_id = int(agraph_node.name)
@@ -262,7 +263,7 @@ with config_col:
             with col1:
                 st.write(f'Run ID:')
             with col2:
-                st.write(tag(uuid.uuid4().hex, variation='blue'), unsafe_allow_html=True)
+                st.write('1')
             with col3:
                 st.write('Submit Time:')
             with col4:
@@ -281,10 +282,9 @@ with config_col:
                 st.write('Input Data:')
             with col2:
                 st.markdown(
-                    tag(st.session_state.run_result['input_data_name'], variation='orange') + ' ' + \
-                    tag(st.session_state.run_result['input_data_range'][0].strftime('%Y/%m/%d') + ' - ' + \
-                        st.session_state.run_result['input_data_range'][1].strftime('%Y/%m/%d'), variation='geekblue'),
-                    unsafe_allow_html=True
+                    st.session_state.run_result['input_data_name'] + ('&nbsp;' * 4) + \
+                    st.session_state.run_result['input_data_range'][0].strftime('%Y/%m/%d') + ' - ' + \
+                    st.session_state.run_result['input_data_range'][1].strftime('%Y/%m/%d'),
                 )
 
             with col3:
@@ -292,14 +292,12 @@ with config_col:
             with col4:
                 input_date_range_days = (st.session_state.run_result['input_data_range'][1] -
                                          st.session_state.run_result['input_data_range'][0]).days
-                st.write(tag(f'{input_date_range_days} days', variation='volcano'), unsafe_allow_html=True)
+                st.write(f'{input_date_range_days} days')
 
             with col1:
                 st.write('Pipeline:')
             with col2:
-                st.write(tag(st.session_state.run_result['workflow'], variation='cyan'), unsafe_allow_html=True)
-
-            col1, col2, col3, col4 = st.columns([1, 3, 1, 2])
+                st.write(st.session_state.run_result['workflow'],  unsafe_allow_html=True)
 
 
 # Configure Input Data
