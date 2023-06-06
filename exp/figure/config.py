@@ -10,7 +10,7 @@ from matplotlib.backends.backend_pgf import FigureCanvasPgf
 from matplotlib import pyplot as plt
 
 WIDTH = 506.295
-COLOR_LIST = ['#fe4a49', '#2ab7ca', '#fed766', 'gray', 'black', 'orange', '#00CD66', '#4D5139']
+COLOR_LIST = ['#fe4a49', '#2ab7ca', '#fed766', '#00CD66', '#ED790C']
 
 
 def set_style():
