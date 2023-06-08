@@ -6,7 +6,6 @@ Email: yuanmingleee@gmail.com
 Date: May 14, 2023
 """
 import traceback
-import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -63,7 +62,7 @@ def generate_workflow_dag(workflow_dag: dict):
         'color': 'blue',
         'fontname': 'Helvetica,Arial,sans-serif',
         'ixedsize': 'true',
-        'fontsize': '12',
+        'fontsize': '15',
         'height': '1'
     })
     dag_agraph.edge_attr.update({
@@ -90,7 +89,7 @@ if st.session_state.workflow is not None and st.session_state.ci_workflow_trigge
         icon='🔍',
     )
 
-config_col, detail_col = st.columns([2, 1])
+config_col, detail_col = st.columns([10, 1])
 
 
 def on_change_workflow_name():
@@ -204,19 +203,16 @@ with config_col:
                 use_container_width=True,
             )
 
-with config_col:
-    st.divider()
-
 # Run CI/CD workflow, show CI/CD Runs
 with config_col:
     if st.session_state.workflow is not None:
-        col0, col1, col2, col3 = st.columns([9, 3, 5, 8])
+        col0, col2, col3 = st.columns([12, 5, 8])
         with col0:
             st.write('### DataCI Pipeline Run')
         with col2:
-            st.button('Detailed Result')
+            st.button('Detailed Result', use_container_width=True)
         with col3:
-            st.button('View in Experiment Tracker', type='primary')
+            st.button('View in Experiment Tracker', type='primary', use_container_width=True)
         if st.session_state.ci_workflow_trigger['status']:
             # Run CI workflow
             st.session_state.run_result = {
