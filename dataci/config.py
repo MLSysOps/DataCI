@@ -15,7 +15,7 @@ def init():
     """
     Init dataci configuration
     """
-
+    CONFIG_FILE.parent.mkdir(exist_ok=True)
     with CONFIG_FILE.open('w') as f:
         f.write("""[CORE]
 # The database file

@@ -8,7 +8,6 @@ Date: Feb 20, 2023
 import inspect
 import logging
 import shutil
-from abc import ABC, abstractmethod
 from collections import defaultdict
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -16,33 +15,26 @@ from typing import TYPE_CHECKING
 from dataci.db.stage import create_one_stage, exist_stage, update_one_stage, get_one_stage, get_next_stage_version_id, \
     get_many_stages
 from dataci.decorators.event import event
-from . import WORKFLOW_CONTEXT
 from .base import BaseModel
 from .workspace import Workspace
 
 if TYPE_CHECKING:
     from typing import Optional
 
-    from networkx import DiGraph
-
 logger = logging.getLogger(__name__)
 
 
-class Stage(BaseModel, ABC):
-    def __init__(
-            self, name: str, symbolize: str = None, params: dict = None, **kwargs,
-    ) -> None:
-        super().__init__(name, **kwargs)
-        self.symbolize = symbolize
-        self.params = params or dict()
+class Stage(BaseModel):
+    def __init__(self, operator) -> None:
+        # if name not provided, use the opterator name
+        name = operator.function.__name__
+        super().__init__(name)
+        self.opterator = operator
         self.create_date: 'Optional[datetime]' = None
         # Output is saved after the stage is run, this is for the descendant stages to use
+        self._backend = 'airflow'
         self._output = None
         self._script = None
-
-    @abstractmethod
-    def run(self, *args, **kwargs):
-        raise NotImplementedError('Method `run` not implemented.')
 
     @property
     def script(self):
@@ -78,7 +70,6 @@ class Stage(BaseModel, ABC):
             'params': self.params,
             'script': self.script,
             'timestamp': self.create_date.timestamp() if self.create_date else None,
-            'symbolize': self.symbolize,
         }
 
     @classmethod
@@ -111,48 +102,20 @@ class Stage(BaseModel, ABC):
 
         return self.reload(config)
 
-    def add_downstream(self, stage: 'Stage'):
-        dag: DiGraph = self.context.get('dag')
-        if dag is None:
-            raise ValueError('DAG is not set in context.')
-        dag.add_edge(self, stage)
-
-        return stage
-
-    def add_self(self):
-        dag: DiGraph = self.context.get('dag')
-        if dag is None:
-            raise ValueError('DAG is not set in context.')
-        dag.add_node(self)
-
-        return self
-
-    @property
-    def context(self):
-        # Get context from contextvars, this will be set within the context of a models
-        ctx = WORKFLOW_CONTEXT.get()
-        # update local context
-        ctx['params'].update(self.params)
-        return ctx
-
-    @property
-    def ancestors(self):
-        return self.context.get('dag').predecessors(self)
+    def test(self, *args, **kwargs):
+        """Test the stage."""
+        return self.opterator.function(*args, **kwargs)
 
     def __call__(self, *args, **kwargs):
-        # Inspect run method signature
-        sig = inspect.signature(self.run)
-        # If context is in run method signature, pass context to run method
-        if 'context' in sig.parameters:
-            kwargs.update(self.context)
-        outputs = self.run(*args, **kwargs)
-        self._output = outputs
-        return outputs
+        from dataci.models.workflow import WorkflowContext
 
-    def __rshift__(self, other):
-        if other is None:
-            return self.add_self()
-        return self.add_downstream(other)
+        result = self.opterator(*args, **kwargs)
+        # Instantiate opterator successfully, add stage to workflow
+        workflow = WorkflowContext.top()
+        if workflow is not None and self.name not in workflow.stage_dict:
+            workflow.add_stage(self)
+
+        return result
 
     def __repr__(self):
         return f'{self.__class__.__name__}(name={self.workspace.name}.{self.name}@{self.version})'

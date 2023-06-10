@@ -9,9 +9,9 @@ import itertools
 import json
 import logging
 import re
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Deque
 
 import networkx as nx
 
@@ -335,3 +335,23 @@ class Workflow(BaseModel):
             return workflow_dict
 
         return workflow_list
+
+
+class WorkflowContext(object):
+    _context_managed_dags: 'Deque[Workflow]' = deque()
+
+    @classmethod
+    def push(cls, workflow: Workflow):
+        """Push a workflow to the context."""
+        cls._context_managed_dags.appendleft(workflow)
+
+    @classmethod
+    def pop(cls):
+        cls._context_managed_dags.popleft()
+
+    @classmethod
+    def top(cls):
+        """Get the current workflow."""
+        if len(cls._context_managed_dags) == 0:
+            return None
+        return cls._context_managed_dags[0]
