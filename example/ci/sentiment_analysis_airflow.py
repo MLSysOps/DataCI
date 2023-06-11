@@ -7,14 +7,15 @@ Date: May 30, 2023
 """
 from datetime import datetime
 
-from airflow.decorators import task, dag
+from dataci.decorators import stage as task
+from dataci.orchestrator.airflow import DAG
 
 
 @task
 def read_dataset():
     import pandas as pd
 
-    df = pd.read_csv('../text_classification/data/reviews_2020Q4_train.csv')
+    df = pd.read_csv('../../exp/text_classification/data/reviews_2020Q4_train.csv')
     return df
 
 
@@ -77,18 +78,25 @@ def offline_evaluation(model):
     print('Dummy offline evaluation')
 
 
-@dag(
-    start_date=datetime(2020, 1, 1),
-)
-def sentiment_analysis():
+# @dag(
+#     start_date=datetime(2020, 1, 1),
+# )
+# def sentiment_analysis():
+with DAG(
+        dag_id='sentiment_analysis',
+        start_date=datetime(2020, 1, 1),
+        schedule_interval=None,
+        catchup=False,
+) as dag:
     df = read_dataset()
     df = data_selection(df)
     df = text_augmentation(df)
     model = model_training(df)
     offline_evaluation(model)
 
-
 if __name__ == '__main__':
     # sentiment_analysis_workflow.publish()
-    dag = sentiment_analysis()
-    dag.test()
+    # print(read_dataset.function)
+    # dag = sentiment_analysis()
+    print(dag)
+    # dag.test()
