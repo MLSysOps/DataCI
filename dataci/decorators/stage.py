@@ -10,10 +10,9 @@ from typing import TYPE_CHECKING
 
 from airflow.decorators import task
 
-from dataci.models import Stage
-
 if TYPE_CHECKING:
     from typing import Callable
+    from dataci.models import Stage
 
 
 def python_stage(*args, **kwargs) -> 'Callable[[Callable], Stage]':
@@ -22,6 +21,8 @@ def python_stage(*args, **kwargs) -> 'Callable[[Callable], Stage]':
     """
 
     def decorator_stage(run):
+        from dataci.models import Stage
+
         @wraps(run)
         def wrapper_stage():
             # Decorate run with airflow task decorator

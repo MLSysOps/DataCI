@@ -22,7 +22,8 @@ class BaseModel(abc.ABC):
         r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|none|\*))?$', re.IGNORECASE
     )
 
-    def __init__(self, name, **kwargs):
+    def __init__(self, name, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         workspace_name, name = name.split('.') if '.' in name else (None, name)
         self.workspace = Workspace(workspace_name)
         self.name = name

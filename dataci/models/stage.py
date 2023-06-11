@@ -25,11 +25,20 @@ logger = logging.getLogger(__name__)
 
 
 class Stage(BaseModel):
-    def __init__(self, operator) -> None:
-        # if name not provided, use the opterator name
-        name = operator.function.__name__
-        super().__init__(name)
-        self.opterator = operator
+    """Stage mixin class.
+
+    Attributes:
+        name_arg (str): The name of the keyword arguments that is used as ID to initialize the stage.
+            If subclass does not use 'name' kwargs as the ID, it should override this attribute.
+    """
+
+    name_arg = 'name'
+
+    def __init__(self, *args, **kwargs) -> None:
+        name = kwargs.get(self.name_arg, None)
+        if name is None:
+            raise TypeError(f'__init__() missing 1 required keyword-only argument: \'{self.name_arg}\'')
+        super().__init__(name, *args, **kwargs)
         self.create_date: 'Optional[datetime]' = None
         # Output is saved after the stage is run, this is for the descendant stages to use
         self._backend = 'airflow'
@@ -101,21 +110,6 @@ class Stage(BaseModel):
             raise ValueError(f'Stage not found by script: {config["script_path"]}\n{script}')
 
         return self.reload(config)
-
-    def test(self, *args, **kwargs):
-        """Test the stage."""
-        return self.opterator.function(*args, **kwargs)
-
-    def __call__(self, *args, **kwargs):
-        from dataci.models.workflow import WorkflowContext
-
-        result = self.opterator(*args, **kwargs)
-        # Instantiate opterator successfully, add stage to workflow
-        workflow = WorkflowContext.top()
-        if workflow is not None and self.name not in workflow.stage_dict:
-            workflow.add_stage(self)
-
-        return result
 
     def __repr__(self):
         return f'{self.__class__.__name__}(name={self.workspace.name}.{self.name}@{self.version})'

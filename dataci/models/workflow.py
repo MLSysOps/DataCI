@@ -5,10 +5,12 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Feb 23, 2023
 """
+import abc
 import itertools
 import json
 import logging
 import re
+from abc import ABC
 from collections import defaultdict, deque
 from datetime import datetime
 from typing import TYPE_CHECKING, Deque
@@ -24,20 +26,18 @@ from dataci.db.workflow import (
     get_next_workflow_version_id,
 )
 from dataci.decorators.event import event
-from . import WORKFLOW_CONTEXT
 from .base import BaseModel
 from .stage import Stage
 # from dataci.run import Run
-from ..config import DEFAULT_WORKSPACE
 from ..utils import hash_binary
 
 if TYPE_CHECKING:
-    from typing import List, Optional, Iterable
+    from typing import Optional, Iterable
 
 logger = logging.getLogger(__name__)
 
 
-class Workflow(BaseModel):
+class Workflow(BaseModel, ABC):
     GET_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
         r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|[a-f\d]{32}|\d+))?$', flags=re.IGNORECASE
     )
@@ -45,108 +45,18 @@ class Workflow(BaseModel):
         r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|[a-f\d]{1,32}|\*))?$', re.IGNORECASE
     )
 
-    def __init__(
-            self,
-            name: str,
-            params: dict = None,
-            debug: bool = True,
-            schedule: 'List[str]' = None,
-            **kwargs,
-    ):
+    def __init__(self, name, **kwargs):
         super().__init__(name, **kwargs)
-        # Context for each stage
-        self.params = params or dict()
-        self.flag = {'debug': debug}
-        # schedule: list of event expression
-        # e.g., ['@daily', '@event producer name status']
-        if isinstance(schedule, str):
-            schedule = [schedule]
-        schedule = schedule or list()
-        self._schedule = list()
-        self.schedule = schedule
-        self.dag = nx.DiGraph()
-        self.context_token = None
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.logger = logging.getLogger(__name__)
         # set during runtime
-        self._outputs = dict()
         self._input_dataset = list()
         self._output_dataset = list()
 
     @property
-    def context(self):
-        return {
-            'params': self.params.copy(),
-            'dag': self.dag,
-            'flag': self.flag,
-            'workflow': self,
-            'input_dataset': self._input_dataset,  # Wait to be set by dataset read hook
-            'output_dataset': self._output_dataset,  # Wait to be set by dataset save hook
-            'outputs': self._outputs,
-        }
-
-    @property
-    def schedule(self):
-        return self._schedule.copy()
-
-    @schedule.setter
-    def schedule(self, new_schedule):
-        # append schedule producer name with workspace name
-        for i, s in enumerate(new_schedule):
-            if s.startswith('@event'):
-                if len(splits := s.split(' ')) == 4:
-                    producer_name, event_name, status = splits[1:]
-                    if '.' not in producer_name:
-                        # Add default workspace
-                        producer_name = '{}.{}'.format(DEFAULT_WORKSPACE, producer_name)
-                    new_schedule[i] = '@event {} {} {}'.format(producer_name, event_name, status)
-                else:
-                    raise ValueError('Invalid schedule expression: {}'.format(s))
-            else:
-                raise ValueError('Invalid schedule expression: {}'.format(s))
-        self._schedule = new_schedule
-
-    @property
+    @abc.abstractmethod
     def stages(self) -> 'Iterable[Stage]':
-        return self.dag.nodes
-
-    def validate(self):
-        """
-        Validate the models:
-        1. there is any cycle in the dag
-        2. All stages are connected
-        """
-        if not nx.is_directed_acyclic_graph(self.dag):
-            raise ValueError('The dag should be a directed acyclic graph.')
-        if not nx.is_connected(nx.to_undirected(self.dag)):
-            raise ValueError('All dag nodes should be connected.')
-        return True
-
-    def __call__(self):
-        with self:
-            # Validate the models
-            self.validate()
-
-            # Execute the models from the root stage
-            stages = nx.topological_sort(self.dag)
-            # Skip the root stage, since it is a virtual stage
-            outputs = None
-            for stage in stages:
-                self.logger.info(f'Executing stage: {stage}')
-                inputs = [t._output for t in stage.ancestors if t._output is not None]
-                outputs = stage(*inputs)
-                # Record output
-                self.context['outputs'][stage.name] = outputs
-            # Get the output of the last stage
-            # TODO: support outputs from different stages? or explicit set workflow output
-            return outputs
-
-    def __enter__(self):
-        self.context_token = WORKFLOW_CONTEXT.set(self.context)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        WORKFLOW_CONTEXT.reset(self.context_token)
+        raise NotImplementedError
 
     def dict(self, id_only=False):
         if id_only:
