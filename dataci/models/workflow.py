@@ -11,9 +11,9 @@ import json
 import logging
 import re
 from abc import ABC
-from collections import defaultdict, deque
+from collections import defaultdict
 from datetime import datetime
-from typing import TYPE_CHECKING, Deque
+from typing import TYPE_CHECKING
 
 import networkx as nx
 
@@ -44,9 +44,14 @@ class Workflow(BaseModel, ABC):
     LIST_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
         r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|[a-f\d]{1,32}|\*))?$', re.IGNORECASE
     )
+    name_arg = 'name'
 
-    def __init__(self, name, **kwargs):
-        super().__init__(name, **kwargs)
+    def __init__(self, *args, **kwargs):
+        if len(args) > 0:
+            name = args[0]
+        else:
+            name = kwargs.get(self.name_arg)
+        super().__init__(name, *args, **kwargs)
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.logger = logging.getLogger(__name__)
         # set during runtime
@@ -245,23 +250,3 @@ class Workflow(BaseModel, ABC):
             return workflow_dict
 
         return workflow_list
-
-
-class WorkflowContext(object):
-    _context_managed_dags: 'Deque[Workflow]' = deque()
-
-    @classmethod
-    def push(cls, workflow: Workflow):
-        """Push a workflow to the context."""
-        cls._context_managed_dags.appendleft(workflow)
-
-    @classmethod
-    def pop(cls):
-        cls._context_managed_dags.popleft()
-
-    @classmethod
-    def top(cls):
-        """Get the current workflow."""
-        if len(cls._context_managed_dags) == 0:
-            return None
-        return cls._context_managed_dags[0]

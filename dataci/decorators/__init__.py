@@ -7,16 +7,23 @@ Date: May 03, 2023
 """
 from typing import TYPE_CHECKING
 
-from dataci.decorators.stage import python_stage
+from dataci.decorators.airflow import python_task
+from dataci.orchestrator.airflow import dag
 
 if TYPE_CHECKING:
     from typing import Any
+
+__all__ = [
+    'StageDecoratorCollection',
+    'dag',
+    'stage',
+]
 
 
 class StageDecoratorCollection:
     """Implementation to provide the ``@stage`` syntax."""
 
-    python = staticmethod(python_stage)
+    python = staticmethod(python_task)
 
     __call__: 'Any' = python  # Alias '@stage' to '@stage.python'.
 
