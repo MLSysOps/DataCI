@@ -7,7 +7,9 @@ Date: Jun 11, 2023
 """
 import functools
 import inspect
+import os
 import sys
+from textwrap import dedent
 from typing import TYPE_CHECKING
 
 from airflow.models import DAG as _DAG
@@ -32,6 +34,22 @@ class DAG(Workflow, _DAG):
     @property
     def stages(self):
         return self.tasks
+
+    @property
+    def script(self):
+        task_script = list()
+        for t in self.tasks:
+            task_script.append(t.script)
+
+        if self._script is None:
+            raise ValueError("Unable to infer DAG script, you should provide a script.")
+
+        scripts = dedent(f"""
+{(os.linesep * 2).join(task_script)}
+        
+{self._script}
+        """)
+        return scripts
 
 
 def dag(
@@ -77,6 +95,9 @@ def dag(
 
                 # Invoke function to create operators in the DAG scope.
                 f(**f_kwargs)
+
+                # Set script to source code of the decorated function
+                dag_obj._script = dedent(inspect.getsource(f))
 
             # Return dag object such that it's accessible in Globals.
             return dag_obj

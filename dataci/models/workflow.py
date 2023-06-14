@@ -54,6 +54,8 @@ class Workflow(BaseModel, ABC):
         super().__init__(name, *args, **kwargs)
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.logger = logging.getLogger(__name__)
+        self._script = None
+        self._init_params = (args, kwargs)
         # set during runtime
         self._input_dataset = list()
         self._output_dataset = list()
@@ -62,6 +64,10 @@ class Workflow(BaseModel, ABC):
     @abc.abstractmethod
     def stages(self) -> 'Iterable[Stage]':
         raise NotImplementedError
+
+    @property
+    def script(self):
+        return self._script
 
     def dict(self, id_only=False):
         if id_only:
