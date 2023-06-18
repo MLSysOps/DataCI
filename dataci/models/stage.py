@@ -6,6 +6,7 @@ Email: yuanmingleee@gmail.com
 Date: Feb 20, 2023
 """
 import inspect
+import json
 import logging
 import shutil
 from collections import defaultdict
@@ -17,6 +18,7 @@ from dataci.db.stage import create_one_stage, exist_stage, update_one_stage, get
 from dataci.decorators.event import event
 from .base import BaseModel
 from .workspace import Workspace
+from ..utils import hash_binary
 
 if TYPE_CHECKING:
     from typing import Optional
@@ -42,6 +44,7 @@ class Stage(BaseModel):
         self.create_date: 'Optional[datetime]' = None
         # Output is saved after the stage is run, this is for the descendant stages to use
         self._backend = 'airflow'
+        self.params = dict()
         self._output = None
         self._script = None
 
@@ -92,9 +95,6 @@ class Stage(BaseModel):
         # Build class object from script
         # TODO: make the build process more secure with sandbox / allowed safe methods
         local_dict = locals()
-        # import stage
-        from dataci.decorators.stage import stage
-        local_dict['stage'] = stage
         exec(script, globals(), local_dict)
         for v in local_dict.copy().values():
             # Stage is instantiated by a class
@@ -123,17 +123,34 @@ class Stage(BaseModel):
         self._script = config['script']
         return self
 
+    @property
+    def fingerprint(self):
+        config = self.dict()
+        fingerprint_dict = {
+            'workspace': config['workspace'],
+            'name': config['name'],
+            'params': config['params'],
+            'script': config['script'],
+        }
+        return hash_binary(json.dumps(fingerprint_dict, sort_keys=True).encode('utf-8'))
+
     @event(name='stage_save')
     def save(self):
         """Save the stage to the workspace."""
         config = self.dict()
-        # Since save, we force set the version to None
-        config['version'] = None
+        # Check if the stage is already saved
+        version = self.fingerprint
+        if exist_stage(config['workspace'], config['name'], version):
+            self.version = version
+            return self
+
+        # stage is not saved
+        config['version'] = version
         # Update create date
         config['timestamp'] = int(datetime.now().timestamp())
 
         # Save the stage script to the workspace stage directory
-        save_dir = self.workspace.stage_dir / str(config['name']) / 'HEAD'
+        save_dir = self.workspace.stage_dir / str(config['name']) / version
         save_file_path = save_dir / 'script.py'
         save_dir.mkdir(parents=True, exist_ok=True)
 

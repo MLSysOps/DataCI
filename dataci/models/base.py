@@ -23,7 +23,16 @@ class BaseModel(abc.ABC):
     )
 
     def __init__(self, name, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        # Prevent to pass invalid arguments to object.__init__
+        mro = type(self).mro()
+        for next_cls in mro[mro.index(BaseModel) + 1:]:
+            if '__init__' in next_cls.__dict__:
+                break
+        else:
+            next_cls = None
+
+        if not next_cls == object:
+            super().__init__(*args, **kwargs)
         workspace_name, name = name.split('.') if '.' in name else (None, name)
         self.workspace = Workspace(workspace_name)
         self.name = name

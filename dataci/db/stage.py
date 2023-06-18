@@ -19,8 +19,8 @@ def create_one_stage(stage_dict):
         cur = db_connection.cursor()
         cur.execute(
             """
-            INSERT INTO stage (workspace, name, version, params, script_path, timestamp, symbolize)
-            VALUES (:workspace, :name, :version, :params, :script_path, :timestamp, :symbolize)
+            INSERT INTO stage (workspace, name, version, params, script_path, timestamp)
+            VALUES (:workspace, :name, :version, :params, :script_path, :timestamp)
             """,
             stage_dict
         )
@@ -86,7 +86,7 @@ def get_one_stage(workspace, name, version=None):
             # Get the head version
             cur.execute(
                 """
-                SELECT workspace, name, version, params, script_path, timestamp, symbolize
+                SELECT workspace, name, version, params, script_path, timestamp
                 FROM   stage 
                 WHERE  workspace=:workspace 
                 AND    name=:name
@@ -106,7 +106,7 @@ def get_one_stage(workspace, name, version=None):
             # Get the latest version
             cur.execute(
                 """
-                SELECT workspace, name, version, params, script_path, timestamp, symbolize
+                SELECT workspace, name, version, params, script_path, timestamp
                 FROM   stage 
                 WHERE  workspace=:workspace 
                 AND    name=:name
@@ -123,7 +123,7 @@ def get_one_stage(workspace, name, version=None):
         elif version != '':
             cur.execute(
                 """
-                SELECT workspace, name, version, params, script_path, timestamp, symbolize
+                SELECT workspace, name, version, params, script_path, timestamp
                 FROM   stage 
                 WHERE  workspace=:workspace 
                 AND    name=:name 
@@ -144,7 +144,6 @@ def get_one_stage(workspace, name, version=None):
         'params': json.loads(po[3]),
         'script_path': po[4],
         'timestamp': po[5],
-        'symbolize': po[6],
     }
 
 

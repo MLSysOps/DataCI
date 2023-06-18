@@ -10,7 +10,7 @@ import logging
 import os
 import shutil
 
-from dataci.config import CACHE_ROOT, DEFAULT_WORKSPACE, CONFIG_FILE
+from dataci.config import CACHE_ROOT, DEFAULT_WORKSPACE, CONFIG_FILE, STORAGE_BACKEND
 from dataci.connector.s3 import connect as connect_s3, mount_bucket, unmount_bucket
 
 logger = logging.getLogger(__name__)
@@ -75,6 +75,8 @@ class Workspace(object):
 
     def connect(self):
         os.makedirs(self.root_dir, exist_ok=True)
+        if STORAGE_BACKEND == 'local':
+            return
         if not self.root_dir.is_mount():
             # Create a S3 bucket for data
             # TODO: region should be configurable

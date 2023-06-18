@@ -26,11 +26,14 @@ log_dir = {log_dir}
 log_level = {log_level}
 # The default workspace
 default_workspace = {workspace}
+# Storage backend
+storage_backend = {storage_backend}
 """.format(
             workspace='default',
             db_file=str(CACHE_ROOT / 'dataci.db'),
             log_dir=str(CACHE_ROOT / 'log'),
             log_level='INFO',
+            storage_backend='local',
         ))
     logging.info(f'Create configuration file {CONFIG_FILE}.')
 
@@ -50,7 +53,7 @@ def load_config():
     Load dataci configuration
     """
     # export the configuration to global variables
-    global DEFAULT_WORKSPACE, DB_FILE, LOG_DIR, LOG_LEVEL
+    global DEFAULT_WORKSPACE, DB_FILE, LOG_DIR, LOG_LEVEL, STORAGE_BACKEND
 
     config = configparser.ConfigParser()
     config.read(CONFIG_FILE)
@@ -58,6 +61,7 @@ def load_config():
     DB_FILE = Path(config.get('CORE', 'db_file', fallback=''))
     LOG_DIR = Path(config.get('CORE', 'log_dir', fallback=''))
     LOG_LEVEL = config.get('CORE', 'log_level', fallback=None)
+    STORAGE_BACKEND = config.get('CORE', 'storage_backend', fallback='local')
 
     # Configure the logging
     # TODO: log to file
@@ -71,6 +75,7 @@ DEFAULT_WORKSPACE = None
 DB_FILE = None
 LOG_DIR = None
 LOG_LEVEL = None
+STORAGE_BACKEND = None
 
 # DataCI Trigger and Scheduler server
 SERVER_ADDRESS = '0.0.0.0'
