@@ -18,6 +18,7 @@ from dataci.db.stage import create_one_stage, exist_stage, update_one_stage, get
 from dataci.decorators.event import event
 from .base import BaseModel
 from .workspace import Workspace
+from ..decorators.base import DecoratedOperatorStageMixin
 from ..utils import hash_binary
 
 if TYPE_CHECKING:
@@ -97,13 +98,8 @@ class Stage(BaseModel):
         local_dict = locals()
         exec(script, globals(), local_dict)
         for v in local_dict.copy().values():
-            # Stage is instantiated by a class
-            if inspect.isclass(v) and issubclass(v, Stage) and v is not Stage:
-                sub_cls = v
-                self = sub_cls(**config)
-                break
-            # Stage is instantiated by a function decorated by @stage
-            elif isinstance(v, Stage):
+            # Stage is instantiated by operator class / a function decorated by @stage
+            if isinstance(v, (Stage, DecoratedOperatorStageMixin)):
                 self = v
                 break
         else:
