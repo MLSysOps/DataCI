@@ -9,13 +9,12 @@ import abc
 import inspect
 import json
 import logging
-import shutil
 from collections import defaultdict
 from datetime import datetime
 from typing import TYPE_CHECKING
 
 from dataci.db.stage import create_one_stage, exist_stage, get_one_stage, get_next_stage_version_tag, \
-    get_many_stages, create_one_stage_tag
+    get_many_stages, get_stage_tag_or_none, create_one_stage_tag
 from dataci.decorators.event import event
 from .base import BaseModel
 from .workspace import Workspace
@@ -155,7 +154,7 @@ class Stage(BaseModel):
 
         # Update the script path in the config
         config['script_path'] = str(save_file_path.relative_to(self.workspace.stage_dir))
-        with open(save_dir, 'w') as f:
+        with open(save_file_path, 'w') as f:
             f.write(config['version'])
         create_one_stage(config)
         return self.reload(config)
@@ -164,12 +163,13 @@ class Stage(BaseModel):
     @abc.abstractmethod
     def publish(self):
         """Publish the stage to the workspace."""
+        # Check if the stage is already published
+        version_tag = get_stage_tag_or_none(self.workspace.name, self.name, self.fingerprint)
+        if version_tag is not None:
+            self.version_tag = version_tag
+            return self
         # Save the stage to the workspace first
         self.save()
-        # Check if the stage is already published
-        # After save, this stage is reloaded. It should have a version tag if it is published
-        if self.version_tag is not None:
-            return self
         config = self.dict()
         config['version_tag'] = str(get_next_stage_version_tag(config['workspace'], config['name']))
         create_one_stage_tag(config)

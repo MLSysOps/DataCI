@@ -14,8 +14,6 @@ from . import db_connection
 def create_one_stage(stage_dict):
     stage_dict = stage_dict.copy()
     stage_dict['params'] = json.dumps(stage_dict['params'])
-    if stage_dict['version_tag'].startswith('v'):
-        stage_dict['version_tag'] = int(stage_dict['version_tag'][1:])  # 'v1' -> 1
 
     with db_connection:
         cur = db_connection.cursor()
@@ -27,15 +25,6 @@ def create_one_stage(stage_dict):
             """,
             stage_dict
         )
-        if stage_dict['version_tag'] is not None:
-            cur.execute(
-                """
-                INSERT INTO stage_tag (workspace, name, version, tag)
-                VALUES (:workspace, :name, :version, :version_tag)
-                ;
-                """,
-                stage_dict
-            )
 
 
 def create_one_stage_tag(stage_dict):
@@ -93,6 +82,26 @@ def exist_stage(workspace, name, version):
                 }
             )
         return cur.fetchone()[0]
+
+
+def get_stage_tag_or_none(workspace, name, version):
+    with db_connection:
+        cur = db_connection.cursor()
+        cur.execute(
+            dedent("""
+            SELECT tag
+            FROM   stage_tag
+            WHERE  workspace=:workspace
+            AND    name=:name
+            AND    version=:version
+            """),
+            {
+                'workspace': workspace,
+                'name': name,
+                'version': version
+            }
+        )
+        return (cur.fetchone() or [None])[0]
 
 
 def get_one_stage(workspace, name, version='latest'):
