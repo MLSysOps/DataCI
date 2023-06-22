@@ -7,7 +7,9 @@ Date: Jun 11, 2023
 """
 import functools
 import inspect
+import shutil
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from airflow.models import DAG as _DAG
@@ -111,3 +113,14 @@ class PythonOperator(Stage, _PythonOperator):
                 script = f.read()
             self._script = script
         return self._script
+
+    def publish(self):
+        super().publish()
+        # Copy the script content to the publish file
+        publish_file_path = (Path.home() / 'airflow' / 'plugins' / self.name).with_suffix('.py')
+        # Create parent dir if not exists
+        publish_file_path.parent.mkdir(parents=True, exist_ok=True)
+        # Remove the publish file if exists
+        with open(publish_file_path, 'w') as f:
+            f.write(self.script)
+        return self

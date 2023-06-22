@@ -36,8 +36,10 @@ class BaseModel(abc.ABC):
         workspace_name, name = name.split('.') if '.' in name else (None, name)
         self.workspace = Workspace(workspace_name)
         self.name = name
-        # Version will be filled on publish
+        # Version will be filled on save
         self.version = None
+        # Version tag will be filled on publish
+        self.version_tag = None
 
     @property
     def full_name(self):
