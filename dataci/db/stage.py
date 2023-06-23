@@ -104,37 +104,40 @@ def get_stage_tag_or_none(workspace, name, version):
         return (cur.fetchone() or [None])[0]
 
 
-def get_one_stage(workspace, name, version='latest'):
-    # Some illustration of versions:
-    # save1 -> save2 (v1) -> save3
-    # In this case,
-    #   version=latest: v1
-    #   version=save2: v1
-    #   version=save1: save1
-
+def get_one_stage_by_version(workspace, name, version='latest'):
     with db_connection:
         cur = db_connection.cursor()
+        # version is a hex string version
         if version == 'latest':
-            # Get the latest version
             cur.execute(
                 dedent("""
-                WITH base AS (
+                    WITH base AS (
                     SELECT workspace, name, version, params, script_path, timestamp
                     FROM   stage
                     WHERE  workspace=:workspace
                     AND    name=:name
+                    AND    version = (
+                        SELECT MAX(version)
+                        FROM   stage
+                        WHERE  workspace=:workspace
+                        AND    name=:name
+                    )
                 )
                 ,tag AS (
                     SELECT workspace, name, version, tag
                     FROM   stage_tag
                     WHERE  workspace=:workspace
                     AND    name=:name
-                    ORDER BY tag DESC
-                    LIMIT 1
                 )
-                SELECT base.workspace, base.name, base.version, tag, params, script_path, timestamp
+                SELECT base.workspace
+                     , base.name
+                     , base.version
+                     , tag
+                     , params
+                     , script_path
+                     , timestamp
                 FROM   base
-                JOIN   tag
+                LEFT JOIN tag
                 ON     base.workspace = tag.workspace
                 AND    base.name = tag.name
                 AND    base.version = tag.version
@@ -145,45 +148,7 @@ def get_one_stage(workspace, name, version='latest'):
                     'name': name,
                 }
             )
-        elif version.startswith('v'):
-            # version is a tag (v1, v2, ...)
-            version = version[1:]
-            cur.execute(
-                dedent("""
-                WITH base AS (
-                    SELECT workspace, name, version, params, script_path, timestamp
-                    FROM   stage
-                    WHERE  workspace=:workspace
-                    AND    name=:name
-                )
-                ,tag AS (
-                    SELECT workspace, name, version, tag
-                    FROM   stage_tag
-                    WHERE  workspace=:workspace
-                    AND    name=:name
-                    AND    tag=:version
-                )
-                SELECT base.workspace
-                     , base.name
-                     , base.version
-                     , tag
-                     , params
-                     , script_path
-                     , timestamp
-                FROM   base
-                JOIN   tag
-                ON     base.workspace = tag.workspace
-                AND    base.name = tag.name
-                AND    base.version = tag.version
-                """),
-                {
-                    'workspace': workspace,
-                    'name': name,
-                    'version': version,
-                }
-            )
         else:
-            # version is a hex string version
             cur.execute(
                 dedent("""
                 WITH base AS (
@@ -226,7 +191,101 @@ def get_one_stage(workspace, name, version='latest'):
         'workspace': po[0],
         'name': po[1],
         'version': po[2],
-        'tag': 'v' + po[3] if po[3] else None,
+        'version_tag': f'v{po[3]}' if po[3] else None,
+        'params': json.loads(po[4]),
+        'script_path': po[5],
+        'timestamp': po[6],
+    }
+
+
+def get_one_stage_by_tag(workspace, name, version_tag='latest'):
+    with db_connection:
+        cur = db_connection.cursor()
+        if version_tag == 'latest':
+            cur.execute(
+                dedent("""
+                WITH base AS (
+                    SELECT workspace, name, version, params, script_path, timestamp
+                    FROM   stage
+                    WHERE  workspace=:workspace
+                    AND    name=:name
+                )
+                ,tag AS (
+                    SELECT workspace, name, version, tag
+                    FROM   stage_tag
+                    WHERE  workspace=:workspace
+                    AND    name=:name
+                    AND    tag = (
+                        SELECT MAX(tag)
+                        FROM   stage_tag
+                        WHERE  workspace=:workspace
+                        AND    name=:name
+                    )
+                )
+                SELECT base.workspace
+                        , base.name
+                        , base.version
+                        , tag
+                        , params
+                        , script_path
+                        , timestamp
+                FROM   base
+                JOIN   tag
+                ON     base.workspace = tag.workspace
+                AND    base.name = tag.name
+                AND    base.version = tag.version
+                ;
+                """),
+                {
+                    'workspace': workspace,
+                    'name': name,
+                }
+            )
+        else:
+            version_tag = version_tag[1:]
+            cur.execute(
+                dedent("""
+                WITH base AS (
+                    SELECT workspace, name, version, params, script_path, timestamp
+                    FROM   stage
+                    WHERE  workspace=:workspace
+                    AND    name=:name
+                )
+                ,tag AS (
+                    SELECT workspace, name, version, tag
+                    FROM   stage_tag
+                    WHERE  workspace=:workspace
+                    AND    name=:name
+                    AND    tag=:version_tag
+                )
+                SELECT base.workspace
+                        , base.name
+                        , base.version
+                        , tag
+                        , params
+                        , script_path
+                        , timestamp
+                FROM   base
+                JOIN   tag
+                ON     base.workspace = tag.workspace
+                AND    base.name = tag.name
+                AND    base.version = tag.version
+                ;
+                """),
+                {
+                    'workspace': workspace,
+                    'name': name,
+                    'version_tag': version_tag,
+                }
+            )
+
+        po = cur.fetchone()
+
+    return {
+        'workspace': po[0],
+        'name': po[1],
+        'version': po[2],
+        'version_tag': f'v{po[3]}',
         'params': json.loads(po[4]),
         'script_path': po[5],
         'timestamp': po[6],

@@ -13,8 +13,15 @@ from collections import defaultdict
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from dataci.db.stage import create_one_stage, exist_stage, get_one_stage, get_next_stage_version_tag, \
-    get_many_stages, get_stage_tag_or_none, create_one_stage_tag
+from dataci.db.stage import (
+    create_one_stage,
+    exist_stage,
+    get_one_stage_by_version,
+    get_one_stage_by_tag,
+    get_next_stage_version_tag,
+    get_stage_tag_or_none,
+    get_many_stages, create_one_stage_tag
+)
 from dataci.decorators.event import event
 from .base import BaseModel
 from .workspace import Workspace
@@ -136,8 +143,14 @@ class Stage(BaseModel):
     def save(self):
         """Save the stage to the workspace."""
         config = self.dict()
-        # Check if the stage is already saved
         version = self.fingerprint
+        # Check if the stage is already published
+        version_tag = get_stage_tag_or_none(self.workspace.name, self.name, version)
+        if version_tag is not None:
+            self.version_tag = version_tag
+            self.version = version
+            return self
+        # Check if the stage is already saved
         if exist_stage(config['workspace'], config['name'], version):
             self.version = version
             return self
@@ -163,13 +176,11 @@ class Stage(BaseModel):
     @abc.abstractmethod
     def publish(self):
         """Publish the stage to the workspace."""
-        # Check if the stage is already published
-        version_tag = get_stage_tag_or_none(self.workspace.name, self.name, self.fingerprint)
-        if version_tag is not None:
-            self.version_tag = version_tag
-            return self
         # Save the stage to the workspace first
         self.save()
+        # Check if the stage is already published
+        if self.version_tag is not None:
+            return self
         config = self.dict()
         config['version_tag'] = str(get_next_stage_version_tag(config['workspace'], config['name']))
         create_one_stage_tag(config)
@@ -179,9 +190,12 @@ class Stage(BaseModel):
     @classmethod
     def get(cls, name, version=None):
         """Get the stage from the workspace."""
-        workspace, name, version = cls.parse_data_model_get_identifier(name, version)
-        stage_config = get_one_stage(workspace, name, version)
-        stage = cls.from_dict(stage_config)
+        workspace, name, version_or_tag = cls.parse_data_model_get_identifier(name, version)
+        if version_or_tag == 'latest' or version_or_tag.startswith('v'):
+            config = get_one_stage_by_tag(workspace, name, version)
+        else:
+            config = get_one_stage_by_version(workspace, name, version)
+        stage = cls.from_dict(config)
         return stage
 
     @classmethod
