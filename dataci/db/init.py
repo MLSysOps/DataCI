@@ -20,6 +20,7 @@ with db_connection:
     DROP TABLE IF EXISTS workflow_dag_node;
     DROP TABLE IF EXISTS stage_tag;
     DROP TABLE IF EXISTS stage;
+    DROP TABLE IF EXISTS workflow_tag;
     DROP TABLE IF EXISTS workflow;
     """)
 logger.info('Drop all tables.')
@@ -39,6 +40,19 @@ with db_connection:
         dag       TEXT,
         PRIMARY KEY (workspace, name, version),
         UNIQUE (workspace, name, version)
+    );
+    
+    CREATE TABLE workflow_tag
+    (
+        workspace TEXT,
+        name      TEXT,
+        version   TEXT,
+        tag       INTEGER,
+        PRIMARY KEY (workspace, name, tag),
+        UNIQUE (workspace, name, tag),
+        UNIQUE (workspace, name, version),
+        FOREIGN KEY (workspace, name, version)
+            REFERENCES workflow (workspace, name, version)
     );
     
     CREATE TABLE stage

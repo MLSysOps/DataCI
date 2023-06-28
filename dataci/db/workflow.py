@@ -6,6 +6,7 @@ Email: yuanmingleee@gmail.com
 Date: Mar 13, 2023
 """
 import json
+from textwrap import dedent
 
 from . import db_connection
 
@@ -13,19 +14,15 @@ from . import db_connection
 def create_one_workflow(workflow_dict):
     """Create one workflow."""
     dag = workflow_dict.pop('dag')
-    workflow_dict['params'] = json.dumps(workflow_dict['params'], sort_keys=True)
-    workflow_dict['flag'] = json.dumps(workflow_dict['flag'], sort_keys=True)
-    workflow_dict['schedule'] = ','.join(workflow_dict['schedule'])
     workflow_dict['dag'] = json.dumps(dag['edge'], sort_keys=True)
     workflow_dag_node_dict = dag['node']
-    workflow_dict['version'] = workflow_dict['version'] or ''
 
     with db_connection:
         cur = db_connection.cursor()
         cur.execute(
             """
-            INSERT INTO workflow (workspace, name, version, timestamp, params, flag, schedule, dag)
-            VALUES (:workspace, :name, :version, :timestamp, :params, :flag, :schedule, :dag)
+            INSERT INTO workflow (workspace, name, version, timestamp, dag)
+            VALUES (:workspace, :name, :version, :timestamp, :dag)
             """,
             workflow_dict,
         )
@@ -63,28 +60,86 @@ def create_one_workflow(workflow_dict):
         return workflow_id
 
 
-def exist_workflow(workspace, name, version):
-    """Check if the workflow exists."""
-    version = version or ''
+def create_one_workflow_tag(workflow_tag_dict):
+    """Create one workflow tag."""
+    workflow_tag_dict['version_tag'] = int(workflow_tag_dict['version_tag'][1:]) # remove 'v' prefix
+
     with db_connection:
         cur = db_connection.cursor()
         cur.execute(
-            f"""
-            SELECT EXISTS(
-                SELECT 1 
-                FROM   workflow 
-                WHERE  workspace=:workspace 
-                AND    name=:name 
-                AND    version=:version
-            )
+            """
+            INSERT INTO workflow_tag (workspace, name, version, tag)
+            VALUES (:workspace, :name, :version, :version_tag)
             """,
+            workflow_tag_dict,
+        )
+        return cur.lastrowid
+
+
+def exist_workflow_by_version(workspace, name, version):
+    """Check if the workflow exists."""
+    with db_connection:
+        cur = db_connection.cursor()
+        cur.execute(
+            dedent(f"""
+                    SELECT EXISTS(
+                        SELECT 1
+                        FROM   workflow
+                        WHERE  workspace=:workspace
+                        AND    name=:name
+                        AND    version=:version
+                    )
+                    """),
             {
                 'workspace': workspace,
                 'name': name,
-                'version': version,
-            },
+                'version': version
+            }
         )
         return cur.fetchone()[0]
+
+
+def exist_workflow_by_tag(workspace, name, tag):
+    """Check if the workflow exists."""
+    with db_connection:
+        cur = db_connection.cursor()
+        cur.execute(
+            dedent("""
+                    SELECT EXISTS(
+                        SELECT 1
+                        FROM   workflow_tag
+                        WHERE  workspace=:workspace
+                        AND    name=:name
+                        AND    tag=:tag
+                    )
+                    """),
+            {
+                'workspace': workspace,
+                'name': name,
+                'tag': tag
+            }
+        )
+        return cur.fetchone()[0]
+
+
+def get_workflow_tag_or_none(workspace, name, version):
+    with db_connection:
+        cur = db_connection.cursor()
+        cur.execute(
+            dedent("""
+            SELECT tag
+            FROM   workflow_tag
+            WHERE  workspace=:workspace
+            AND    name=:name
+            AND    version=:version
+            """),
+            {
+                'workspace': workspace,
+                'name': name,
+                'version': version
+            }
+        )
+        return (cur.fetchone() or [None])[0]
 
 
 def update_one_workflow(workflow_dict):
@@ -390,11 +445,10 @@ def get_next_workflow_version_id(workspace, name):
         cur = db_connection.cursor()
         cur.execute(
             """
-            SELECT COALESCE(MAX(CAST(version AS INTEGER)), 0) + 1
-            FROM   workflow
+            SELECT COALESCE(MAX(CAST(tag AS INTEGER)), 0) + 1
+            FROM   workflow_tag
             WHERE  workspace=:workspace 
             AND    name=:name
-            AND    length(version) < 32
             ;
             """,
             {
@@ -402,4 +456,4 @@ def get_next_workflow_version_id(workspace, name):
                 'name': name,
             },
         )
-        return cur.fetchone()[0]
+        return 'v' + str(cur.fetchone()[0])

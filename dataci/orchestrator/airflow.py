@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import networkx as nx
 from airflow.models import DAG as _DAG
 from airflow.operators.python import PythonOperator as _PythonOperator
 from airflow.utils.decorators import fixup_decorator_warning_stack
@@ -34,6 +35,14 @@ class DAG(Workflow, _DAG):
     @property
     def stages(self):
         return self.tasks
+
+    @property
+    def dag(self):
+        g = nx.DiGraph()
+        for t in self.tasks:
+            g.add_node(t)
+            g.add_edges_from([(t, d) for d in t.downstream_list])
+        return g
 
     @property
     def script(self):

@@ -19,11 +19,12 @@ import networkx as nx
 
 from dataci.db.workflow import (
     create_one_workflow,
-    exist_workflow,
+    exist_workflow_by_tag,
+    exist_workflow_by_version,
     update_one_workflow,
     get_one_workflow,
     get_many_workflow,
-    get_next_workflow_version_id,
+    get_next_workflow_version_id, get_workflow_tag_or_none, create_one_workflow_tag,
 )
 from dataci.decorators.event import event
 from .base import BaseModel
@@ -66,6 +67,11 @@ class Workflow(BaseModel, ABC):
         raise NotImplementedError
 
     @property
+    @abc.abstractmethod
+    def dag(self) -> 'nx.DiGraph':
+        raise NotImplementedError
+
+    @property
     def script(self):
         return self._script
 
@@ -87,21 +93,15 @@ class Workflow(BaseModel, ABC):
         for stage in self.dag.nodes:
             _ = stage_mapping[stage]
 
-        # Translate the schedule list to a list of event string
-        schedule_list = list()
-        for e in self.schedule:
-            schedule_list.append(':'.join(e.split(' ')[1:]))
         return {
             'workspace': self.workspace.name,
             'name': self.name,
             'version': self.version,
-            'params': self.params,
-            'schedule': schedule_list,
             'dag': {
                 'node': {v: k.dict(id_only=True) for k, v in stage_mapping.items()},
                 'edge': dag_edge_list,
             },
-            'flag': self.flag,
+            'script': self.script,
             'timestamp': int(self.create_date.timestamp()) if self.create_date else None,
         }
 
@@ -145,6 +145,17 @@ class Workflow(BaseModel, ABC):
             return repr(self) == repr(__o)
         return False
 
+    @property
+    def fingerprint(self):
+        config = self.dict()
+        fingerprint_dict = {
+            'workspace': config['workspace'],
+            'name': config['name'],
+            'script': config['script'],
+            'stages': [stage.fingerprint for stage in self.stages],
+        }
+        return hash_binary(json.dumps(fingerprint_dict, sort_keys=True).encode('utf-8'))
+
     def reload(self, config):
         """Reload the models from the updated config."""
         self.version = config['version'] if config['version'] != 'head' else None
@@ -154,65 +165,42 @@ class Workflow(BaseModel, ABC):
     @event(name='workflow_save')
     def save(self):
         """Save the models to the workspace."""
+        config = self.dict()
+        version = self.fingerprint
+
+        # Check if the stage is already saved
+        if exist_workflow_by_version(config['workspace'], config['name'], version):
+            self.version = version
+            # Get stage tag
+            version_tag = get_workflow_tag_or_none(self.workspace.name, self.name, version)
+            self.version_tag = version_tag
+            return self
+
         # Check if the models name is valid
         if self.NAME_PATTERN.match(f'{self.workspace.name}.{self.name}') is None:
             raise ValueError(f'Workflow name {self.workspace}.{self.name} is not valid.')
         # Save the used stages (only if the stage is not saved)
         for stage in self.stages:
-            if stage.version is None:
-                stage.save()
-                logger.info(f'Saved stage: {stage}')
+            stage.save()
+            logger.info(f'Saved stage: {stage}')
 
-        config = self.dict()
-        # Since save, we force set the version to None (this is different from latest)
-        config['version'] = None
+        config['version'] = version
         # Update create date
         config['timestamp'] = int(datetime.now().timestamp())
         # Save the workflow
-        if not exist_workflow(config['workspace'], config['name'], config['version']):
-            create_one_workflow(config)
-            logger.info(f'Saved workflows: {self}')
-        else:
-            update_one_workflow(config)
-            logger.info(f'Updated workflows: {self}')
+        create_one_workflow(config)
         return self.reload(config)
 
-    def cache(self):
-        """Cache the models to the workspace with a version. This is a temp function for CI.
-
-        Refer to how to make DAG versioning: https://cwiki.apache.org/confluence/display/AIRFLOW/AIP-36+DAG+Versioning
-        """
-        config = self.dict()
-        # We generate the fingerprint for the workflow
-        version_generate_config = {
-            'workspace': config['workspace'],
-            'name': config['name'],
-            'dag': config['dag'],
-            'schedule': config['schedule'],
-            'params': config['params'],
-            'flag': config['flag'],
-        }
-        fingerprint_bin = json.dumps(version_generate_config, sort_keys=True).encode('utf-8')
-        config['version'] = hash_binary(fingerprint_bin)
-        # Save the workflow
-        if not exist_workflow(config['workspace'], config['name'], config['version']):
-            create_one_workflow(config)
-        else:
-            update_one_workflow(config)
-        self.reload(config)
-        logger.info(f'Cached workflow: {self}')
-        return self
-
-    def patch(self, stage: Stage):
-        """Patch the new stage to the same name stage in workflow."""
-        patch_mapping = dict()
-        for s in self.stages:
-            if s.full_name == stage.full_name:
-                patch_mapping[s] = stage
-
-        # Relabel the graph
-        self.dag = nx.relabel_nodes(self.dag, patch_mapping, copy=True)
-        return self
+    # def patch(self, stage: Stage):
+    #     """Patch the new stage to the same name stage in workflow."""
+    #     patch_mapping = dict()
+    #     for s in self.stages:
+    #         if s.full_name == stage.full_name:
+    #             patch_mapping[s] = stage
+    #
+    #     # Relabel the graph
+    #     self.dag = nx.relabel_nodes(self.dag, patch_mapping, copy=True)
+    #     return self
 
     @event(name='workflow_publish')
     def publish(self):
@@ -220,16 +208,19 @@ class Workflow(BaseModel, ABC):
         # TODO: use DB transaction / data object lock
         # Save models first
         self.save()
-        # Publish the used stages (only if the stage is not published)
+        # Check if the models is already published
+        if self.version_tag is not None:
+            return self
+
+        # Publish the used stages
         for stage in self.stages:
-            if stage.version is None or stage.version == '':
-                stage.publish()
-                logger.info(f'Published stage: {stage}')
+            stage.publish()
+            logger.info(f'Published stage: {stage}')
 
         config = self.dict()
         # Since publish, we generate the latest version
-        config['version'] = get_next_workflow_version_id(workspace=config['workspace'], name=config['name'])
-        create_one_workflow(config)
+        config['version_tag'] = get_next_workflow_version_id(workspace=config['workspace'], name=config['name'])
+        create_one_workflow_tag(config)
         return self.reload(config)
 
     @classmethod
