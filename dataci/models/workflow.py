@@ -20,7 +20,7 @@ from dataci.db.workflow import (
     create_one_workflow,
     exist_workflow_by_version,
     get_many_workflow,
-    get_next_workflow_version_id, get_workflow_tag_or_none, create_one_workflow_tag, get_one_workflow_by_tag,
+    get_next_workflow_version_id, create_one_workflow_tag, get_one_workflow_by_tag,
     get_one_workflow_by_version,
 )
 from . import Workspace
@@ -171,11 +171,8 @@ class Workflow(BaseModel, ABC):
 
         # Check if the stage is already saved
         if exist_workflow_by_version(self.workspace.name, self.name, version):
-            self.version = version
-            # Get stage tag
-            version_tag = get_workflow_tag_or_none(self.workspace.name, self.name, version)
-            self.version_tag = version_tag
-            return self
+            # reload
+            return self.reload()
 
         # Check if the models name is valid
         if self.NAME_PATTERN.match(f'{self.workspace.name}.{self.name}') is None:

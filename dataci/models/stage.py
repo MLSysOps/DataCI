@@ -19,7 +19,6 @@ from dataci.db.stage import (
     get_one_stage_by_version,
     get_one_stage_by_tag,
     get_next_stage_version_tag,
-    get_stage_tag_or_none,
     get_many_stages, create_one_stage_tag
 )
 from .base import BaseModel
@@ -148,16 +147,9 @@ class Stage(BaseModel):
         """Save the stage to the workspace."""
         config = self.dict()
         version = self.fingerprint
-        # Check if the stage is already published
-        version_tag = get_stage_tag_or_none(self.workspace.name, self.name, version)
-        if version_tag is not None:
-            self.version_tag = version_tag
-            self.version = version
-            return self
         # Check if the stage is already saved
         if exist_stage(config['workspace'], config['name'], version):
-            self.version = version
-            return self
+            return self.reload()
 
         # stage is not saved
         config['version'] = version

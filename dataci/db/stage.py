@@ -84,26 +84,6 @@ def exist_stage(workspace, name, version):
         return cur.fetchone()[0]
 
 
-def get_stage_tag_or_none(workspace, name, version):
-    with db_connection:
-        cur = db_connection.cursor()
-        cur.execute(
-            dedent("""
-            SELECT tag
-            FROM   stage_tag
-            WHERE  workspace=:workspace
-            AND    name=:name
-            AND    version=:version
-            """),
-            {
-                'workspace': workspace,
-                'name': name,
-                'version': version
-            }
-        )
-        return (cur.fetchone() or [None])[0]
-
-
 def get_one_stage_by_version(workspace, name, version='latest'):
     with db_connection:
         cur = db_connection.cursor()
