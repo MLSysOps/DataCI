@@ -9,7 +9,6 @@ import abc
 import itertools
 import json
 import logging
-import re
 from abc import ABC
 from collections import defaultdict
 from datetime import datetime
@@ -19,14 +18,12 @@ import networkx as nx
 
 from dataci.db.workflow import (
     create_one_workflow,
-    exist_workflow_by_tag,
     exist_workflow_by_version,
-    update_one_workflow,
-    get_one_workflow,
     get_many_workflow,
-    get_next_workflow_version_id, get_workflow_tag_or_none, create_one_workflow_tag,
+    get_next_workflow_version_id, get_workflow_tag_or_none, create_one_workflow_tag, get_one_workflow_by_tag,
+    get_one_workflow_by_version,
 )
-from dataci.decorators.event import event
+from . import Workspace
 from .base import BaseModel
 from .stage import Stage
 # from dataci.run import Run
@@ -39,12 +36,6 @@ logger = logging.getLogger(__name__)
 
 
 class Workflow(BaseModel, ABC):
-    GET_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
-        r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|[a-f\d]{32}|\d+))?$', flags=re.IGNORECASE
-    )
-    LIST_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
-        r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|[a-f\d]{1,32}|\*))?$', re.IGNORECASE
-    )
     name_arg = 'name'
 
     def __init__(self, *args, **kwargs):
@@ -107,27 +98,25 @@ class Workflow(BaseModel, ABC):
 
     @classmethod
     def from_dict(cls, config: 'dict'):
-        # 1. convert the dag to a list of edges
-        # 2. convert each node from Stage to an id
-        dag_edge_list = config['dag']['edge']
-        # Build stage conversion mapping
-        stage_mapping = {
-            k: Stage.get(f"{v['workspace']}.{v['name']}", version=v['version'])
-            for k, v in config['dag']['node'].items()
-        }
-        # Convert the dag edge list
-        dag_edge_list = [
-            (stage_mapping[source], stage_mapping[target], data) for source, target, data in dag_edge_list
-        ]
-        # Translate the schedule list to a list of event string
-        for i, e in enumerate(config['schedule']):
-            # producer:name:status -> @event producer name status
-            config['schedule'][i] = '@event ' + ' '.join(e.split(':'))
-        # Build the models
-        workflow = cls(config['name'], params=config['params'], schedule=config['schedule'], **config['flag'])
-        workflow.dag.add_edges_from(dag_edge_list)
-        workflow.reload(config)
-        return workflow
+        # Get script from stage code directory
+        workspace = Workspace(config['workspace'])
+        with (workspace.workflow_dir / config['name'] / config['version']).with_suffix('.py').open() as f:
+            script = f.read()
+        # Update script
+        config['script'] = script
+
+        # Build class object from script
+        # TODO: make the build process more secure with sandbox / allowed safe methods
+        local_dict = locals()
+        exec(script, local_dict, local_dict)
+        for v in local_dict.copy().values():
+            # Stage is instantiated by operator class / a function decorated by @stage
+            if isinstance(v, Workflow):
+                self = v
+                break
+        else:
+            raise ValueError(f'Workflow not found by script:\n{script}')
+        return self.reload(config)
 
     def __repr__(self) -> str:
         if all((self.workspace.name, self.name)):
@@ -156,20 +145,32 @@ class Workflow(BaseModel, ABC):
         }
         return hash_binary(json.dumps(fingerprint_dict, sort_keys=True).encode('utf-8'))
 
-    def reload(self, config):
-        """Reload the models from the updated config."""
-        self.version = config['version'] if config['version'] != 'head' else None
+    def reload(self, config=None):
+        """Reload the models from the updated config. If config is None, reload from the database."""
+        config = config or get_one_workflow_by_version(self.workspace.name, self.name, self.fingerprint)
+        if config is None:
+            return self
+
+        self.version = config['version']
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
+        if 'script' in config:
+            self._script = config['script']
+        if 'dag' in config:
+            # Reload stages by stage config fetched from DB
+            stage_mapping = dict()
+            for stage_config in config['dag']['node'].values():
+                stage = Stage.get(f"{stage_config['workspace']}.{stage_config['name']}@{stage_config['version']}")
+                stage_mapping[stage.full_name] = stage
+            for stage in self.stages:
+                stage.reload(stage_mapping[stage.full_name].dict())
         return self
 
-    @event(name='workflow_save')
     def save(self):
         """Save the models to the workspace."""
-        config = self.dict()
         version = self.fingerprint
 
         # Check if the stage is already saved
-        if exist_workflow_by_version(config['workspace'], config['name'], version):
+        if exist_workflow_by_version(self.workspace.name, self.name, version):
             self.version = version
             # Get stage tag
             version_tag = get_workflow_tag_or_none(self.workspace.name, self.name, version)
@@ -184,9 +185,19 @@ class Workflow(BaseModel, ABC):
             stage.save()
             logger.info(f'Saved stage: {stage}')
 
+        # Get config after call save on all stages, since the stage version might be updated
+        config = self.dict()
         config['version'] = version
         # Update create date
         config['timestamp'] = int(datetime.now().timestamp())
+
+        # Save the stage script to the workspace stage directory
+        save_dir = self.workspace.workflow_dir / str(config['name'])
+        save_file_path = (save_dir / config['version']).with_suffix('.py')
+        save_dir.mkdir(parents=True, exist_ok=True)
+        with open(save_file_path, 'w') as f:
+            f.write(config['script'])
+
         # Save the workflow
         create_one_workflow(config)
         return self.reload(config)
@@ -202,7 +213,6 @@ class Workflow(BaseModel, ABC):
     #     self.dag = nx.relabel_nodes(self.dag, patch_mapping, copy=True)
     #     return self
 
-    @event(name='workflow_publish')
     def publish(self):
         """Publish the models to the workspace."""
         # TODO: use DB transaction / data object lock
@@ -228,7 +238,15 @@ class Workflow(BaseModel, ABC):
         """Get a models from the workspace."""
         workspace, name, version = cls.parse_data_model_get_identifier(name, version)
 
-        config = get_one_workflow(workspace, name, version)
+        if version is None or version == 'latest' or version.startswith('v'):
+            # Get by tag
+            config = get_one_workflow_by_tag(workspace, name, version)
+        else:
+            # Get by version
+            if version.lower() == 'none':
+                version = None
+            config = get_one_workflow_by_version(workspace, name, version)
+
         return cls.from_dict(config)
 
     @classmethod

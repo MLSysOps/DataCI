@@ -7,7 +7,7 @@ Date: Jun 11, 2023
 """
 import functools
 import inspect
-import shutil
+import re
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -49,8 +49,32 @@ class DAG(Workflow, _DAG):
         if self._script is None:
             with open(self.fileloc, 'r') as f:
                 script = f.read()
+            # Remove stage import statements:
+            # from xxx import stage_name / import stage_name
+            stage_name_pattern = '|'.join([stage.name for stage in self.stages])
+            import_pattern = re.compile(
+                rf'^(?:from\s+[\w\.]+\s+)?import\s+(?:{stage_name_pattern})[\r\t\f ]*\n', flags=re.MULTILINE
+            )
+            script = import_pattern.sub('', script)
+
+            # Insert the stage scripts before the DAG script:
+            for stage in self.stages:
+                script = stage.script + '\n' * 2 + script
+
             self._script = script
         return self._script
+
+    def publish(self):
+        """Publish the DAG to the backend."""
+        super().publish()
+        # Copy the script content to the published file
+        publish_file_path = (Path.home() / 'airflow' / 'dags' / self.name).with_suffix('.py')
+        # Create parent dir if not exists
+        publish_file_path.parent.mkdir(parents=True, exist_ok=True)
+        # Remove the published file if exists
+        with open(publish_file_path, 'w') as f:
+            f.write(self.script)
+        return self
 
 
 def dag(
@@ -125,11 +149,11 @@ class PythonOperator(Stage, _PythonOperator):
 
     def publish(self):
         super().publish()
-        # Copy the script content to the publish file
+        # Copy the script content to the published file
         publish_file_path = (Path.home() / 'airflow' / 'plugins' / self.name).with_suffix('.py')
         # Create parent dir if not exists
         publish_file_path.parent.mkdir(parents=True, exist_ok=True)
-        # Remove the publish file if exists
+        # Remove the published file if exists
         with open(publish_file_path, 'w') as f:
             f.write(self.script)
         return self

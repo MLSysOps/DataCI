@@ -195,7 +195,7 @@ def get_one_stage_by_version(workspace, name, version='latest'):
         'params': json.loads(po[4]),
         'script_path': po[5],
         'timestamp': po[6],
-    }
+    } if po else None
 
 
 def get_one_stage_by_tag(workspace, name, version_tag='latest'):
@@ -289,7 +289,7 @@ def get_one_stage_by_tag(workspace, name, version_tag='latest'):
         'params': json.loads(po[4]),
         'script_path': po[5],
         'timestamp': po[6],
-    }
+    } if po else None
 
 
 def get_many_stages(workspace, name, version=None, all=False):

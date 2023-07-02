@@ -28,6 +28,10 @@ class Workspace(object):
         self.connect()
 
     @property
+    def workflow_dir(self):
+        return self.root_dir / 'workflow'
+
+    @property
     def stage_dir(self):
         return self.root_dir / 'stage'
 

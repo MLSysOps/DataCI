@@ -62,7 +62,7 @@ def create_one_workflow(workflow_dict):
 
 def create_one_workflow_tag(workflow_tag_dict):
     """Create one workflow tag."""
-    workflow_tag_dict['version_tag'] = int(workflow_tag_dict['version_tag'][1:]) # remove 'v' prefix
+    workflow_tag_dict['version_tag'] = int(workflow_tag_dict['version_tag'][1:])  # remove 'v' prefix
 
     with db_connection:
         cur = db_connection.cursor()
@@ -102,6 +102,7 @@ def exist_workflow_by_version(workspace, name, version):
 def exist_workflow_by_tag(workspace, name, tag):
     """Check if the workflow exists."""
     with db_connection:
+        tag = int(tag[1:])  # remove 'v' prefix
         cur = db_connection.cursor()
         cur.execute(
             dedent("""
@@ -142,136 +143,85 @@ def get_workflow_tag_or_none(workspace, name, version):
         return (cur.fetchone() or [None])[0]
 
 
-def update_one_workflow(workflow_dict):
-    dag = workflow_dict.pop('dag')
-    workflow_dict['params'] = json.dumps(workflow_dict['params'], sort_keys=True)
-    workflow_dict['flag'] = json.dumps(workflow_dict['flag'], sort_keys=True)
-    workflow_dict['schedule'] = ','.join(workflow_dict['schedule'])
-    workflow_dict['dag'] = json.dumps(dag['edge'], sort_keys=True)
-    workflow_dag_node_dict = dag['node']
-    workflow_dict['version'] = workflow_dict['version'] or ''
-
+def get_one_workflow_by_version(workspace, name, version):
     with db_connection:
         cur = db_connection.cursor()
-        cur.execute(
-            """
-            UPDATE workflow
-            SET timestamp=:timestamp, params=:params, flag=:flag, schedule=:schedule, dag=:dag
-            WHERE workspace=:workspace AND name=:name AND version=:version
-            ;
-            """,
-            workflow_dict,
-        )
-        cur.execute(
-            """
-            DELETE FROM workflow_dag_node
-            WHERE workflow_workspace=:workspace
-            AND   workflow_name=:name
-            AND   workflow_version=:version
-            """,
-            workflow_dict,
-        )
-        cur.executemany(
-            """
-            INSERT INTO workflow_dag_node ( workflow_workspace
-                                          , workflow_name
-                                          , workflow_version
-                                          , stage_workspace
-                                          , stage_name
-                                          , stage_version
-                                          , dag_node_id)
-            VALUES ( :workflow_workspace
-                   , :workflow_name
-                   , :workflow_version
-                   , :stage_workspace
-                   , :stage_name
-                   , :stage_version
-                   , :dag_node_id);
-            """,
-            [
-                {
-                    'workflow_workspace': workflow_dict['workspace'],
-                    'workflow_name': workflow_dict['name'],
-                    'workflow_version': workflow_dict['version'],
-                    'stage_workspace': node['workspace'],
-                    'stage_name': node['name'],
-                    'stage_version': node['version'] or '',
-                    'dag_node_id': node_id,
-                }
-                for node_id, node in workflow_dag_node_dict.items()
-            ],
-        )
-
-
-def get_one_workflow(workspace, name, version=None):
-    # replace None with '', since None will lead to issues in SQL
-    version = version or ''
-
-    with db_connection:
-        cur = db_connection.cursor()
-        if version == '':
-            # Get the head version
-            cur.execute(
-                """
-                SELECT workspace, name, version, timestamp, params, flag, schedule, dag
-                FROM   workflow 
-                WHERE  workspace=:workspace 
-                AND    name=:name
-                AND    version=:version
-                ;
-                """,
-                {
-                    'workspace': workspace,
-                    'name': name,
-                    'version': version,
-                }
-            )
-            workflow = cur.fetchone()
-            if workflow is None:
-                # If there is no head version, get the latest version (by set version to None)
-                version = 'latest'
-        if version == 'latest':
+        if version is None:
             # Get the latest version
             cur.execute(
-                """
-                SELECT workspace, name, version, timestamp, params, flag, schedule, dag
-                FROM   workflow
-                WHERE  workspace=:workspace AND name=:name
-                ORDER BY version DESC
-                LIMIT 1
+                dedent("""
+                WITH base AS (
+                    SELECT *
+                    FROM   workflow
+                    WHERE  workspace = :workspace 
+                    AND    name = :name
+                )
+                ,latest AS (
+                    SELECT MAX(timestamp) AS timestamp
+                    FROM   base
+                )
+                ,tag AS (
+                    SELECT version, tag
+                    FROM   workflow_tag
+                    WHERE  workspace = :workspace
+                    AND    name = :name
+                )
+                SELECT workspace, name, base.version, tag, base.timestamp, params, flag, schedule, dag
+                FROM   base
+                JOIN   latest
+                ON     base.timestamp = latest.timestamp
+                LEFT JOIN tag
+                ON     base.version = tag.version
                 ;
-                """,
+                """),
                 {
                     'workspace': workspace,
                     'name': name,
-                },
+                }
             )
-            workflow = cur.fetchone()
-        elif version != '':
+        else:
+            # Get the specified version
             cur.execute(
-                """
-                SELECT workspace, name, version, timestamp, params, flag, schedule, dag
-                FROM   workflow
-                WHERE  workspace=:workspace AND name=:name AND version=:version
+                dedent("""
+                WITH base AS (
+                    SELECT workspace, name, version, timestamp, params, flag, schedule, dag
+                    FROM   workflow
+                    WHERE  workspace = :workspace
+                    AND    name = :name
+                    AND    version = :version
+                )
+                ,tag AS (
+                    SELECT version, tag
+                    FROM   workflow_tag
+                    WHERE  workspace = :workspace
+                    AND    name = :name
+                    AND    version = :version
+                )
+                SELECT workspace, name, base.version, tag, timestamp, params, flag, schedule, dag
+                FROM   base
+                LEFT JOIN tag
+                ON     base.version = tag.version
                 ;
-                """,
+                """),
                 {
                     'workspace': workspace,
                     'name': name,
                     'version': version,
-                },
+                }
             )
-            workflow = cur.fetchone()
+
+        workflow = cur.fetchone()
         workflow_dict = {
             'workspace': workflow[0],
             'name': workflow[1],
             'version': workflow[2],
-            'timestamp': workflow[3],
-            'params': json.loads(workflow[4]),
-            'flag': json.loads(workflow[5]),
-            'schedule': workflow[6].split(',') if workflow[6] != '' else list(),  # schedule is a list
+            'version_tag': f'v{workflow[3]}' if workflow[3] else None,
+            'timestamp': workflow[4],
+            'params': '',
+            'flag': '',
+            'schedule': '',
             'dag': {
-                'edge': json.loads(workflow[7]),
+                'edge': json.loads(workflow[8]),
             }
         }
         # Overwrite the query version for dag node
@@ -298,7 +248,111 @@ def get_one_workflow(workspace, name, version=None):
                 'version': node[2] if node[2] != '' else None,
             } for node in cur.fetchall()
         }
-        workflow_dict['version'] = workflow_dict['version'] or ''
+        return workflow_dict
+
+
+def get_one_workflow_by_tag(workspace, name, tag):
+    with db_connection:
+        cur = db_connection.cursor()
+        if tag is None or tag == 'latest':
+            cur.execute(
+                dedent("""
+                WITH tag AS (
+                    SELECT version, tag
+                    FROM   workflow_tag
+                    WHERE  workspace = :workspace
+                    AND    name = :name
+                )
+                ,latest AS (
+                    SELECT MAX(tag) AS tag
+                    FROM   tag
+                )
+                ,base AS (
+                    SELECT workspace, name, version, timestamp, params, flag, schedule, dag
+                    FROM   workflow
+                    WHERE  workspace = :workspace
+                    AND    name = :name
+                )
+                SELECT workspace, name, tag.version, tag.tag, timestamp, params, flag, schedule, dag
+                FROM   tag
+                JOIN   latest
+                ON     tag.tag = latest.tag
+                JOIN   base
+                ON     tag.version = base.version
+                ;
+                """),
+                {
+                    'workspace': workspace,
+                    'name': name,
+                }
+            )
+        else:
+            tag = int(tag[1:])  # remove 'v' prefix
+            cur.execute(
+                dedent("""
+                WITH base AS (
+                    SELECT workspace, name, version, timestamp, params, flag, schedule, dag
+                    FROM   workflow
+                    WHERE  workspace = :workspace
+                    AND    name = :name
+                )
+                ,tag AS (
+                    SELECT version, tag
+                    FROM   workflow_tag
+                    WHERE  workspace = :workspace
+                    AND    name = :name
+                    AND    tag = :tag
+                )
+                SELECT workspace, name, base.version, tag, timestamp, params, flag, schedule, dag
+                FROM   base
+                JOIN   tag
+                ON     base.version = tag.version
+                ;
+                """),
+                {
+                    'workspace': workspace,
+                    'name': name,
+                    'tag': tag,
+                }
+            )
+        config = cur.fetchone()
+        workflow_dict = {
+            'workspace': config[0],
+            'name': config[1],
+            'version': config[2],
+            'version_tag': f'v{config[3]}',
+            'timestamp': config[4],
+            'params': '',
+            'flag': '',
+            'schedule': '',
+            'dag': {
+                'edge': json.loads(config[8]),
+            }
+        }
+        # Overwrite the query version for dag node
+        version = workflow_dict['version']
+        cur.execute(
+            dedent("""
+            SELECT stage_workspace, stage_name, stage_version, dag_node_id
+            FROM   workflow_dag_node
+            WHERE  workflow_workspace=:workspace
+            AND    workflow_name=:name
+            AND    workflow_version =:version
+            ;
+            """),
+            {
+                'workspace': workspace,
+                'name': name,
+                'version': version,
+            },
+        )
+        workflow_dict['dag']['node'] = {
+            node[3]: {
+                'workspace': node[0],
+                'name': node[1],
+                'version': node[2] if node[2] != '' else None,
+            } for node in cur.fetchall()
+        }
         return workflow_dict
 
 

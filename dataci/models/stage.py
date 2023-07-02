@@ -22,10 +22,8 @@ from dataci.db.stage import (
     get_stage_tag_or_none,
     get_many_stages, create_one_stage_tag
 )
-from dataci.decorators.event import event
 from .base import BaseModel
 from .workspace import Workspace
-from ..decorators.base import DecoratedOperatorStageMixin
 from ..utils import hash_binary
 
 if TYPE_CHECKING:
@@ -95,9 +93,11 @@ class Stage(BaseModel):
 
     @classmethod
     def from_dict(cls, config: dict):
+        from dataci.decorators.base import DecoratedOperatorStageMixin
+
         # Get script from stage code directory
         workspace = Workspace(config['workspace'])
-        with (workspace.stage_dir / config['script_path']).open() as f:
+        with open(workspace.stage_dir / config['script_path']) as f:
             script = f.read()
 
         config['script'] = script
@@ -118,14 +118,19 @@ class Stage(BaseModel):
     def __repr__(self):
         return f'{self.__class__.__name__}(name={self.workspace.name}.{self.name}@{self.version})'
 
-    def reload(self, config):
-        """Reload the stage from the config."""
+    def reload(self, config=None):
+        """Reload the stage from the config. If config is not provided, reload from the Database.
+        """
+        config = config or get_one_stage_by_version(self.workspace.name, self.name, self.fingerprint)
+        if config is None:
+            return self
         self.version = config['version']
         self.version_tag = config['version_tag']
         self.params = config['params']
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
         # Manual set the script to the stage object, as the script is not available in the exec context
-        self._script = config['script']
+        if 'script' in config:
+            self._script = config['script']
         return self
 
     @property
@@ -139,7 +144,6 @@ class Stage(BaseModel):
         }
         return hash_binary(json.dumps(fingerprint_dict, sort_keys=True).encode('utf-8'))
 
-    @event(name='stage_save')
     def save(self):
         """Save the stage to the workspace."""
         config = self.dict()
@@ -168,11 +172,10 @@ class Stage(BaseModel):
         # Update the script path in the config
         config['script_path'] = str(save_file_path.relative_to(self.workspace.stage_dir))
         with open(save_file_path, 'w') as f:
-            f.write(config['version'])
+            f.write(config['script'])
         create_one_stage(config)
         return self.reload(config)
 
-    @event(name='stage_publish')
     @abc.abstractmethod
     def publish(self):
         """Publish the stage to the workspace."""
@@ -192,9 +195,9 @@ class Stage(BaseModel):
         """Get the stage from the workspace."""
         workspace, name, version_or_tag = cls.parse_data_model_get_identifier(name, version)
         if version_or_tag == 'latest' or version_or_tag.startswith('v'):
-            config = get_one_stage_by_tag(workspace, name, version)
+            config = get_one_stage_by_tag(workspace, name, version_or_tag)
         else:
-            config = get_one_stage_by_version(workspace, name, version)
+            config = get_one_stage_by_version(workspace, name, version_or_tag)
         stage = cls.from_dict(config)
         return stage
 
