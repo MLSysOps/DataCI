@@ -5,22 +5,26 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Mar 10, 2023
 """
+import json
 import logging
-import re
 import shutil
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import pandas as pd
-
 from dataci.connector.s3 import download as s3_download
-from dataci.db.dataset import get_many_datasets, get_one_dataset, get_next_version_id, create_one_dataset, \
-    exists_dataset, update_one_dataset
-from dataci.utils import hash_file
+from dataci.db.dataset import (
+    get_many_datasets,
+    get_one_dataset_by_version,
+    get_one_dataset_by_tag,
+    get_next_dataset_version_tag,
+    create_one_dataset,
+    create_one_dataset_tag,
+    exist_dataset_by_version
+)
+from dataci.utils import hash_file, hash_binary
 from .base import BaseModel
-from ..decorators.event import event
 
 if TYPE_CHECKING:
     from typing import Optional, Union
@@ -30,13 +34,6 @@ logger = logging.getLogger(__name__)
 
 
 class Dataset(BaseModel):
-    VERSION_PATTERN = re.compile(r'latest|[a-f\d]{32}|\d+', flags=re.IGNORECASE)
-    GET_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
-        r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|[a-f\d]{32}|\d+))?$', flags=re.IGNORECASE
-    )
-    LIST_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
-        r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|[a-f\d]{1,32}|\*))?$', re.IGNORECASE
-    )
 
     def __init__(
             self,
@@ -44,7 +41,6 @@ class Dataset(BaseModel):
             dataset_files=None,
             yield_workflow: 'Optional[Union[Workflow, dict]]' = None,
             parent_dataset: 'Optional[Union[Dataset, dict]]' = None,
-            log_message=None,
             id_column='id',
             **kwargs,
     ):
@@ -67,7 +63,6 @@ class Dataset(BaseModel):
             self.dataset_files = None
         self._yield_workflow = yield_workflow
         self._parent_dataset = parent_dataset
-        self.log_message = log_message or ''
         # TODO: create a dataset schema and verify
         self.id_column = id_column
         self.__published = False
@@ -99,14 +94,15 @@ class Dataset(BaseModel):
         dataset_obj.size = config['size']
         return dataset_obj
 
-    def dict(self):
+    def dict(self, id_only=False):
         yield_workflow_dict = self.yield_workflow.dict() if self.yield_workflow else {
-            'workspace': None, 'name': None, 'version': None,
+            'workspace': None, 'name': None, 'version': None, 'version_tag': None
         }
         parent_dataset_dict = {
             'workspace': self.workspace.name,
             'name': self.parent_dataset.name,
-            'version': self.parent_dataset.version
+            'version': self.parent_dataset.version,
+            'version_tag': self.parent_dataset.version_tag,
         } if self.parent_dataset else {
             'workspace': None, 'name': None, 'version': None
         }
@@ -116,7 +112,6 @@ class Dataset(BaseModel):
             'timestamp': self.create_date.timestamp() if self.create_date else None,
             'parent_dataset': parent_dataset_dict,
             'yield_workflow': yield_workflow_dict,
-            'log_message': self.log_message,
             'version': self.version,
             'filename': self.dataset_files.name,
             'size': self.size,
@@ -165,32 +160,47 @@ class Dataset(BaseModel):
             return repr(self) == repr(__o)
         return False
 
-    def reload(self, config):
+    @property
+    def fingerprint(self):
+        config = self.dict()
+        fingerprint_dict = {
+            'workspace': config['workspace'],
+            'name': config['name'],
+            'datasets': hash_file(self.dataset_files)
+        }
+        return hash_binary(json.dumps(fingerprint_dict, sort_keys=True).encode('utf-8'))
+
+    def reload(self, config=None):
         """Reload dataset from db returned config
         """
+        config = config or get_one_dataset_by_version(self.workspace.name, self.name, self.fingerprint)
+        if config is None:
+            return self
         self.version = config['version']
+        self.version_tag = config['version_tag']
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
         return self
 
-    @event('dataset_save')
     def save(self):
         """Save dataset to db with generated version ID for caching
         """
+        version = self.fingerprint
+
+        # Check if the stage is already saved
+        if exist_dataset_by_version(self.workspace.name, self.name, version):
+            return self.reload()
+
+        # Check if the models name is valid
+        if self.NAME_PATTERN.match(f'{self.workspace.name}.{self.name}') is None:
+            raise ValueError(f'Dataset name {self.workspace}.{self.name} is not valid.')
+
+        # Get config after call save on all stages, since the stage version might be updated
         config = self.dict()
-        # Generate version ID by the content of dataset
-        config['version'] = hash_file(self.dataset_files)
+        config['version'] = version
+        # Update create date
         config['timestamp'] = int(datetime.now().timestamp())
-        # If the dataset version is already in DB, update dataset
-        if exists_dataset(
-                config['workspace'], config['name'], config['version']
-        ):
-            update_one_dataset(config)
-            self.reload(config)
-            logger.info(f'Update dataset: {self}')
-            return self
+
         # If the dataset version is not in DB, save dataset
-        # Save dataset to mount cloud object storage
-        logger.info(f'Save dataset files to mounted S3: {self.workspace.data_dir}')
         dataset_cache_dir = self.workspace.data_dir / config['name'] / config['version']
         dataset_cache_dir.mkdir(parents=True, exist_ok=True)
         # Copy local files to cloud object storage
@@ -198,38 +208,33 @@ class Dataset(BaseModel):
         shutil.copy2(self.dataset_files, dataset_cache_dir)
         # Save dataset to DB
         create_one_dataset(config)
-        self.reload(config)
-        logger.info(f'Save dataset to DB: {self}')
-        return self
+        return self.reload(config)
 
-    @event('dataset_publish')
     def publish(self):
+        self.save()
+        # Check if the stage is already published
+        if self.version_tag is not None:
+            return self
         config = self.dict()
-        config['version'] = str(get_next_version_id(self.workspace.name, self.name))
-        config['timestamp'] = int(datetime.now().timestamp())
-        #####################################################################
-        # Step 1: Save dataset to mount cloud object storage
-        #####################################################################
-        logger.info(f'Save dataset files to mounted S3: {self.workspace.data_dir}')
-        dataset_cache_dir = self.workspace.data_dir / config['name'] / config['version']
-        dataset_cache_dir.mkdir(parents=True, exist_ok=True)
-        # Copy local files to cloud object storage
-        # FIXME: only support a single file now
-        shutil.copy2(self.dataset_files, dataset_cache_dir)
+        config['version_tag'] = str(get_next_dataset_version_tag(config['workspace'], config['name']))
+        create_one_dataset_tag(config)
 
-        #####################################################################
-        # Step 2: Publish dataset to DB
-        #####################################################################
-        create_one_dataset(config)
-        self.reload(config)
-        logger.info(f'Adding dataset to db: {self}')
-        return self
+        return self.reload(config)
 
     @classmethod
     def get(cls, name: str, version=None):
-        workspace, name, version = cls.parse_data_model_get_identifier(name=name, version=version)
-        dataset_dict = get_one_dataset(workspace=workspace, name=name, version=version)
-        return cls.from_dict(dataset_dict)
+        workspace, name, version_or_tag = cls.parse_data_model_get_identifier(name, version)
+
+        if version_or_tag is None or version_or_tag == 'latest' or version_or_tag.startswith('v'):
+            # Get by tag
+            config = get_one_dataset_by_tag(workspace, name, version_or_tag)
+        else:
+            # Get by version
+            if version_or_tag.lower() == 'none':
+                version_or_tag = None
+            config = get_one_dataset_by_version(workspace, name, version_or_tag)
+
+        return cls.from_dict(config)
 
     @classmethod
     def find(cls, dataset_identifier=None, tree_view=False, all=False):

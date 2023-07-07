@@ -5,6 +5,8 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Mar 11, 2023
 """
+from textwrap import dedent
+
 from . import db_connection
 
 
@@ -12,145 +14,270 @@ def create_one_dataset(dataset_dict):
     workflow_dict = dataset_dict['yield_workflow']
     parent_dataset_dict = dataset_dict['parent_dataset']
     with db_connection:
-        db_connection.execute(
-            """
-            INSERT INTO dataset ( workspace
-                                , name
-                                , version
-                                , yield_workflow_workspace
-                                , yield_workflow_name
-                                , yield_workflow_version
-                                , log_message
-                                , timestamp
-                                , id_column
-                                , size
-                                , filename
-                                , parent_dataset_workspace
-                                , parent_dataset_name
-                                , parent_dataset_version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ;
-            """,
-            (
-                dataset_dict['workspace'],
-                dataset_dict['name'],
-                dataset_dict['version'],
-                workflow_dict['workspace'],
-                workflow_dict['name'],
-                workflow_dict['version'],
-                dataset_dict['log_message'],
-                dataset_dict['timestamp'],
-                dataset_dict['id_column'],
-                dataset_dict['size'],
-                dataset_dict['filename'],
-                parent_dataset_dict['workspace'],
-                parent_dataset_dict['name'],
-                parent_dataset_dict['version'],
+        cur = db_connection.cursor()
+        cur.execute(
+            dedent("""
+            INSERT INTO dataset (
+                workspace,
+                name,
+                version,
+                yield_workflow_workspace,
+                yield_workflow_name,
+                yield_workflow_version,
+                log_message,
+                timestamp,
+                id_column,
+                size,
+                filename,
+                parent_dataset_workspace,
+                parent_dataset_name,
+                parent_dataset_version
             )
+            VALUES (
+                :workspace,
+                :name,
+                :version,
+                :yield_workflow_workspace,
+                :yield_workflow_name,
+                :yield_workflow_version,
+                :log_message,
+                :timestamp,
+                :id_column,
+                :size,
+                :filename,
+                :parent_dataset_workspace,
+                :parent_dataset_name,
+                :parent_dataset_version
+            )
+            ;
+            """),
+            {
+                'workspace': dataset_dict['workspace'],
+                'name': dataset_dict['name'],
+                'version': dataset_dict['version'],
+                'yield_workflow_workspace': workflow_dict['workspace'],
+                'yield_workflow_name': workflow_dict['name'],
+                'yield_workflow_version': workflow_dict['version'],
+                'log_message': dataset_dict['log_message'],
+                'timestamp': dataset_dict['timestamp'],
+                'id_column': dataset_dict['id_column'],
+                'size': dataset_dict['size'],
+                'filename': dataset_dict['filename'],
+                'parent_dataset_workspace': parent_dataset_dict['workspace'],
+                'parent_dataset_name': parent_dataset_dict['name'],
+                'parent_dataset_version': parent_dataset_dict['version'],
+            }
         )
 
+        return cur.lastrowid
 
-def exists_dataset(workspace, name, version):
+
+def create_one_dataset_tag(dataset_tag_dict):
+    dataset_tag_dict['version_tag'] = int(dataset_tag_dict['version_tag'][1:])  # 'v1' -> 1
+
+    with db_connection:
+        cur = db_connection.cursor()
+        cur.execute(
+            dedent("""
+            INSERT INTO dataset_tag (
+                workspace,
+                name,
+                version,
+                tag
+            )
+            VALUES (
+                :workspace,
+                :name,
+                :version,
+                :version_tag
+            )
+            ;
+            """),
+            dataset_tag_dict
+        )
+
+        return cur.lastrowid
+
+
+def exist_dataset_by_version(workspace, name, version):
     with db_connection:
         cur = db_connection.cursor()
         cur = cur.execute(
-            """
-            SELECT 1
-            FROM   dataset
-            WHERE  workspace = ?
-            AND    name = ?
-            AND    version = ?
+            dedent("""
+            SELECT EXISTS(
+                SELECT 1
+                FROM   dataset
+                WHERE  workspace = :workspace
+                AND    name = :name
+                AND    version = :version
+            )
             ;
-            """,
-            (workspace, name, version)
+            """),
+            {
+                'workspace': workspace,
+                'name': name,
+                'version': version,
+            }
         )
         return cur.fetchone() is not None
 
 
-def update_one_dataset(dataset_dict):
-    yield_workflow_dict = dataset_dict['yield_workflow']
-    parent_dataset_dict = dataset_dict['parent_dataset']
+def get_one_dataset_by_version(workspace, name, version='latest'):
     with db_connection:
         cur = db_connection.cursor()
-        cur.execute(
-            """
-            UPDATE dataset
-            SET    yield_workflow_workspace = ?
-            ,      yield_workflow_name = ?
-            ,      yield_workflow_version = ?
-            ,      log_message = ?
-            ,      timestamp = ?
-            ,      id_column = ?
-            ,      size = ?
-            ,      filename = ?
-            ,      parent_dataset_workspace = ?
-            ,      parent_dataset_name = ?
-            ,      parent_dataset_version = ?
-            WHERE  workspace = ?
-            AND    name = ?
-            AND    version = ?
-            ;
-            """,
-            (
-                yield_workflow_dict['workspace'],
-                yield_workflow_dict['name'],
-                yield_workflow_dict['version'],
-                dataset_dict['log_message'],
-                dataset_dict['timestamp'],
-                dataset_dict['id_column'],
-                dataset_dict['size'],
-                dataset_dict['filename'],
-                parent_dataset_dict['workspace'],
-                parent_dataset_dict['name'],
-                parent_dataset_dict['version'],
-                dataset_dict['workspace'],
-                dataset_dict['name'],
-                dataset_dict['version'],
-            )
-        )
-        return cur.rowcount
-
-
-def get_one_dataset(workspace, name, version='latest'):
-    with db_connection:
-        if version != 'latest':
-            dataset_po_iter = db_connection.execute(
-                """
-                --beginsql
-                WITH selected_dataset AS (
-                    SELECT workspace
-                         , name
-                         , version
+        if version == 'none':
+            cur.execute(
+                dedent("""
+                WITH base AS (
+                    SELECT workspace,
+                           name,
+                           version, 
+                           yield_workflow_workspace,
+                           yield_workflow_name,
+                           yield_workflow_version,
+                           log_message,
+                           timestamp,
+                           id_column,
+                           size,
+                           filename,
+                           parent_dataset_workspace,
+                           parent_dataset_name,
+                           parent_dataset_version
                     FROM   dataset
-                    WHERE  workspace = ?
-                    AND    name = ?
-                    AND    version GLOB ?
+                    WHERE  workspace = :workspace
+                    AND    name = :name
+                    AND    timestamp = (
+                        SELECT MAX(timestamp)
+                        FROM   dataset
+                        WHERE  workspace = :workspace
+                        AND    name = :name
+                    )
                 )
-                SELECT d.workspace
-                     , d.name
-                     , d.version
-                     , yield_workflow_workspace
-                     , yield_workflow_name
-                     , yield_workflow_version
-                     , log_message
-                     , timestamp
-                     , id_column
-                     , size
-                     , filename
-                     , parent_dataset_workspace
-                     , parent_dataset_name
-                     , parent_dataset_version
-                FROM dataset d
-                JOIN selected_dataset sd 
-                ON   d.workspace = sd.workspace
-                AND  d.name = sd.name 
-                AND  d.version = sd.version
+                ,tag AS (
+                    SELECT  workspace,
+                            name,
+                            version,
+                            tag
+                    FROM    dataset_tag
+                    WHERE   workspace = :workspace
+                    AND     name = :name
+                )
+                SELECT  base.workspace,
+                        base.name,
+                        base.version,
+                        tag.tag,
+                        yield_workflow_workspace,
+                        yield_workflow_name,
+                        yield_workflow_version,
+                        log_message,
+                        timestamp,
+                        id_column,
+                        size,
+                        filename,
+                        parent_dataset_workspace,
+                        parent_dataset_name,
+                        parent_dataset_version
+                FROM   base
+                LEFT JOIN tag
+                ON     base.workspace = tag.workspace
+                AND    base.name = tag.name
+                AND    base.version = tag.version
                 ;
-                --endsql
-                """, (workspace, name, version))
+                """), {
+                    'workspace': workspace,
+                    'name': name,
+                }
+            )
         else:
-            dataset_po_iter = db_connection.execute(
-                """
+            cur.execute(
+                dedent("""
+                WITH base AS (
+                    SELECT workspace,
+                           name,
+                           version, 
+                           yield_workflow_workspace,
+                           yield_workflow_name,
+                           yield_workflow_version,
+                           log_message,
+                           timestamp,
+                           id_column,
+                           size,
+                           filename,
+                           parent_dataset_workspace,
+                           parent_dataset_name,
+                           parent_dataset_version
+                    FROM   dataset
+                    WHERE  workspace = :workspace
+                    AND    name = :name
+                    AND    version = :version
+                )
+                ,tag AS (
+                    SELECT  workspace,
+                            name,
+                            version,
+                            tag
+                    FROM    dataset_tag
+                    WHERE   workspace = :workspace
+                    AND     name = :name
+                    AND     version = :version
+                )
+                SELECT  base.workspace,
+                        base.name,
+                        base.version,
+                        tag.tag,
+                        yield_workflow_workspace,
+                        yield_workflow_name,
+                        yield_workflow_version,
+                        log_message,
+                        timestamp,
+                        id_column,
+                        size,
+                        filename,
+                        parent_dataset_workspace,
+                        parent_dataset_name,
+                        parent_dataset_version
+                FROM   base
+                LEFT JOIN tag
+                ON     base.workspace = tag.workspace
+                AND    base.name = tag.name
+                AND    base.version = tag.version
+                ;
+                """), {
+                    'workspace': workspace,
+                    'name': name,
+                    'version': version,
+                }
+            )
+    po = cur.fetchone()
+    return {
+        'workspace': po[0],
+        'name': po[1],
+        'version': po[2],
+        'version_tag': f'v{po[3]}' if po[3] is not None else None,
+        'yield_workflow': {
+            'workspace': po[4],
+            'name': po[5],
+            'version': po[6],
+        },
+        'log_message': po[7],
+        'timestamp': po[8],
+        'id_column': po[9],
+        'size': po[10],
+        'filename': po[11],
+        'parent_dataset': {
+            'workspace': po[12],
+            'name': po[13],
+            'version': po[14],
+        },
+    } if po is not None else None
+
+
+def get_one_dataset_by_tag(workspace, name, tag):
+    with db_connection:
+        cur = db_connection.cursor()
+        if tag == 'latest':
+            cur.execute(dedent("""
+            WITH base AS (
                 SELECT workspace,
                        name,
                        version, 
@@ -165,39 +292,126 @@ def get_one_dataset(workspace, name, version='latest'):
                        parent_dataset_workspace,
                        parent_dataset_name,
                        parent_dataset_version
-                FROM  (
-                    SELECT *,
-                           rank() OVER (PARTITION BY workspace, name ORDER BY timestamp DESC) AS rk
-                    FROM   dataset
-                    WHERE  workspace = ?
-                    AND    name = ?
+                FROM   dataset
+                WHERE  workspace = :workspace
+                AND    name = :name
+            )
+            ,tag AS (
+                SELECT  workspace,
+                        name,
+                        version,
+                        tag
+                FROM    dataset_tag
+                WHERE   workspace = :workspace
+                AND     name = :name
+                AND     tag = (
+                    SELECT MAX(tag)
+                    FROM   dataset_tag
+                    WHERE  workspace = :workspace
+                    AND    name = :name
                 )
-                WHERE rk = 1
-                ;
-                """, (workspace, name,))
-    dataset_po_list = list(dataset_po_iter)
-    if len(dataset_po_list) == 0:
-        raise ValueError(f'Dataset {workspace}.{name}@{version} not found.')
-    if len(dataset_po_list) > 1:
-        raise ValueError(f'Found more than one dataset {workspace}.{name}@{version}.')
-    workspace, name, version, yield_workflow_workspace, yield_workflow_name, yield_workflow_version, log_message, \
-    timestamp, id_column, size, filename, parent_dataset_workspace, parent_dataset_name, parent_dataset_version = \
-        dataset_po_list[0]
-    return {
-        'workspace': workspace, 'name': name, 'version': version,
-        'yield_workflow': {
-            'workspace': yield_workflow_workspace,
-            'name': yield_workflow_name,
-            'version': yield_workflow_version,
-        },
-        'log_message': log_message,
-        'timestamp': timestamp, 'size': size, 'filename': filename,
-        'parent_dataset': {
-            'workspace': parent_dataset_workspace,
-            'name': parent_dataset_name,
-            'version': parent_dataset_version,
-        },
-    }
+            )
+            SELECT  base.workspace,
+                    base.name,
+                    base.version,
+                    tag.tag,
+                    yield_workflow_workspace,
+                    yield_workflow_name,
+                    yield_workflow_version,
+                    log_message,
+                    timestamp,
+                    id_column,
+                    size,
+                    filename,
+                    parent_dataset_workspace,
+                    parent_dataset_name,
+                    parent_dataset_version
+            FROM   base
+            JOIN tag
+            ON     base.workspace = tag.workspace
+            AND    base.name = tag.name
+            AND    base.version = tag.version
+            ;
+            """))
+        else:
+            cur.execute(dedent("""
+            WITH base AS (
+                SELECT workspace,
+                       name,
+                       version, 
+                       yield_workflow_workspace,
+                       yield_workflow_name,
+                       yield_workflow_version,
+                       log_message,
+                       timestamp,
+                       id_column,
+                       size,
+                       filename,
+                       parent_dataset_workspace,
+                       parent_dataset_name,
+                       parent_dataset_version
+                FROM   dataset
+                WHERE  workspace = :workspace
+                AND    name = :name
+            )
+            ,tag AS (
+                SELECT  workspace,
+                        name,
+                        version,
+                        tag
+                FROM    dataset_tag
+                WHERE   workspace = :workspace
+                AND     name = :name
+                AND     tag = :tag
+            )
+            SELECT  base.workspace,
+                    base.name,
+                    base.version,
+                    tag.tag,
+                    yield_workflow_workspace,
+                    yield_workflow_name,
+                    yield_workflow_version,
+                    log_message,
+                    timestamp,
+                    id_column,
+                    size,
+                    filename,
+                    parent_dataset_workspace,
+                    parent_dataset_name,
+                    parent_dataset_version
+            FROM   base
+            JOIN tag
+            ON     base.workspace = tag.workspace
+            AND    base.name = tag.name
+            AND    base.version = tag.version
+            ;
+            """), {
+                'workspace': workspace,
+                'name': name,
+                'tag': tag,
+            })
+        po = cur.fetchone()
+        return {
+            'workspace': po[0],
+            'name': po[1],
+            'version': po[2],
+            'version_tag': f'v{po[3]}' if po[3] is not None else None,
+            'yield_workflow': {
+                'workspace': po[4],
+                'name': po[5],
+                'version': po[6],
+            },
+            'log_message': po[7],
+            'timestamp': po[8],
+            'id_column': po[9],
+            'size': po[10],
+            'filename': po[11],
+            'parent_dataset': {
+                'workspace': po[12],
+                'name': po[13],
+                'version': po[14],
+            },
+        } if po is not None else None
 
 
 def get_many_datasets(workspace, name, version=None, all=False):
@@ -309,19 +523,15 @@ def get_many_datasets(workspace, name, version=None, all=False):
     return dataset_dict_list
 
 
-def get_next_version_id(workspace, name):
+def get_next_dataset_version_tag(workspace, name):
     with db_connection:
-        result_iter = db_connection.execute(
+        cur = db_connection.cursor()
+        cur.execute(
             """
-            SELECT COALESCE(MAX(CAST(version AS INTEGER)), 0) + 1
-            FROM   dataset
+            SELECT COALESCE(MAX(tag), 0) + 1
+            FROM   dataset_tag
             WHERE  workspace = ?
             AND    name = ?
-            AND    length(version) < 32
             ;
             """, (workspace, name,))
-        result = list(result_iter)[0][0]
-        if result is None:
-            return 1
-        else:
-            return result
+        return cur.fetchone()[0]

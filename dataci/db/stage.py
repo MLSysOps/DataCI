@@ -91,13 +91,13 @@ def get_one_stage_by_version(workspace, name, version='latest'):
         if version == 'latest':
             cur.execute(
                 dedent("""
-                    WITH base AS (
+                WITH base AS (
                     SELECT workspace, name, version, params, script_path, timestamp
                     FROM   stage
                     WHERE  workspace=:workspace
                     AND    name=:name
-                    AND    version = (
-                        SELECT MAX(version)
+                    AND    timestamp = (
+                        SELECT MAX(timestamp)
                         FROM   stage
                         WHERE  workspace=:workspace
                         AND    name=:name
