@@ -1,0 +1,4 @@
+sasl==0.3.1
+pyhive==0.6.3
+thrift==0.16.0
+thrift-sasl==0.4.3
