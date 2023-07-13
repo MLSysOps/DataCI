@@ -13,7 +13,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from dataci.connector.s3 import download as s3_download
 from dataci.db.dataset import (
     get_many_datasets,
     get_one_dataset_by_version,
@@ -27,8 +26,7 @@ from dataci.utils import hash_file, hash_binary
 from .base import BaseModel
 
 if TYPE_CHECKING:
-    from typing import Optional, Union
-    from dataci.models import Workflow
+    from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +37,6 @@ class Dataset(BaseModel):
             self,
             name,
             dataset_files=None,
-            yield_workflow: 'Optional[Union[Workflow, dict]]' = None,
-            parent_dataset: 'Optional[Union[Dataset, dict]]' = None,
             id_column='id',
             **kwargs,
     ):
@@ -50,6 +46,8 @@ class Dataset(BaseModel):
             # dataset_files is a S3 path
             # FIXME: only support single file
             if dataset_files.startswith('s3://'):
+                from dataci.connector.s3 import download as s3_download
+
                 # Download to local cache directory
                 # FIXME: same file will be overwritten
                 cache_dir = self.workspace.tmp_dir
@@ -61,8 +59,6 @@ class Dataset(BaseModel):
                 self.dataset_files = Path(dataset_files)
         else:
             self.dataset_files = None
-        self._yield_workflow = yield_workflow
-        self._parent_dataset = parent_dataset
         # TODO: create a dataset schema and verify
         self.id_column = id_column
         self.__published = False
@@ -77,12 +73,6 @@ class Dataset(BaseModel):
 
     @classmethod
     def from_dict(cls, config):
-        # Build parent_dataset
-        if not all(config['parent_dataset'].values()):
-            config['parent_dataset'] = None
-        # Build yield_workflow
-        if not all(config['yield_workflow'].values()):
-            config['yield_workflow'] = None
         config['name'] = f'{config["workspace"]}.{config["name"]}'
         dataset_obj = cls(**config)
         dataset_obj.create_date = datetime.fromtimestamp(config['timestamp'])
@@ -95,54 +85,16 @@ class Dataset(BaseModel):
         return dataset_obj
 
     def dict(self, id_only=False):
-        yield_workflow_dict = self.yield_workflow.dict() if self.yield_workflow else {
-            'workspace': None, 'name': None, 'version': None, 'version_tag': None
-        }
-        parent_dataset_dict = {
-            'workspace': self.workspace.name,
-            'name': self.parent_dataset.name,
-            'version': self.parent_dataset.version,
-            'version_tag': self.parent_dataset.version_tag,
-        } if self.parent_dataset else {
-            'workspace': None, 'name': None, 'version': None
-        }
         config = {
             'workspace': self.workspace.name,
             'name': self.name,
             'timestamp': self.create_date.timestamp() if self.create_date else None,
-            'parent_dataset': parent_dataset_dict,
-            'yield_workflow': yield_workflow_dict,
             'version': self.version,
             'filename': self.dataset_files.name,
             'size': self.size,
             'id_column': self.id_column,
         }
         return config
-
-    @property
-    def yield_workflow(self):
-        """Lazy load yield models"""
-        from dataci.models import Workflow
-
-        if self._yield_workflow is None or isinstance(self._yield_workflow, Workflow):
-            return self._yield_workflow
-
-        self._yield_workflow = Workflow.get(
-            name=f'{self._yield_workflow["workspace"]}.{self._yield_workflow["name"]}',
-            version=self._yield_workflow['version'],
-        )
-        return self._yield_workflow
-
-    @property
-    def parent_dataset(self):
-        # The parent dataset is None or already loaded
-        if self._parent_dataset is None or isinstance(self._parent_dataset, Dataset):
-            return self._parent_dataset
-        # Load the parent dataset using get method
-        self._parent_dataset = self.get(
-            f'{self._parent_dataset["workspace"]}.{self._parent_dataset["name"]}@{self._parent_dataset["version"]}'
-        )
-        return self._parent_dataset
 
     def __repr__(self):
         if all((self.workspace.name, self.name, self.version)):

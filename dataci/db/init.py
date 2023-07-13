@@ -103,22 +103,11 @@ with db_connection:
         workspace                TEXT,
         name                     TEXT,
         version                  TEXT,
-        yield_workflow_workspace TEXT,
-        yield_workflow_name      TEXT,
-        yield_workflow_version   TEXT,
         log_message              TEXT,
         timestamp                INTEGER,
         id_column                TEXT,
         size                     INTEGER,
         filename                 TEXT,
-        parent_dataset_workspace TEXT,
-        parent_dataset_name      TEXT,
-        parent_dataset_version   TEXT,
-        FOREIGN KEY (yield_workflow_workspace, yield_workflow_name, yield_workflow_version)
-            REFERENCES workflow (workspace, name, version),
-        FOREIGN KEY (parent_dataset_workspace, parent_dataset_name, parent_dataset_version)
-            REFERENCES dataset (workspace, name, version),
-        PRIMARY KEY (workspace, name, version),
         UNIQUE (workspace, name, version)
     );
     

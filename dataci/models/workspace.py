@@ -11,7 +11,6 @@ import os
 import shutil
 
 from dataci.config import CACHE_ROOT, DEFAULT_WORKSPACE, CONFIG_FILE, STORAGE_BACKEND
-from dataci.connector.s3 import connect as connect_s3, mount_bucket, unmount_bucket
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +43,10 @@ class Workspace(object):
         return self.root_dir / 'tmp'
 
     def remove(self):
+        if STORAGE_BACKEND == 'local':
+            return
+
+        from dataci.connector.s3 import unmount_bucket
         # Delete the S3 bucket content
         shutil.rmtree(self.data_dir, ignore_errors=True)
         logger.info(f'Remove all files in bucket {self.data_dir}.')
@@ -81,6 +84,8 @@ class Workspace(object):
         os.makedirs(self.root_dir, exist_ok=True)
         if STORAGE_BACKEND == 'local':
             return
+
+        from dataci.connector.s3 import connect as connect_s3, mount_bucket
         if not self.root_dir.is_mount():
             # Create a S3 bucket for data
             # TODO: region should be configurable

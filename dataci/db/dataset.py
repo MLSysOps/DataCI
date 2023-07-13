@@ -21,33 +21,21 @@ def create_one_dataset(dataset_dict):
                 workspace,
                 name,
                 version,
-                yield_workflow_workspace,
-                yield_workflow_name,
-                yield_workflow_version,
                 log_message,
                 timestamp,
                 id_column,
                 size,
-                filename,
-                parent_dataset_workspace,
-                parent_dataset_name,
-                parent_dataset_version
+                filename
             )
             VALUES (
                 :workspace,
                 :name,
                 :version,
-                :yield_workflow_workspace,
-                :yield_workflow_name,
-                :yield_workflow_version,
                 :log_message,
                 :timestamp,
                 :id_column,
                 :size,
-                :filename,
-                :parent_dataset_workspace,
-                :parent_dataset_name,
-                :parent_dataset_version
+                :filename
             )
             ;
             """),
@@ -55,17 +43,11 @@ def create_one_dataset(dataset_dict):
                 'workspace': dataset_dict['workspace'],
                 'name': dataset_dict['name'],
                 'version': dataset_dict['version'],
-                'yield_workflow_workspace': workflow_dict['workspace'],
-                'yield_workflow_name': workflow_dict['name'],
-                'yield_workflow_version': workflow_dict['version'],
                 'log_message': dataset_dict['log_message'],
                 'timestamp': dataset_dict['timestamp'],
                 'id_column': dataset_dict['id_column'],
                 'size': dataset_dict['size'],
-                'filename': dataset_dict['filename'],
-                'parent_dataset_workspace': parent_dataset_dict['workspace'],
-                'parent_dataset_name': parent_dataset_dict['name'],
-                'parent_dataset_version': parent_dataset_dict['version'],
+                'filename': dataset_dict['filename']
             }
         )
 
@@ -131,18 +113,12 @@ def get_one_dataset_by_version(workspace, name, version='latest'):
                 WITH base AS (
                     SELECT workspace,
                            name,
-                           version, 
-                           yield_workflow_workspace,
-                           yield_workflow_name,
-                           yield_workflow_version,
+                           version,
                            log_message,
                            timestamp,
                            id_column,
                            size,
-                           filename,
-                           parent_dataset_workspace,
-                           parent_dataset_name,
-                           parent_dataset_version
+                           filename
                     FROM   dataset
                     WHERE  workspace = :workspace
                     AND    name = :name
@@ -166,17 +142,11 @@ def get_one_dataset_by_version(workspace, name, version='latest'):
                         base.name,
                         base.version,
                         tag.tag,
-                        yield_workflow_workspace,
-                        yield_workflow_name,
-                        yield_workflow_version,
                         log_message,
                         timestamp,
                         id_column,
                         size,
-                        filename,
-                        parent_dataset_workspace,
-                        parent_dataset_name,
-                        parent_dataset_version
+                        filename
                 FROM   base
                 LEFT JOIN tag
                 ON     base.workspace = tag.workspace
@@ -194,18 +164,12 @@ def get_one_dataset_by_version(workspace, name, version='latest'):
                 WITH base AS (
                     SELECT workspace,
                            name,
-                           version, 
-                           yield_workflow_workspace,
-                           yield_workflow_name,
-                           yield_workflow_version,
+                           version,
                            log_message,
                            timestamp,
                            id_column,
                            size,
-                           filename,
-                           parent_dataset_workspace,
-                           parent_dataset_name,
-                           parent_dataset_version
+                           filename
                     FROM   dataset
                     WHERE  workspace = :workspace
                     AND    name = :name
@@ -225,17 +189,11 @@ def get_one_dataset_by_version(workspace, name, version='latest'):
                         base.name,
                         base.version,
                         tag.tag,
-                        yield_workflow_workspace,
-                        yield_workflow_name,
-                        yield_workflow_version,
                         log_message,
                         timestamp,
                         id_column,
                         size,
-                        filename,
-                        parent_dataset_workspace,
-                        parent_dataset_name,
-                        parent_dataset_version
+                        filename
                 FROM   base
                 LEFT JOIN tag
                 ON     base.workspace = tag.workspace
@@ -254,21 +212,11 @@ def get_one_dataset_by_version(workspace, name, version='latest'):
         'name': po[1],
         'version': po[2],
         'version_tag': f'v{po[3]}' if po[3] is not None else None,
-        'yield_workflow': {
-            'workspace': po[4],
-            'name': po[5],
-            'version': po[6],
-        },
-        'log_message': po[7],
-        'timestamp': po[8],
-        'id_column': po[9],
-        'size': po[10],
-        'filename': po[11],
-        'parent_dataset': {
-            'workspace': po[12],
-            'name': po[13],
-            'version': po[14],
-        },
+        'log_message': po[4],
+        'timestamp': po[5],
+        'id_column': po[6],
+        'size': po[7],
+        'filename': po[8],
     } if po is not None else None
 
 
@@ -280,18 +228,12 @@ def get_one_dataset_by_tag(workspace, name, tag):
             WITH base AS (
                 SELECT workspace,
                        name,
-                       version, 
-                       yield_workflow_workspace,
-                       yield_workflow_name,
-                       yield_workflow_version,
+                       version,
                        log_message,
                        timestamp,
                        id_column,
                        size,
-                       filename,
-                       parent_dataset_workspace,
-                       parent_dataset_name,
-                       parent_dataset_version
+                       filename
                 FROM   dataset
                 WHERE  workspace = :workspace
                 AND    name = :name
@@ -315,17 +257,11 @@ def get_one_dataset_by_tag(workspace, name, tag):
                     base.name,
                     base.version,
                     tag.tag,
-                    yield_workflow_workspace,
-                    yield_workflow_name,
-                    yield_workflow_version,
                     log_message,
                     timestamp,
                     id_column,
                     size,
-                    filename,
-                    parent_dataset_workspace,
-                    parent_dataset_name,
-                    parent_dataset_version
+                    filename
             FROM   base
             JOIN tag
             ON     base.workspace = tag.workspace
@@ -338,18 +274,12 @@ def get_one_dataset_by_tag(workspace, name, tag):
             WITH base AS (
                 SELECT workspace,
                        name,
-                       version, 
-                       yield_workflow_workspace,
-                       yield_workflow_name,
-                       yield_workflow_version,
+                       version,
                        log_message,
                        timestamp,
                        id_column,
                        size,
-                       filename,
-                       parent_dataset_workspace,
-                       parent_dataset_name,
-                       parent_dataset_version
+                       filename
                 FROM   dataset
                 WHERE  workspace = :workspace
                 AND    name = :name
@@ -368,17 +298,11 @@ def get_one_dataset_by_tag(workspace, name, tag):
                     base.name,
                     base.version,
                     tag.tag,
-                    yield_workflow_workspace,
-                    yield_workflow_name,
-                    yield_workflow_version,
                     log_message,
                     timestamp,
                     id_column,
                     size,
-                    filename,
-                    parent_dataset_workspace,
-                    parent_dataset_name,
-                    parent_dataset_version
+                    filename
             FROM   base
             JOIN tag
             ON     base.workspace = tag.workspace
@@ -396,21 +320,11 @@ def get_one_dataset_by_tag(workspace, name, tag):
             'name': po[1],
             'version': po[2],
             'version_tag': f'v{po[3]}' if po[3] is not None else None,
-            'yield_workflow': {
-                'workspace': po[4],
-                'name': po[5],
-                'version': po[6],
-            },
-            'log_message': po[7],
-            'timestamp': po[8],
-            'id_column': po[9],
-            'size': po[10],
-            'filename': po[11],
-            'parent_dataset': {
-                'workspace': po[12],
-                'name': po[13],
-                'version': po[14],
-            },
+            'log_message': po[4],
+            'timestamp': po[5],
+            'id_column': po[6],
+            'size': po[7],
+            'filename': po[8],
         } if po is not None else None
 
 
@@ -443,17 +357,11 @@ def get_many_datasets(workspace, name, version=None, all=False):
                 SELECT d.workspace,
                           d.name,
                             d.version,
-                            yield_workflow_workspace,
-                            yield_workflow_name,
-                            yield_workflow_version,
                             log_message,
                             timestamp,
                             id_column,
                             size,
-                            filename,
-                            parent_dataset_workspace,
-                            parent_dataset_name,
-                            parent_dataset_version
+                            filename
                 FROM   dataset d
                 JOIN  selected_dataset sd
                 ON    d.workspace = sd.workspace
@@ -478,17 +386,11 @@ def get_many_datasets(workspace, name, version=None, all=False):
                 SELECT d.workspace,
                        d.name,
                        d.version,
-                       yield_workflow_workspace,
-                       yield_workflow_name,
-                       yield_workflow_version,
                        log_message,
                        timestamp,
                        id_column,
                        size,
-                       filename,
-                       parent_dataset_workspace,
-                       parent_dataset_name,
-                       parent_dataset_version
+                       filename
                 FROM   dataset d
                 JOIN  selected_dataset sd
                 ON    d.workspace = sd.workspace
@@ -503,21 +405,11 @@ def get_many_datasets(workspace, name, version=None, all=False):
             'workspace': dataset_po[0],
             'name': dataset_po[1],
             'version': dataset_po[2],
-            'yield_workflow': {
-                'workspace': dataset_po[3],
-                'name': dataset_po[4],
-                'version': dataset_po[5],
-            },
-            'log_message': dataset_po[6],
-            'timestamp': dataset_po[7],
-            'id_column': dataset_po[8],
-            'size': dataset_po[9],
-            'filename': dataset_po[10],
-            'parent_dataset': {
-                'workspace': dataset_po[11],
-                'name': dataset_po[12],
-                'version': dataset_po[13],
-            },
+            'log_message': dataset_po[3],
+            'timestamp': dataset_po[4],
+            'id_column': dataset_po[5],
+            'size': dataset_po[6],
+            'filename': dataset_po[7],
         }
         dataset_dict_list.append(dataset_dict)
     return dataset_dict_list
