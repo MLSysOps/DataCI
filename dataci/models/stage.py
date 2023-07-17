@@ -45,7 +45,7 @@ class Stage(BaseModel):
         name = kwargs.get(self.name_arg, None)
         if name is None:
             raise TypeError(f'__init__() missing 1 required keyword-only argument: \'{self.name_arg}\'')
-        self.input_table: dict = input_table
+        self.input_table: dict = input_table or dict()
         self.output_table: dict = output_table
         super().__init__(name, *args, **kwargs)
         self.create_date: 'Optional[datetime]' = None

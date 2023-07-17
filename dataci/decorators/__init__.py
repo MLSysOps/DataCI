@@ -7,7 +7,7 @@ Date: May 03, 2023
 """
 from typing import TYPE_CHECKING
 
-from dataci.decorators.airflow import python_task
+from dataci.decorators.airflow import python_task, dataset_wrapper as Dataset
 from dataci.orchestrator.airflow import dag
 
 if TYPE_CHECKING:
@@ -17,6 +17,7 @@ __all__ = [
     'StageDecoratorCollection',
     'dag',
     'stage',
+    'Dataset',
 ]
 
 

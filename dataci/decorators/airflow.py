@@ -9,11 +9,12 @@ import inspect
 from typing import TYPE_CHECKING, cast
 
 import attr
+from airflow import XComArg
 from airflow.decorators.base import TaskDecorator as AirflowTaskDecorator, _TaskDecorator as _AirflowTaskDecorator
 from airflow.decorators.python import _PythonDecoratedOperator
 
 from dataci.decorators.base import DecoratedOperatorStageMixin
-from dataci.models import Stage
+from dataci.models import Stage, Dataset
 from dataci.orchestrator.airflow import PythonOperator
 
 if TYPE_CHECKING:
@@ -43,11 +44,22 @@ class _TaskDecorator(_AirflowTaskDecorator, DecoratedOperatorStageMixin):
         self._stage = cast(Stage, op)
 
     def __call__(self, *args, **kwargs):
+        # Check if the input arguments are dataset
+        # If so, mark the argument as input table
+        call_args = inspect.getcallargs(self.function, *args, **kwargs)
+        for key, arg in call_args.items():
+            if isinstance(getattr(arg, 'operator', None), Stage):  # arg.operator is DataCI stage
+                if arg.operator.output_table:  # arg.operator's output is a dataset
+                    self._stage.input_table[key] = str(arg.operator.output_table)
+
         xcom_arg = super().__call__(*args, **kwargs)
         # Replace the _stage attribute with the newly created operator object
         op = xcom_arg.operator
         if isinstance(op, Stage):
+            input_table, output_table = self._stage.input_table, self._stage.output_table
             self._stage = cast(Stage, op)
+            # TODO: use reload to update the stage object
+            self._stage.input_table, self._stage.output_table = input_table, output_table
         return xcom_arg
 
 
@@ -137,3 +149,8 @@ def python_task(
         decorated_operator_class=PythonDecoratedOperator,
         **kwargs,
     )
+
+
+def dataset_wrapper(name, dataset_files: XComArg = None, **kwargs):
+    dataset_files.operator.output_table = Dataset(name=name, **kwargs)
+    return dataset_files
