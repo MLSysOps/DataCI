@@ -5,13 +5,17 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Mar 10, 2023
 """
+import hashlib
+import io
 import json
 import logging
-import shutil
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+import pandas as pd
+from pandas.core.util.hashing import hash_pandas_object
 
 from dataci.db.dataset import (
     get_many_datasets,
@@ -22,7 +26,7 @@ from dataci.db.dataset import (
     create_one_dataset_tag,
     exist_dataset_by_version
 )
-from dataci.utils import hash_file, hash_binary
+from dataci.utils import hash_binary
 from .base import BaseModel
 
 if TYPE_CHECKING:
@@ -41,35 +45,36 @@ class Dataset(BaseModel):
             **kwargs,
     ):
         super().__init__(name, **kwargs)
-        # Cache dataset files from cloud object storage
+        self._dataset_files = None
         if dataset_files is not None:
-            # dataset_files is a S3 path
-            # FIXME: only support single file
-            if dataset_files.startswith('s3://'):
-                from dataci.connector.s3 import download as s3_download
-
-                # Download to local cache directory
-                # FIXME: same file will be overwritten
-                cache_dir = self.workspace.tmp_dir
-                cache_path = cache_dir / dataset_files.split('/')[-1]
-                s3_download(dataset_files, str(cache_dir))
-                self.dataset_files = cache_path
-            else:
-                # dataset_files is a local path
-                self.dataset_files = Path(dataset_files)
-        else:
-            self.dataset_files = None
+            self.dataset_files = dataset_files
         # TODO: create a dataset schema and verify
         self.id_column = id_column
         self.__published = False
         self.create_date: 'Optional[datetime]' = None
-        # TODO: improve this get size of dataset
-        if self.dataset_files and self.dataset_files.suffix == '.csv':
-            with open(self.dataset_files) as f:
-                print(self.dataset_files)
-                self.size = sum(1 for _ in f) - 1  # exclude header
+        self.size = None
+
+    @property
+    def dataset_files(self):
+        return self._dataset_files
+
+    @dataset_files.setter
+    def dataset_files(self, value):
+        # dataset_files is a S3 path
+        # FIXME: only support single file
+        if isinstance(value, (str, Path)) and str(value).startswith('s3://'):
+            from dataci.connector.s3 import download as s3_download
+
+            # Download to local cache directory
+            # FIXME: same file will be overwritten
+            cache_dir = self.workspace.tmp_dir
+            cache_path = cache_dir / str(value).split('/')[-1]
+            s3_download(value, str(cache_dir))
+            self._dataset_files = DataFile(cache_path)
         else:
-            self.size = None
+            # dataset_files is a local path
+            self._dataset_files = DataFile(value)
+        self.size = len(value)
 
     @classmethod
     def from_dict(cls, config):
@@ -77,10 +82,7 @@ class Dataset(BaseModel):
         dataset_obj = cls(**config)
         dataset_obj.create_date = datetime.fromtimestamp(config['timestamp'])
         dataset_obj.version = config['version']
-        dataset_obj.dataset_files = (
-                dataset_obj.workspace.data_dir / dataset_obj.name / dataset_obj.version /
-                config['filename']
-        )
+        dataset_obj.dataset_files = DataFile(config['filename'])
         dataset_obj.size = config['size']
         return dataset_obj
 
@@ -90,7 +92,7 @@ class Dataset(BaseModel):
             'name': self.name,
             'timestamp': self.create_date.timestamp() if self.create_date else None,
             'version': self.version,
-            'filename': self.dataset_files.name,
+            'filename': self.dataset_files.location if self.dataset_files is not None else None,
             'size': self.size,
             'id_column': self.id_column,
         }
@@ -118,7 +120,7 @@ class Dataset(BaseModel):
         fingerprint_dict = {
             'workspace': config['workspace'],
             'name': config['name'],
-            'datasets': hash_file(self.dataset_files)
+            'datasets': self.dataset_files.md5,
         }
         return hash_binary(json.dumps(fingerprint_dict, sort_keys=True).encode('utf-8'))
 
@@ -155,9 +157,9 @@ class Dataset(BaseModel):
         # If the dataset version is not in DB, save dataset
         dataset_cache_dir = self.workspace.data_dir / config['name'] / config['version']
         dataset_cache_dir.mkdir(parents=True, exist_ok=True)
-        # Copy local files to cloud object storage
-        # FIXME: only support a single file now
-        shutil.copy2(self.dataset_files, dataset_cache_dir)
+        # File extension will be automatically resolved when save, so we put a dummy file extension
+        self.dataset_files.save(dataset_cache_dir / 'file.auto')
+        print(self.dataset_files.location)
         # Save dataset to DB
         create_one_dataset(config)
         return self.reload(config)
@@ -234,3 +236,56 @@ class Dataset(BaseModel):
             return dict(dataset_dict)
 
         return dataset_list
+
+
+class DataFile(object):
+    def __init__(self, file):
+        self.location: Optional[str] = None
+        self._file = None
+
+        if isinstance(file, (str, Path)):
+            self.location = str(file)
+        else:
+            self._file = file
+
+    def __del__(self):
+        if isinstance(self._file, io.TextIOWrapper):
+            self._file.close()
+
+    def __len__(self):
+        return len(self.read())
+
+    def read(self):
+        if self._file is not None:
+            return self._file
+        if self.location.endswith('.csv'):
+            # read csv
+            self._file = pd.read_csv(self.location)
+        elif self.location.endswith('.parquet'):
+            # read parquet
+            self._file = pd.read_parquet(self.location)
+        else:
+            raise ValueError(f'Unable to read file {self.location}')
+        return self._file
+
+    def save(self, path=None):
+        """Save the loaded file to specified location"""
+        # file is a pandas dataframe, serialize it to parquet
+        if isinstance(self._file, pd.DataFrame):
+            # change the file extension to parquet
+            path = Path(path or self.location).with_suffix('.parquet')
+            self._file.to_parquet(path, engine='fastparquet', compression='gzip')
+        # unknown file type
+        else:
+            raise ValueError(f'Unable to serialize dataset_files type {type(self._file)}')
+        self.location = path
+
+    @property
+    def schema(self):
+        pass
+
+    @property
+    def md5(self):
+        return hashlib.md5(
+            hash_pandas_object(self.read()).values
+        ).hexdigest()
