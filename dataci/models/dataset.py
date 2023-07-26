@@ -55,7 +55,7 @@ class Dataset(BaseModel):
         self.size = None
 
     @property
-    def dataset_files(self):
+    def dataset_files(self) -> 'Optional[DataFile]':
         return self._dataset_files
 
     @dataset_files.setter
@@ -82,7 +82,7 @@ class Dataset(BaseModel):
         dataset_obj = cls(**config)
         dataset_obj.create_date = datetime.fromtimestamp(config['timestamp'])
         dataset_obj.version = config['version']
-        dataset_obj.dataset_files = DataFile(config['location'])
+        dataset_obj.dataset_files = config['location']
         dataset_obj.size = config['size']
         return dataset_obj
 

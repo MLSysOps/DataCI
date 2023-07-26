@@ -20,7 +20,7 @@ from airflow.utils.decorators import fixup_decorator_warning_stack
 from dataci.models import Workflow, Stage, Dataset
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from typing import Callable, Any
 
 
 class DAG(Workflow, _DAG):
@@ -142,20 +142,28 @@ class PythonOperator(Stage, _PythonOperator):
         """Execute the python callable."""
         # Resolve input table
         bound = inspect.signature(self.python_callable).bind(*self.op_args, **self.op_kwargs)
-        for arg_name, dataset_name in self.input_table.items():
+        for arg_name, _ in self.input_table.items():
             if arg_name in bound.arguments:
-                dataset = Dataset.get(dataset_name)
-                bound.arguments[arg_name] = dataset.dataset_files
+                dataset = Dataset.get(bound.arguments[arg_name])
+                bound.arguments[arg_name] = dataset.dataset_files.read()
+                # For logging
+                self.log.info(f'Input table {arg_name}: {dataset.identifier}')
 
         self.op_args, self.op_kwargs = bound.args, bound.kwargs
         # Run the stage by backend
         ret = super().execute_callable()
         # Save the output table
-        if self.output_table is not None:
-            self.output_table.dataset_files = ret
-            # FIXME: save the dataset_files if the dataset_files is object
-            self.output_table.save()
-            ret = str(self.output_table)
+        for key, dataset in self.output_table.items():
+            # If the operator has multiple outputs (get from airflow python operator)
+            if self.multiple_outputs:
+                dataset.dataset_files = ret[key]
+                dataset.save()
+                ret[key] = dataset.identifier
+            else:
+                dataset.dataset_files = ret
+                dataset.save()
+                ret = dataset.identifier
+            self.log.info(f'Output table {key}: {dataset.identifier}')
         return ret
 
     @property

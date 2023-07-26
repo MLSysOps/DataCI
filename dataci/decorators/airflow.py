@@ -9,9 +9,9 @@ import inspect
 from typing import TYPE_CHECKING, cast
 
 import attr
-from airflow import XComArg
 from airflow.decorators.base import TaskDecorator as AirflowTaskDecorator, _TaskDecorator as _AirflowTaskDecorator
 from airflow.decorators.python import _PythonDecoratedOperator
+from airflow.models.xcom_arg import PlainXComArg
 
 from dataci.decorators.base import DecoratedOperatorStageMixin
 from dataci.models import Stage, Dataset
@@ -50,7 +50,8 @@ class _TaskDecorator(_AirflowTaskDecorator, DecoratedOperatorStageMixin):
         for key, arg in call_args.items():
             if isinstance(getattr(arg, 'operator', None), Stage):  # arg.operator is DataCI stage
                 if arg.operator.output_table:  # arg.operator's output is a dataset
-                    self._stage.input_table[key] = str(arg.operator.output_table)
+                    # Mark the dataset as input table, provide a dummy value
+                    self._stage.input_table[key] = ...
 
         xcom_arg = super().__call__(*args, **kwargs)
         # Replace the _stage attribute with the newly created operator object
@@ -151,6 +152,9 @@ def python_task(
     )
 
 
-def dataset_wrapper(name, dataset_files: XComArg = None, **kwargs):
-    dataset_files.operator.output_table = Dataset(name=name, **kwargs)
+def dataset_wrapper(name, dataset_files: PlainXComArg = None, **kwargs):
+    # parse multiple outputs from XComArg
+    if dataset_files is not None:
+        dataset = Dataset(name=name, **kwargs)
+        dataset_files.operator.output_table[dataset_files.key] = dataset
     return dataset_files
