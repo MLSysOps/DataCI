@@ -92,8 +92,6 @@ class BaseModel(abc.ABC):
         version = version or version_
         if version:
             version = str(version).lower()
-            if version == 'none':
-                version = None
 
         return workspace, name, version
 

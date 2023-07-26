@@ -107,7 +107,7 @@ with db_connection:
         timestamp                INTEGER,
         id_column                TEXT,
         size                     INTEGER,
-        filename                 TEXT,
+        location                 TEXT,
         UNIQUE (workspace, name, version)
     );
     

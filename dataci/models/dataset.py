@@ -82,7 +82,7 @@ class Dataset(BaseModel):
         dataset_obj = cls(**config)
         dataset_obj.create_date = datetime.fromtimestamp(config['timestamp'])
         dataset_obj.version = config['version']
-        dataset_obj.dataset_files = DataFile(config['filename'])
+        dataset_obj.dataset_files = DataFile(config['location'])
         dataset_obj.size = config['size']
         return dataset_obj
 
@@ -90,9 +90,11 @@ class Dataset(BaseModel):
         config = {
             'workspace': self.workspace.name,
             'name': self.name,
-            'timestamp': self.create_date.timestamp() if self.create_date else None,
             'version': self.version,
-            'filename': self.dataset_files.location if self.dataset_files is not None else None,
+            'version_tag': self.version_tag,
+            'log_message': '',  # FIXME: not used
+            'timestamp': self.create_date.timestamp() if self.create_date else None,
+            'location': self.dataset_files.location if self.dataset_files is not None else None,
             'size': self.size,
             'id_column': self.id_column,
         }
@@ -148,18 +150,18 @@ class Dataset(BaseModel):
         if self.NAME_PATTERN.match(f'{self.workspace.name}.{self.name}') is None:
             raise ValueError(f'Dataset name {self.workspace}.{self.name} is not valid.')
 
-        # Get config after call save on all stages, since the stage version might be updated
-        config = self.dict()
-        config['version'] = version
-        # Update create date
-        config['timestamp'] = int(datetime.now().timestamp())
-
         # If the dataset version is not in DB, save dataset
-        dataset_cache_dir = self.workspace.data_dir / config['name'] / config['version']
+        dataset_cache_dir = self.workspace.data_dir / self.name / version
         dataset_cache_dir.mkdir(parents=True, exist_ok=True)
         # File extension will be automatically resolved when save, so we put a dummy file extension
         self.dataset_files.save(dataset_cache_dir / 'file.auto')
         print(self.dataset_files.location)
+
+        # Get config after call save the dataset file, since the dataset file location is not known before save
+        config = self.dict()
+        config['version'] = version
+        # Update create date
+        config['timestamp'] = int(datetime.now().timestamp())
         # Save dataset to DB
         create_one_dataset(config)
         return self.reload(config)
@@ -278,7 +280,7 @@ class DataFile(object):
         # unknown file type
         else:
             raise ValueError(f'Unable to serialize dataset_files type {type(self._file)}')
-        self.location = path
+        self.location = str(path)
 
     @property
     def schema(self):

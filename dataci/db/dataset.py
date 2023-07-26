@@ -11,8 +11,6 @@ from . import db_connection
 
 
 def create_one_dataset(dataset_dict):
-    workflow_dict = dataset_dict['yield_workflow']
-    parent_dataset_dict = dataset_dict['parent_dataset']
     with db_connection:
         cur = db_connection.cursor()
         cur.execute(
@@ -25,7 +23,7 @@ def create_one_dataset(dataset_dict):
                 timestamp,
                 id_column,
                 size,
-                filename
+                location
             )
             VALUES (
                 :workspace,
@@ -35,7 +33,7 @@ def create_one_dataset(dataset_dict):
                 :timestamp,
                 :id_column,
                 :size,
-                :filename
+                :location
             )
             ;
             """),
@@ -47,7 +45,7 @@ def create_one_dataset(dataset_dict):
                 'timestamp': dataset_dict['timestamp'],
                 'id_column': dataset_dict['id_column'],
                 'size': dataset_dict['size'],
-                'filename': dataset_dict['filename']
+                'location': dataset_dict['location']
             }
         )
 
@@ -101,13 +99,14 @@ def exist_dataset_by_version(workspace, name, version):
                 'version': version,
             }
         )
-        return cur.fetchone() is not None
+        return cur.fetchone() == (1,)
 
 
 def get_one_dataset_by_version(workspace, name, version='latest'):
+    version = version or 'latest'
     with db_connection:
         cur = db_connection.cursor()
-        if version == 'none':
+        if version == 'latest':
             cur.execute(
                 dedent("""
                 WITH base AS (
@@ -118,7 +117,7 @@ def get_one_dataset_by_version(workspace, name, version='latest'):
                            timestamp,
                            id_column,
                            size,
-                           filename
+                           location
                     FROM   dataset
                     WHERE  workspace = :workspace
                     AND    name = :name
@@ -146,7 +145,7 @@ def get_one_dataset_by_version(workspace, name, version='latest'):
                         timestamp,
                         id_column,
                         size,
-                        filename
+                        location
                 FROM   base
                 LEFT JOIN tag
                 ON     base.workspace = tag.workspace
@@ -169,7 +168,7 @@ def get_one_dataset_by_version(workspace, name, version='latest'):
                            timestamp,
                            id_column,
                            size,
-                           filename
+                           location
                     FROM   dataset
                     WHERE  workspace = :workspace
                     AND    name = :name
@@ -193,7 +192,7 @@ def get_one_dataset_by_version(workspace, name, version='latest'):
                         timestamp,
                         id_column,
                         size,
-                        filename
+                        location
                 FROM   base
                 LEFT JOIN tag
                 ON     base.workspace = tag.workspace
@@ -216,7 +215,7 @@ def get_one_dataset_by_version(workspace, name, version='latest'):
         'timestamp': po[5],
         'id_column': po[6],
         'size': po[7],
-        'filename': po[8],
+        'location': po[8],
     } if po is not None else None
 
 
@@ -233,7 +232,7 @@ def get_one_dataset_by_tag(workspace, name, tag):
                        timestamp,
                        id_column,
                        size,
-                       filename
+                       location
                 FROM   dataset
                 WHERE  workspace = :workspace
                 AND    name = :name
@@ -261,7 +260,7 @@ def get_one_dataset_by_tag(workspace, name, tag):
                     timestamp,
                     id_column,
                     size,
-                    filename
+                    location
             FROM   base
             JOIN tag
             ON     base.workspace = tag.workspace
@@ -279,7 +278,7 @@ def get_one_dataset_by_tag(workspace, name, tag):
                        timestamp,
                        id_column,
                        size,
-                       filename
+                       location
                 FROM   dataset
                 WHERE  workspace = :workspace
                 AND    name = :name
@@ -302,7 +301,7 @@ def get_one_dataset_by_tag(workspace, name, tag):
                     timestamp,
                     id_column,
                     size,
-                    filename
+                    location
             FROM   base
             JOIN tag
             ON     base.workspace = tag.workspace
@@ -324,7 +323,7 @@ def get_one_dataset_by_tag(workspace, name, tag):
             'timestamp': po[5],
             'id_column': po[6],
             'size': po[7],
-            'filename': po[8],
+            'location': po[8],
         } if po is not None else None
 
 
@@ -361,7 +360,7 @@ def get_many_datasets(workspace, name, version=None, all=False):
                             timestamp,
                             id_column,
                             size,
-                            filename
+                            location
                 FROM   dataset d
                 JOIN  selected_dataset sd
                 ON    d.workspace = sd.workspace
@@ -390,7 +389,7 @@ def get_many_datasets(workspace, name, version=None, all=False):
                        timestamp,
                        id_column,
                        size,
-                       filename
+                       location
                 FROM   dataset d
                 JOIN  selected_dataset sd
                 ON    d.workspace = sd.workspace
@@ -409,7 +408,7 @@ def get_many_datasets(workspace, name, version=None, all=False):
             'timestamp': dataset_po[4],
             'id_column': dataset_po[5],
             'size': dataset_po[6],
-            'filename': dataset_po[7],
+            'location': dataset_po[7],
         }
         dataset_dict_list.append(dataset_dict)
     return dataset_dict_list
