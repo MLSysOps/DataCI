@@ -41,6 +41,9 @@ class DecoratedOperatorStageMixin:
     def script(self):
         return self._stage.script
 
+    def test(self, *args, **kwargs):
+        return self._stage.test(*args, **kwargs)
+
     def dict(self):
         return self._stage.dict()
 

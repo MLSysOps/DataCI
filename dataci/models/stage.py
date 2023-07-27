@@ -69,6 +69,11 @@ class Stage(BaseModel):
             self._script = source_code
         return self._script
 
+    @abc.abstractmethod
+    def test(self, *args, **kwargs):
+        """Test the stage."""
+        raise NotImplementedError
+
     def dict(self, id_only=False):
         """Get the dict representation of the stage.
 

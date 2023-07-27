@@ -166,6 +166,16 @@ class PythonOperator(Stage, _PythonOperator):
             self.log.info(f'Output table {key}: {dataset.identifier}')
         return ret
 
+    def test(self, *args, **kwargs):
+        # Provide context for operator args and kwargs
+        self.op_args, self.op_kwargs = args, kwargs
+        try:
+            # Run the stage by backend
+            return self.execute_callable()
+        finally:
+            # Restore the operator args and kwargs
+            self.op_args, self.op_kwargs = args, kwargs
+
     @property
     def script(self):
         if self._script is None:
