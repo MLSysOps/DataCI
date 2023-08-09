@@ -5,10 +5,12 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Mar 10, 2023
 """
+import abc
 import hashlib
-import io
 import json
 import logging
+import shutil
+import tempfile
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -30,9 +32,151 @@ from dataci.utils import hash_binary
 from .base import BaseModel
 
 if TYPE_CHECKING:
-    from typing import Optional
+    from typing import Optional, Type
 
 logger = logging.getLogger(__name__)
+
+
+class DataFileIO(abc.ABC):
+    DEFAULT_SUFFIX: str
+
+    def __init__(self, file_path):
+        self.file_path = file_path
+
+    @abc.abstractmethod
+    def read(self, num_records=None):
+        pass
+
+    @abc.abstractmethod
+    def write(self, records, indices=None):
+        pass
+
+    @abc.abstractmethod
+    def seek(self, offset, whence=0):
+        pass
+
+    @property
+    @abc.abstractmethod
+    def sha256(self):
+        pass
+
+    @abc.abstractmethod
+    def __len__(self):
+        pass
+
+
+class CSVFileIO(DataFileIO):
+    DEFAULT_SUFFIX = '.csv'
+
+    def __init__(self, file_path):
+        super().__init__(file_path)
+        self._pos = 0
+        self._len = None
+        self._sha256 = None
+
+    def read(self, num_records=None):
+        records = pd.read_csv(self.file_path, skiprows=self._pos, nrows=num_records)
+        # recover the file pointer to the correct position (pos + num_records)
+        if num_records is not None:
+            self._pos += num_records
+        return records
+
+    def write(self, records, indices=None):
+        if not isinstance(records, (pd.DataFrame, pd.Series)):
+            raise ValueError('CSVFileIO only supports writing pandas.Series or pandas.DataFrame to csv file')
+        records.to_csv(self.file_path, index=indices)
+        # update the file length
+        self._len = len(records)
+        self._sha256 = None
+
+    def seek(self, offset, whence=0):
+        # skip offset lines by dummy read 0 rows. Use engine='python' to avoid unpredictable file pointer
+        # https://stackoverflow.com/a/62142109
+        if whence == 0:
+            self._pos = offset
+        elif whence == 1:
+            self._pos += offset
+        elif whence == 2:
+            self._pos = len(self) - offset
+        else:
+            raise ValueError(f'Invalid whence {whence}, only 0, 1, 2 are supported')
+
+    @property
+    def sha256(self):
+        if self._sha256 is None:
+            self._sha256 = hashlib.sha256(
+                hash_pandas_object(self.read()).values
+            ).hexdigest()
+        return self._sha256
+
+    def __len__(self):
+        if self._len is None:
+            return len(pd.read_csv(self.file_path))
+        return self._len
+
+
+class ParquetFileIO(DataFileIO):
+    DEFAULT_SUFFIX = '.parquet'
+
+    def __init__(self, file_path):
+        super().__init__(file_path)
+        self._pos = 0
+        self._len = None
+        self._sha256 = None
+
+    def read(self, num_records=None):
+        records = pd.read_parquet(self.file_path, skiprows=self._pos, nrows=num_records)
+        # recover the file pointer to the correct position (pos + num_records)
+        if num_records is not None:
+            self._pos += num_records
+        return records
+
+    def write(self, records, indices=None):
+        if not isinstance(records, (pd.DataFrame, pd.Series)):
+            raise ValueError('ParquetFileIO only supports writing pandas.Series or pandas.DataFrame to parquet file')
+        records.to_parquet(self.file_path, index=indices, compression='gzip')
+        # update the file length
+        self._len = len(records)
+        self._sha256 = None
+
+    def seek(self, offset, whence=0):
+        # skip offset lines by dummy read 0 rows. Use engine='python' to avoid unpredictable file pointer
+        # https://stackoverflow.com/a/62142109
+        if whence == 0:
+            self._pos = offset
+        elif whence == 1:
+            self._pos += offset
+        elif whence == 2:
+            self._pos = len(self) - offset
+        else:
+            raise ValueError(f'Invalid whence {whence}, only 0, 1, 2 are supported')
+
+    @property
+    def sha256(self):
+        if self._sha256 is None:
+            self._sha256 = hashlib.sha256(
+                hash_pandas_object(self.read()).values
+            ).hexdigest()
+        return self._sha256
+
+    def __len__(self):
+        if self._len is None:
+            return len(pd.read_parquet(self.file_path))
+        return self._len
+
+
+class AutoFileIO(DataFileIO, abc.ABC):
+
+    def __new__(cls, *args, **kwargs):
+        if cls is AutoFileIO:
+            if args[0].endswith('.csv'):
+                return CSVFileIO(*args, **kwargs)
+            elif args[0].endswith('.parquet'):
+                return ParquetFileIO(*args, **kwargs)
+            else:
+                raise ValueError(f'Unable to read file {args[0]}')
+        else:
+            return super().__new__(cls)
 
 
 class Dataset(BaseModel):
@@ -41,40 +185,71 @@ class Dataset(BaseModel):
             self,
             name,
             dataset_files=None,
+            file_reader: 'Type[DataFileIO]' = AutoFileIO,
+            file_writer: 'Type[DataFileIO]' = CSVFileIO,
             id_column='id',
             **kwargs,
     ):
         super().__init__(name, **kwargs)
-        self._dataset_files = None
-        if dataset_files is not None:
-            self.dataset_files = dataset_files
         # TODO: create a dataset schema and verify
         self.id_column = id_column
-        self.__published = False
+        self.file_reader = file_reader
+        self.file_writer = file_writer
         self.create_date: 'Optional[datetime]' = None
-        self.size = None
+        self._dataset_files = None
+        self._len = None
+        self._sha256 = None
+
+        if dataset_files is not None:
+            self.dataset_files = dataset_files
 
     @property
-    def dataset_files(self) -> 'Optional[DataFile]':
+    def dataset_files(self) -> 'Optional[str]':
         return self._dataset_files
 
     @dataset_files.setter
     def dataset_files(self, value):
         # dataset_files is a S3 path
         # FIXME: only support single file
-        if isinstance(value, (str, Path)) and str(value).startswith('s3://'):
-            from dataci.connector.s3 import download as s3_download
+        if isinstance(value, (str, Path)):
+            if str(value).startswith('s3://'):
+                from dataci.connector.s3 import download as s3_download
 
-            # Download to local cache directory
-            # FIXME: same file will be overwritten
-            cache_dir = self.workspace.tmp_dir
-            cache_path = cache_dir / str(value).split('/')[-1]
-            s3_download(value, str(cache_dir))
-            self._dataset_files = DataFile(cache_path)
+                # Download to local cache directory
+                # FIXME: same file will be overwritten
+                cache_dir = self.workspace.tmp_dir
+                cache_path = cache_dir / str(value).split('/')[-1]
+                s3_download(value, str(cache_dir))
+                self._dataset_files = str(cache_path)
+            else:
+                # dataset_files is a local path
+                self._dataset_files = str(value)
         else:
-            # dataset_files is a local path
-            self._dataset_files = DataFile(value)
-        self.size = len(value)
+            # dataset_files is an object
+            # Create a temp file for temporary save this dataset locally
+            self._dataset_files = tempfile.NamedTemporaryFile(
+                mode='w',
+                suffix=self.file_writer.DEFAULT_SUFFIX,
+                dir=self.workspace.tmp_dir, delete=False
+            ).name
+            # Write the dataset to the temp file
+            self.write(value)
+        self._len = None
+        self._sha256 = None
+
+    @property
+    def sha256(self):
+        if self._sha256 is None:
+            self._sha256 = self.file_reader(self.dataset_files).sha256
+        return self._sha256
+
+    def read(self):
+        # Use provided file reader class to read the dataset file
+        return self.file_reader(self.dataset_files).read()
+
+    def write(self, records=None):
+        # Use provided file writer to write to the dataset file
+        return self.file_writer(self.dataset_files).write(records)
 
     @classmethod
     def from_dict(cls, config):
@@ -94,11 +269,16 @@ class Dataset(BaseModel):
             'version_tag': self.version_tag,
             'log_message': '',  # FIXME: not used
             'timestamp': self.create_date.timestamp() if self.create_date else None,
-            'location': self.dataset_files.location if self.dataset_files is not None else None,
-            'size': self.size,
+            'location': self.dataset_files if self.dataset_files is not None else None,
+            'size': len(self),
             'id_column': self.id_column,
         }
         return config
+
+    def __len__(self):
+        if self._len is None:
+            self._len = len(self.file_reader(self.dataset_files))
+        return self._len
 
     def __repr__(self):
         if all((self.workspace.name, self.name, self.version)):
@@ -122,7 +302,7 @@ class Dataset(BaseModel):
         fingerprint_dict = {
             'workspace': config['workspace'],
             'name': config['name'],
-            'datasets': self.dataset_files.md5,
+            'datasets': self.sha256,
         }
         return hash_binary(json.dumps(fingerprint_dict, sort_keys=True).encode('utf-8'))
 
@@ -153,9 +333,9 @@ class Dataset(BaseModel):
         # If the dataset version is not in DB, save dataset
         dataset_cache_dir = self.workspace.data_dir / self.name / version
         dataset_cache_dir.mkdir(parents=True, exist_ok=True)
-        # File extension will be automatically resolved when save, so we put a dummy file extension
-        self.dataset_files.save(dataset_cache_dir / 'file.auto')
-        print(self.dataset_files.location)
+        # Copy dataset file to cache dir
+        shutil.copy2(self.dataset_files, dataset_cache_dir)
+        self._dataset_files = str(dataset_cache_dir / self.dataset_files.split('/')[-1])
 
         # Get config after call save the dataset file, since the dataset file location is not known before save
         config = self.dict()
@@ -238,56 +418,3 @@ class Dataset(BaseModel):
             return dict(dataset_dict)
 
         return dataset_list
-
-
-class DataFile(object):
-    def __init__(self, file):
-        self.location: Optional[str] = None
-        self._file = None
-
-        if isinstance(file, (str, Path)):
-            self.location = str(file)
-        else:
-            self._file = file
-
-    def __del__(self):
-        if isinstance(self._file, io.TextIOWrapper):
-            self._file.close()
-
-    def __len__(self):
-        return len(self.read())
-
-    def read(self):
-        if self._file is not None:
-            return self._file
-        if self.location.endswith('.csv'):
-            # read csv
-            self._file = pd.read_csv(self.location)
-        elif self.location.endswith('.parquet'):
-            # read parquet
-            self._file = pd.read_parquet(self.location)
-        else:
-            raise ValueError(f'Unable to read file {self.location}')
-        return self._file
-
-    def save(self, path=None):
-        """Save the loaded file to specified location"""
-        # file is a pandas dataframe, serialize it to parquet
-        if isinstance(self._file, pd.DataFrame):
-            # change the file extension to parquet
-            path = Path(path or self.location).with_suffix('.parquet')
-            self._file.to_parquet(path, engine='fastparquet', compression='gzip')
-        # unknown file type
-        else:
-            raise ValueError(f'Unable to serialize dataset_files type {type(self._file)}')
-        self.location = str(path)
-
-    @property
-    def schema(self):
-        pass
-
-    @property
-    def md5(self):
-        return hashlib.md5(
-            hash_pandas_object(self.read()).values
-        ).hexdigest()
