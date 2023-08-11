@@ -32,7 +32,7 @@ from dataci.utils import hash_binary
 from .base import BaseModel
 
 if TYPE_CHECKING:
-    from typing import Optional, Type
+    from typing import Optional, Union, Type
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +165,31 @@ class ParquetFileIO(DataFileIO):
         return self._len
 
 
+class SkipReaderFileIO(DataFileIO):
+    DEFAULT_SUFFIX = '.bin'
+
+    def __init__(self, file_path):
+        super().__init__(file_path)
+        self._len = None
+        self._sha256 = None
+
+    def read(self, num_records=None):
+        return self.file_path
+
+    def write(self, records, indices=None):
+        raise NotImplementedError
+
+    def seek(self, offset, whence=0):
+        raise NotImplementedError
+
+    @property
+    def sha256(self):
+        return self._sha256
+
+    def __len__(self):
+        return self._len
+
+
 class AutoFileIO(DataFileIO, abc.ABC):
 
     def __new__(cls, *args, **kwargs):
@@ -179,20 +204,33 @@ class AutoFileIO(DataFileIO, abc.ABC):
             return super().__new__(cls)
 
 
+file_io_registry = {
+    'csv': CSVFileIO,
+    'parquet': ParquetFileIO,
+    'auto': AutoFileIO,
+    'skip': SkipReaderFileIO,
+    None: SkipReaderFileIO,
+}
+
+
 class Dataset(BaseModel):
 
     def __init__(
             self,
             name,
             dataset_files=None,
-            file_reader: 'Type[DataFileIO]' = AutoFileIO,
-            file_writer: 'Type[DataFileIO]' = CSVFileIO,
+            file_reader: 'Union[str, Type[DataFileIO]]' = 'auto',
+            file_writer: 'Union[str, Type[DataFileIO]]' = 'csv',
             id_column='id',
             **kwargs,
     ):
         super().__init__(name, **kwargs)
         # TODO: create a dataset schema and verify
         self.id_column = id_column
+        if file_reader is None or isinstance(file_reader, str):
+            file_reader = file_io_registry[file_reader]
+        if file_writer is None or isinstance(file_writer, str):
+            file_writer = file_io_registry[file_writer]
         self.file_reader = file_reader
         self.file_writer = file_writer
         self.create_date: 'Optional[datetime]' = None

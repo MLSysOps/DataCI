@@ -156,11 +156,11 @@ class PythonOperator(Stage, _PythonOperator):
         for key, dataset in self.output_table.items():
             # If the operator has multiple outputs (get from airflow python operator)
             if self.multiple_outputs:
-                dataset.dataset_files = ret[key]
+                dataset.write(ret[key])
                 dataset.save()
                 ret[key] = dataset.identifier
             else:
-                dataset.dataset_files = ret
+                dataset.write(ret)
                 dataset.save()
                 ret = dataset.identifier
             self.log.info(f'Output table {key}: {dataset.identifier}')

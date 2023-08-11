@@ -17,17 +17,15 @@ from alaas.server.executors import TorchALWorker
 from docarray import Document, DocumentArray
 from transformers import pipeline, AutoTokenizer
 
+from dataci.decorators import stage
+
 logger = logging.getLogger(__name__)
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 
-def read_dataset(exp_time):
-    df = pd.read_csv(DATASET_BASE_PATH.format(exp_time))
-    return df
-
-
-def select_data(df, num_samples: int, strategy: str = 'RandomSampling'):
+@stage
+def select_data(df, num_samples: int, model_name, strategy: str = 'RandomSampling'):
     text_list = df['text'].tolist()
 
     # Large number of data breaks the server, let's do in a non-server-client way
@@ -35,7 +33,7 @@ def select_data(df, num_samples: int, strategy: str = 'RandomSampling'):
     # Start ALaaS server in a separate process
     logger.info('Start AL Worker')
     al_worker = TorchALWorker(
-        model_name=MODEL_NAME,
+        model_name=model_name,
         model_repo="huggingface/pytorch-transformers",
         device='cuda',
         strategy=strategy,
@@ -71,17 +69,13 @@ def select_data(df, num_samples: int, strategy: str = 'RandomSampling'):
     return selected_df
 
 
-def save_dataset(df, file_path):
-    Path(file_path).parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(file_path, index=False)
-
-
 if __name__ == '__main__':
     exp_time = '2021Q4'
     prefix = ''
     DATASET_BASE_PATH = prefix + 'data/reviews_{}_train.csv'
     MODEL_NAME = prefix + 'out/2021Q3_LC_Token_lr=1.00E-05_b=128_j=4/model/'
     SAVE_DATASET_BASE_PATH = prefix + 'processed/'
+
     cur_year, cur_quarter = exp_time.split('Q')
     last_quarter = f'{int(cur_year) - 1}Q4' if cur_quarter == '1' else f'{cur_year}Q{int(cur_quarter) - 1}'
     data_selection_method = 'LC'
@@ -89,7 +83,16 @@ if __name__ == '__main__':
         'RS': 'RandomSampling',
         'LC': 'LeastConfidence',
     }
+    save_path = SAVE_DATASET_BASE_PATH + f'data_select_{exp_time}_{data_selection_method}.csv'
+    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
 
-    df_ = read_dataset(last_quarter)
-    selected_df = select_data(df_, num_samples=5000, strategy=strategy_name_mapper[data_selection_method])
-    save_dataset(selected_df, SAVE_DATASET_BASE_PATH + f'data_select_{exp_time}_{data_selection_method}.csv')
+    # Read input data
+    df_ = pd.read_csv(DATASET_BASE_PATH.format(exp_time))
+
+    # Run stage: select_data
+    selected_df = select_data.test(
+        df_, num_samples=5000, model_name=MODEL_NAME, strategy=strategy_name_mapper[data_selection_method]
+    )
+
+    # Save output data
+    selected_df.to_csv(save_path, index=False)

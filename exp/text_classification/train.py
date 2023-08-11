@@ -8,9 +8,9 @@ Date: Mar 22, 2023
 import argparse
 import json
 import logging
-import os
 import random
 import shutil
+import sys
 import tempfile
 import time
 from datetime import datetime
@@ -26,7 +26,8 @@ from torch.utils.collect_env import get_pretty_env_info
 from torch.utils.data import Dataset, DataLoader, random_split
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-logger = None
+from dataci.decorators import stage
+
 LOG_FILE_NAME = 'out.log'
 
 
@@ -99,6 +100,12 @@ def parse_args(args=None):
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu',
                         help='Device to use for training (cuda or cpu)')
 
+    # allow providing args by sys.argv or args argument
+    if args is not None:
+        args = sys.argv[1:] + list(args)
+    else:
+        args = sys.argv[1:]
+
     args = parser.parse_args(args)
     return args
 
@@ -131,7 +138,7 @@ def collate_fn(batch):
     return new_batch
 
 
-def setup_dataloader(args, tokenizer):
+def setup_dataloader(args, tokenizer, logger):
     train_dataset = TextDataset(
         args.train_dataset, id_column=args.id_col, text_column=args.text_col, label_column=args.label_col,
         tokenizer=tokenizer,
@@ -164,7 +171,7 @@ def setup_dataloader(args, tokenizer):
     return train_dataloader, val_dataloader, test_dataloader
 
 
-def train_one_epoch(args, model, dataloader, optimizer, epoch_num):
+def train_one_epoch(args, model, dataloader, optimizer, epoch_num, logger):
     train_loss_list, train_acc_list, batch_time_list = list(), list(), list()
     train_pred_results = list()
     model.train()
@@ -234,7 +241,7 @@ def train_one_epoch(args, model, dataloader, optimizer, epoch_num):
 
 
 @torch.no_grad()
-def val_one_epoch(args, model, dataloader, epoch_num, test=False):
+def val_one_epoch(args, model, dataloader, epoch_num, test=False, logger=...):
     stage_name = 'test' if test else 'val'
     val_loss_list, val_acc_list, batch_time_list = list(), list(), list()
     val_pred_results = list()
@@ -303,8 +310,9 @@ def val_one_epoch(args, model, dataloader, epoch_num, test=False):
     return val_metrics_dict, val_pred_results
 
 
-def main(args):
-    global logger
+@stage(task_id='train_text_classification_model')
+def main(args=None):
+    args = parse_args(args)
 
     # Prepare exp directory
     args.exp_root = Path(args.exp_root)
@@ -348,7 +356,7 @@ def main(args):
     # Load the tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name)
     # Load dataset
-    train_dataloader, val_dataloader, test_dataloader = setup_dataloader(args, tokenizer)
+    train_dataloader, val_dataloader, test_dataloader = setup_dataloader(args, tokenizer, logger)
     # Load model
     model = AutoModelForSequenceClassification.from_pretrained(args.model_name, num_labels=args.num_classes)
     model = model.to(args.device)
@@ -360,11 +368,11 @@ def main(args):
     for epoch in range(args.epochs):
         # train loop
         train_metrics_dict, train_pred_result = train_one_epoch(
-            args, model, train_dataloader, optimizer, epoch,
+            args, model, train_dataloader, optimizer, epoch, logger=logger
         )
         # Validation loop
         val_metrics_dict, val_pred_result = val_one_epoch(
-            args, model, val_dataloader, epoch, test=False
+            args, model, val_dataloader, epoch, test=False, logger=logger
         )
 
         # Save loggings and results
@@ -407,5 +415,4 @@ def main(args):
 
 
 if __name__ == '__main__':
-    args_ = parse_args()
-    main(args_)
+    main.test()

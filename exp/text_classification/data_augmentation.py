@@ -10,11 +10,10 @@ from pathlib import Path
 import pandas as pd
 import augly.text as textaugs
 
-def read_dataset(file_name: str):
-    df = pd.read_csv(file_name)
-    return df
+from dataci.decorators import stage
 
 
+@stage
 def text_augmentation(df):
     aug_function = textaugs.OneOf([
         textaugs.ReplaceSimilarUnicodeChars(),
@@ -24,16 +23,24 @@ def text_augmentation(df):
 
     return df
 
-def save_dataset(df, file_path):
-    Path(file_path).parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(file_path, index=False)
-
 
 if __name__ == '__main__':
+    # Parameters
     exp_time = '2021Q4'
     prefix = ''
+    data_select_strategy = 'RS'
+
+    # Configurations
     SAVE_DATASET_BASE_PATH = prefix + 'processed/'
-    data_select_strategy = 'LC'
-    df = read_dataset(SAVE_DATASET_BASE_PATH + f'data_select_{exp_time}_{data_select_strategy}.csv')
-    df = text_augmentation(df)
-    save_dataset(df, SAVE_DATASET_BASE_PATH + f'data_aug_{exp_time}_{data_select_strategy}.csv')
+    input_path = SAVE_DATASET_BASE_PATH + f'data_select_{exp_time}_{data_select_strategy}.csv'
+    save_path = SAVE_DATASET_BASE_PATH + f'data_aug_{exp_time}_{data_select_strategy}.csv'
+    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+
+    # Read input data
+    df = pd.read_csv(input_path)
+
+    # Run stage: text_augmentation
+    data_aug_df = text_augmentation.test(df)
+
+    # Save output data
+    data_aug_df.to_csv(save_path, index=False)

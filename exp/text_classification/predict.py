@@ -9,6 +9,7 @@ import argparse
 import json
 import logging
 import random
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -22,7 +23,8 @@ from torch.utils.collect_env import get_pretty_env_info
 from torch.utils.data import Dataset, DataLoader
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-logger = None
+from dataci.decorators import stage
+
 LOG_FILE_NAME = 'out.log'
 
 
@@ -82,6 +84,12 @@ def parse_args(args=None):
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu',
                         help='Device to use for training (cuda or cpu)')
 
+    # allow providing args by sys.argv or args argument
+    if args is not None:
+        args = sys.argv[1:] + list(args)
+    else:
+        args = sys.argv[1:]
+
     args = parser.parse_args(args)
     return args
 
@@ -114,7 +122,7 @@ def collate_fn(batch):
     return new_batch
 
 
-def setup_dataloader(args, tokenizer):
+def setup_dataloader(args, tokenizer, logger):
     test_dataset = TextDataset(
         args.test_dataset, id_column=args.id_col, text_column=args.text_col, label_column=args.label_col,
         tokenizer=tokenizer,
@@ -129,7 +137,7 @@ def setup_dataloader(args, tokenizer):
 
 
 @torch.no_grad()
-def val_one_epoch(args, model, dataloader, epoch_num, test=False):
+def val_one_epoch(args, model, dataloader, epoch_num, test=False, logger=...):
     stage_name = 'test' if test else 'val'
     val_loss_list, val_acc_list, batch_time_list = list(), list(), list()
     val_pred_results = list()
@@ -193,8 +201,9 @@ def val_one_epoch(args, model, dataloader, epoch_num, test=False):
     return val_metrics_dict, val_pred_results
 
 
-def main(args):
-    global logger
+@stage(task_id='predict_text_classification')
+def main(args=None):
+    args = parse_args(args)
 
     # Prepare exp directory
     args.exp_root = args.exp_root / '_'.join([
@@ -234,13 +243,13 @@ def main(args):
     # Load the tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name)
     # Load dataset
-    test_dataloader = setup_dataloader(args, tokenizer)
+    test_dataloader = setup_dataloader(args, tokenizer, logger=logger)
     # Load model
     model = AutoModelForSequenceClassification.from_pretrained(args.model_name, num_labels=args.num_classes)
     model = model.to(args.device)
 
     test_metrics_dict, test_pred_result = val_one_epoch(
-        args, model, test_dataloader, epoch_num=None, test=True,
+        args, model, test_dataloader, epoch_num=None, test=True, logger=logger,
     )
     # Save test results and metrics
     logger.info(f"Saving test metrics and predictions to {args.exp_root}")
@@ -254,6 +263,4 @@ def main(args):
 
 
 if __name__ == '__main__':
-    args_ = parse_args()
-    main(args_)
-
+    main.test()

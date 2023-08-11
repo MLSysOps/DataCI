@@ -14,7 +14,7 @@ from airflow.decorators.python import _PythonDecoratedOperator
 from airflow.models.xcom_arg import PlainXComArg
 
 from dataci.decorators.base import DecoratedOperatorStageMixin
-from dataci.models import Stage, Dataset
+from dataci.models import Stage, Dataset as _Dataset
 from dataci.orchestrator.airflow import PythonOperator
 
 if TYPE_CHECKING:
@@ -52,6 +52,8 @@ class _TaskDecorator(_AirflowTaskDecorator, DecoratedOperatorStageMixin):
                 if arg.operator.output_table:  # arg.operator's output is a dataset
                     # Mark the dataset as input table, provide a dummy value
                     self._stage.input_table[key] = ...
+            elif isinstance(arg, Dataset):  # arg is a DataCI dataset
+                self._stage.input_table[key] = arg.identifier
 
         xcom_arg = super().__call__(*args, **kwargs)
         # Replace the _stage attribute with the newly created operator object
@@ -152,9 +154,16 @@ def python_task(
     )
 
 
-def dataset_wrapper(name, dataset_files: PlainXComArg = None, **kwargs):
-    # parse multiple outputs from XComArg
-    if dataset_files is not None:
-        dataset = Dataset(name=name, **kwargs)
-        dataset_files.operator.output_table[dataset_files.key] = dataset
-    return dataset_files
+class Dataset:
+    def __new__(cls, name: str, dataset_files: PlainXComArg = None, file_reader='auto', file_writer='csv', **kwargs):
+        # parse multiple outputs from XComArg
+        if dataset_files is not None:
+            if isinstance(dataset_files, PlainXComArg):
+                dataset = Dataset(name=name, file_reader=file_reader, file_writer=file_writer, **kwargs)
+                dataset_files.operator.output_table[dataset_files.key] = dataset
+
+        return dataset_files
+
+    @classmethod
+    def get(cls, name: str, version: str = None):
+        return _Dataset.get(name, version=version)
