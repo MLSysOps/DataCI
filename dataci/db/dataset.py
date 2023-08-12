@@ -53,8 +53,6 @@ def create_one_dataset(dataset_dict):
 
 
 def create_one_dataset_tag(dataset_tag_dict):
-    dataset_tag_dict['version_tag'] = int(dataset_tag_dict['version_tag'][1:])  # 'v1' -> 1
-
     with db_connection:
         cur = db_connection.cursor()
         cur.execute(
@@ -63,13 +61,15 @@ def create_one_dataset_tag(dataset_tag_dict):
                 workspace,
                 name,
                 version,
-                tag
+                tag,
+                timestamp
             )
             VALUES (
                 :workspace,
                 :name,
                 :version,
-                :version_tag
+                :version_tag,
+                unixepoch()
             )
             ;
             """),
@@ -245,8 +245,8 @@ def get_one_dataset_by_tag(workspace, name, tag):
                 FROM    dataset_tag
                 WHERE   workspace = :workspace
                 AND     name = :name
-                AND     tag = (
-                    SELECT MAX(tag)
+                AND     timestamp = (
+                    SELECT MAX(timestamp)
                     FROM   dataset_tag
                     WHERE  workspace = :workspace
                     AND    name = :name
@@ -318,7 +318,7 @@ def get_one_dataset_by_tag(workspace, name, tag):
             'workspace': po[0],
             'name': po[1],
             'version': po[2],
-            'version_tag': f'v{po[3]}' if po[3] is not None else None,
+            'version_tag': po[3],
             'log_message': po[4],
             'timestamp': po[5],
             'id_column': po[6],
@@ -412,17 +412,3 @@ def get_many_datasets(workspace, name, version=None, all=False):
         }
         dataset_dict_list.append(dataset_dict)
     return dataset_dict_list
-
-
-def get_next_dataset_version_tag(workspace, name):
-    with db_connection:
-        cur = db_connection.cursor()
-        cur.execute(
-            """
-            SELECT COALESCE(MAX(tag), 0) + 1
-            FROM   dataset_tag
-            WHERE  workspace = ?
-            AND    name = ?
-            ;
-            """, (workspace, name,))
-        return cur.fetchone()[0]

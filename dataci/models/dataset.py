@@ -9,6 +9,7 @@ import abc
 import hashlib
 import json
 import logging
+import re
 import shutil
 import tempfile
 from collections import defaultdict
@@ -23,7 +24,6 @@ from dataci.db.dataset import (
     get_many_datasets,
     get_one_dataset_by_version,
     get_one_dataset_by_tag,
-    get_next_dataset_version_tag,
     create_one_dataset,
     create_one_dataset_tag,
     exist_dataset_by_version
@@ -214,6 +214,15 @@ file_io_registry = {
 
 
 class Dataset(BaseModel):
+    VERSION_PATTERN = re.compile(r'latest|none|\w+', flags=re.IGNORECASE)
+    GET_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
+        r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|none|\w+))?$', flags=re.IGNORECASE
+    )
+    LIST_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
+        r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(latest|none|[\w*]+))?$', re.IGNORECASE
+    )
+    # any alphanumeric string that is not a pure 'latest', 'none', or hex string
+    VERSION_TAG_PATTERN = re.compile(r'^(?!^latest$|^none$|^[\da-f]+$)\w+$', flags=re.IGNORECASE)
 
     def __init__(
             self,
@@ -384,13 +393,21 @@ class Dataset(BaseModel):
         create_one_dataset(config)
         return self.reload(config)
 
-    def publish(self):
+    def publish(self, version_tag=None):
         self.save()
         # Check if the stage is already published
         if self.version_tag is not None:
+            logger.warning(f'Dataset {self} is already published with version_tag={self.version_tag}.')
             return self
+        # Check if version_tag is valid
+        if version_tag is None or self.VERSION_TAG_PATTERN.match(version_tag) is None:
+            raise ValueError(
+                f'Dataset version_tag {version_tag} is not valid. '
+                f'Expect a alphanumeric string that is not a pure "latest", "none" or hex string.'
+            )
+
         config = self.dict()
-        config['version_tag'] = str(get_next_dataset_version_tag(config['workspace'], config['name']))
+        config['version_tag'] = version_tag.lower()
         create_one_dataset_tag(config)
 
         return self.reload(config)
@@ -399,7 +416,7 @@ class Dataset(BaseModel):
     def get(cls, name: str, version=None):
         workspace, name, version_or_tag = cls.parse_data_model_get_identifier(name, version)
 
-        if version_or_tag is None or version_or_tag == 'latest' or version_or_tag.startswith('v'):
+        if version_or_tag is None or cls.VERSION_TAG_PATTERN.match(version_or_tag) is not None:
             # Get by tag
             config = get_one_dataset_by_tag(workspace, name, version_or_tag)
         else:
