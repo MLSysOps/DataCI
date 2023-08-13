@@ -45,6 +45,23 @@ class DAG(Workflow, _DAG):
         return g
 
     @property
+    def input_datasets(self):
+        dataset_names = set()
+        for stage in self.stages:
+            if isinstance(stage, Stage):
+                # Only add input table names
+                for v in stage.input_table.values():
+                    dataset_names.add(v['name'] if isinstance(v, dict) else v)
+        # Remove Ellipsis
+        dataset_names.discard(...)
+        return map(Dataset.get, dataset_names)
+
+    @property
+    def output_datasets(self):
+        # TODO: get dag output datasets
+        raise NotImplementedError
+
+    @property
     def script(self):
         if self._script is None:
             with open(self.fileloc, 'r') as f:

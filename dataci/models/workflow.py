@@ -31,6 +31,7 @@ from ..utils import hash_binary
 
 if TYPE_CHECKING:
     from typing import Optional, Iterable
+    from dataci.models import Dataset
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +49,6 @@ class Workflow(BaseModel, ABC):
         self.logger = logging.getLogger(__name__)
         self._script = None
         self._init_params = (args, kwargs)
-        # set during runtime
-        self._input_dataset = list()
-        self._output_dataset = list()
 
     @property
     @abc.abstractmethod
@@ -60,6 +58,17 @@ class Workflow(BaseModel, ABC):
     @property
     @abc.abstractmethod
     def dag(self) -> 'nx.DiGraph':
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def input_datasets(self) -> 'Iterable[Dataset]':
+        """Return all outside produced input datasets of the workflow."""
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def output_datasets(self) -> 'Iterable[Dataset]':
         raise NotImplementedError
 
     @property
@@ -94,6 +103,8 @@ class Workflow(BaseModel, ABC):
             },
             'script': self.script,
             'timestamp': int(self.create_date.timestamp()) if self.create_date else None,
+            'input_datasets': [dataset.dict(id_only=True) for dataset in self.input_datasets],
+            'output_datasets': [],
         }
 
     @classmethod
