@@ -46,16 +46,20 @@ class _TaskDecorator(_AirflowTaskDecorator, DecoratedOperatorStageMixin):
     def __call__(self, *args, **kwargs):
         # Check if the input arguments are dataset
         # If so, mark the argument as input table
-        call_args = inspect.getcallargs(self.function, *args, **kwargs)
-        for key, arg in call_args.items():
+        bound = inspect.signature(self.function).bind(*args, **kwargs)
+        for key, arg in bound.arguments.items():
             if isinstance(getattr(arg, 'operator', None), Stage):  # arg.operator is DataCI stage
                 if arg.operator.output_table:  # arg.operator's output is a dataset
                     # Mark the dataset as input table, provide a dummy value
                     self._stage.input_table[key] = ...
-            elif isinstance(arg, Dataset):  # arg is a DataCI dataset
-                self._stage.input_table[key] = arg.identifier
+            elif isinstance(arg, _Dataset):  # arg is a DataCI dataset
+                self._stage.input_table[key] = {
+                    'name': arg.identifier, 'file_reader': arg.file_reader.NAME, 'file_writer': arg.file_writer.NAME
+                }
+                # Rewrite the argument with the dataset identifier
+                bound.arguments[key] = arg.identifier
 
-        xcom_arg = super().__call__(*args, **kwargs)
+        xcom_arg = super().__call__(*bound.args, **bound.kwargs)
         # Replace the _stage attribute with the newly created operator object
         op = xcom_arg.operator
         if isinstance(op, Stage):
@@ -159,11 +163,11 @@ class Dataset:
         # parse multiple outputs from XComArg
         if dataset_files is not None:
             if isinstance(dataset_files, PlainXComArg):
-                dataset = Dataset(name=name, file_reader=file_reader, file_writer=file_writer, **kwargs)
+                dataset = _Dataset(name=name, file_reader=file_reader, file_writer=file_writer, **kwargs)
                 dataset_files.operator.output_table[dataset_files.key] = dataset
 
         return dataset_files
 
     @classmethod
-    def get(cls, name: str, version: str = None):
-        return _Dataset.get(name, version=version)
+    def get(cls, name: str, version: str = None, file_reader='auto', file_writer='csv'):
+        return _Dataset.get(name, version=version, file_reader=file_reader, file_writer=file_writer)

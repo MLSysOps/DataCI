@@ -53,7 +53,7 @@ class DAG(Workflow, _DAG):
             # from xxx import stage_name / import stage_name
             stage_name_pattern = '|'.join([stage.name for stage in self.stages])
             import_pattern = re.compile(
-                rf'^(?:from\s+[\w\.]+\s+)?import\s+(?:{stage_name_pattern})[\r\t\f ]*\n', flags=re.MULTILINE
+                rf'^(?:from\s+[\w.]+\s+)?import\s+(?:{stage_name_pattern})[\r\t\f ]*\n', flags=re.MULTILINE
             )
             script = import_pattern.sub('', script)
 
@@ -142,10 +142,14 @@ class PythonOperator(Stage, _PythonOperator):
         """Execute the python callable."""
         # Resolve input table
         bound = inspect.signature(self.python_callable).bind(*self.op_args, **self.op_kwargs)
-        for arg_name, _ in self.input_table.items():
+        for arg_name, arg_value in self.input_table.items():
             if arg_name in bound.arguments:
-                dataset = Dataset.get(bound.arguments[arg_name])
-                bound.arguments[arg_name] = dataset.dataset_files.read()
+                arg_value = arg_value if arg_value is not Ellipsis else bound.arguments[arg_name]
+                if not isinstance(arg_value, dict):
+                    # If the input table is not a dict, it is a dataset identifier
+                    arg_value = {'name': arg_value}
+                dataset = Dataset.get(**arg_value)
+                bound.arguments[arg_name] = dataset.read()
                 # For logging
                 self.log.info(f'Input table {arg_name}: {dataset.identifier}')
 
@@ -156,13 +160,21 @@ class PythonOperator(Stage, _PythonOperator):
         for key, dataset in self.output_table.items():
             # If the operator has multiple outputs (get from airflow python operator)
             if self.multiple_outputs:
-                dataset.write(ret[key])
+                dataset.dataset_files = ret[key]
                 dataset.save()
-                ret[key] = dataset.identifier
+                ret[key] = {
+                    'name': dataset.identifier,
+                    'file_reader': dataset.file_reader.NAME,
+                    'file_writer': dataset.file_writer.NAME
+                }
             else:
-                dataset.write(ret)
+                dataset.dataset_files = ret
                 dataset.save()
-                ret = dataset.identifier
+                ret = {
+                    'name': dataset.identifier,
+                    'file_reader': dataset.file_reader.NAME,
+                    'file_writer': dataset.file_writer.NAME
+                }
             self.log.info(f'Output table {key}: {dataset.identifier}')
         return ret
 

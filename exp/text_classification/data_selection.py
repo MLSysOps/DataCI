@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 
 import pandas as pd
+import torch
 from alaas.server.executors import TorchALWorker
 from docarray import Document, DocumentArray
 from transformers import pipeline, AutoTokenizer
@@ -25,8 +26,9 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 
 @stage
-def select_data(df, num_samples: int, model_name, strategy: str = 'RandomSampling'):
+def select_data(df, num_samples: int, model_name, strategy: str = 'RandomSampling', device: str = None):
     text_list = df['text'].tolist()
+    device = device or 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # Large number of data breaks the server, let's do in a non-server-client way
 
@@ -35,7 +37,7 @@ def select_data(df, num_samples: int, model_name, strategy: str = 'RandomSamplin
     al_worker = TorchALWorker(
         model_name=model_name,
         model_repo="huggingface/pytorch-transformers",
-        device='cuda',
+        device=device,
         strategy=strategy,
         minibatch_size=1024,
         tokenizer_model="bert-base-uncased",

@@ -397,7 +397,7 @@ def main(args=None):
         shutil.copy(tmp_log_path.name, args.log_path)
 
     test_metrics_dict, test_pred_result = val_one_epoch(
-        args, model, test_dataloader, epoch_num=None, test=True,
+        args, model, test_dataloader, epoch_num=None, test=True, logger=logger,
     )
     # Save final model
     model.save_pretrained(args.exp_root / 'model')
@@ -411,7 +411,7 @@ def main(args=None):
     # 3. Copy log file
     shutil.copy(tmp_log_path.name, args.log_path)
 
-    return args.exp_root
+    return str(args.exp_root)
 
 
 if __name__ == '__main__':

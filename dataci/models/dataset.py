@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 class DataFileIO(abc.ABC):
     DEFAULT_SUFFIX: str
+    NAME: str
 
     def __init__(self, file_path):
         self.file_path = file_path
@@ -67,6 +68,7 @@ class DataFileIO(abc.ABC):
 
 class CSVFileIO(DataFileIO):
     DEFAULT_SUFFIX = '.csv'
+    NAME = 'csv'
 
     def __init__(self, file_path):
         super().__init__(file_path)
@@ -117,6 +119,7 @@ class CSVFileIO(DataFileIO):
 
 class ParquetFileIO(DataFileIO):
     DEFAULT_SUFFIX = '.parquet'
+    NAME = 'parquet'
 
     def __init__(self, file_path):
         super().__init__(file_path)
@@ -165,35 +168,11 @@ class ParquetFileIO(DataFileIO):
         return self._len
 
 
-class SkipReaderFileIO(DataFileIO):
-    DEFAULT_SUFFIX = '.bin'
-
-    def __init__(self, file_path):
-        super().__init__(file_path)
-        self._len = None
-        self._sha256 = None
-
-    def read(self, num_records=None):
-        return self.file_path
-
-    def write(self, records, indices=None):
-        raise NotImplementedError
-
-    def seek(self, offset, whence=0):
-        raise NotImplementedError
-
-    @property
-    def sha256(self):
-        return self._sha256
-
-    def __len__(self):
-        return self._len
-
-
 class AutoFileIO(DataFileIO, abc.ABC):
+    NAME = 'auto'
 
     def __new__(cls, *args, **kwargs):
-        if cls is AutoFileIO:
+        if issubclass(cls, AutoFileIO):
             if args[0].endswith('.csv'):
                 return CSVFileIO(*args, **kwargs)
             elif args[0].endswith('.parquet'):
@@ -202,6 +181,31 @@ class AutoFileIO(DataFileIO, abc.ABC):
                 raise ValueError(f'Unable to read file {args[0]}')
         else:
             return super().__new__(cls)
+
+
+class SkipReaderFileIO(DataFileIO):
+    NAME = 'skip'
+
+    def __init__(self, file_path):
+        super().__init__(file_path)
+        # For get the file
+        self.file_io = AutoFileIO(file_path)
+
+    def read(self, num_records=None):
+        return self.file_path
+
+    def write(self, records, indices=None):
+        return self.file_io.write(records, indices)
+
+    def seek(self, offset, whence=0):
+        return self.file_io.seek(offset, whence)
+
+    @property
+    def sha256(self):
+        return self.file_io.sha256
+
+    def __len__(self):
+        return len(self.file_io)
 
 
 file_io_registry = {
@@ -347,8 +351,8 @@ class Dataset(BaseModel):
     def fingerprint(self):
         config = self.dict()
         fingerprint_dict = {
-            'workspace': config['workspace'],
-            'name': config['name'],
+            'workspace': self.workspace.name,
+            'name': self.name,
             'datasets': self.sha256,
         }
         return hash_binary(json.dumps(fingerprint_dict, sort_keys=True).encode('utf-8'))
@@ -413,7 +417,7 @@ class Dataset(BaseModel):
         return self.reload(config)
 
     @classmethod
-    def get(cls, name: str, version=None):
+    def get(cls, name: str, version=None, file_reader='auto', file_writer='csv'):
         workspace, name, version_or_tag = cls.parse_data_model_get_identifier(name, version)
 
         if version_or_tag is None or cls.VERSION_TAG_PATTERN.match(version_or_tag) is not None:
@@ -425,6 +429,8 @@ class Dataset(BaseModel):
                 version_or_tag = None
             config = get_one_dataset_by_version(workspace, name, version_or_tag)
 
+        config['file_reader'] = file_reader
+        config['file_writer'] = file_writer
         return cls.from_dict(config)
 
     @classmethod

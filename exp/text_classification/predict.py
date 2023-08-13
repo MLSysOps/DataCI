@@ -259,7 +259,7 @@ def main(args=None):
     # 2. Save test prediction to CSV file
     pd.DataFrame(test_pred_result).to_csv(args.pred_dir / 'test_preds.csv', index=False)
 
-    return args.exp_root
+    return str(args.exp_root)
 
 
 if __name__ == '__main__':
