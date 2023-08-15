@@ -5,18 +5,13 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Feb 20, 2023
 """
-import contextvars
 
-WORKFLOW_CONTEXT = contextvars.ContextVar(
-    'workflow_context',
-    default={'params': dict()}
-)
-
-from .workspace import Workspace
+from .dataset import Dataset
+from .event import Event
 from .stage import Stage
 from .workflow import Workflow
-from .dataset import Dataset
+from .workspace import Workspace
 
 __all__ = [
-    'Workspace', 'Dataset', 'Workflow', 'Stage', 'WORKFLOW_CONTEXT'
+    'Workspace', 'Dataset', 'Event', 'Workflow', 'Stage',
 ]

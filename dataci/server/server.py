@@ -14,7 +14,8 @@ from fastapi import FastAPI
 
 from dataci.config import SERVER_ADDRESS, SERVER_PORT
 from dataci.models.event import DISABLE_EVENT
-from dataci.server.trigger import Trigger, EVENT_QUEUE, QUEUE_END
+from dataci.plugins.orchestrator.airflow import Trigger
+from dataci.server.trigger import EVENT_QUEUE, QUEUE_END
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

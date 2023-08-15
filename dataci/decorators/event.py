@@ -8,8 +8,6 @@ Date: Aug 15, 2023
 from functools import wraps
 from typing import TYPE_CHECKING
 
-from dataci.server.trigger import Event
-
 if TYPE_CHECKING:
     from typing import Type, Union, TypeVar, Callable
     from dataci.models.base import BaseModel
@@ -21,6 +19,9 @@ def event(name: str = None, producer: str = None):
     def wrapper(func: 'T') -> 'T':
         @wraps(func)
         def inner_wrapper(self: 'Union[BaseModel, Type[BaseModel]]', *args, **kwargs):
+            # Prevent circular import
+            from dataci.models import Event
+
             producer_ = producer
             if producer_ is None:
                 if isinstance(self, type):
