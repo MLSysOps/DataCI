@@ -21,6 +21,7 @@ class BaseModel(abc.ABC):
     LIST_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
         r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|none|\*))?$', re.IGNORECASE
     )
+    type_name: str
 
     def __init__(self, name, *args, **kwargs):
         # Prevent to pass invalid arguments to object.__init__
@@ -48,6 +49,10 @@ class BaseModel(abc.ABC):
     @property
     def identifier(self):
         return f'{self.workspace.name}.{self.name}@{self.version}'
+
+    @property
+    def uri(self):
+        return f'dataci://{self.workspace.name}/{self.type_name}/{self.name}/{self.version}'
 
     @abc.abstractmethod
     def dict(self):

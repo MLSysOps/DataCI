@@ -28,9 +28,9 @@ from dataci.db.dataset import (
     create_one_dataset_tag,
     exist_dataset_by_version
 )
+from dataci.decorators.event import event
 from dataci.utils import hash_binary
 from .base import BaseModel
-from ..decorators.event import event
 
 if TYPE_CHECKING:
     from typing import Optional, Union, Type
@@ -219,6 +219,8 @@ file_io_registry = {
 
 
 class Dataset(BaseModel):
+    type_name = 'dataset'
+
     VERSION_PATTERN = re.compile(r'latest|none|\w+', flags=re.IGNORECASE)
     GET_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
         r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|none|\w+))?$', flags=re.IGNORECASE
@@ -398,7 +400,7 @@ class Dataset(BaseModel):
         create_one_dataset(config)
         return self.reload(config)
 
-    @event('dataset_publish')
+    @event()
     def publish(self, version_tag=None):
         self.save()
         # Check if the stage is already published

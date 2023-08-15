@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     T = TypeVar('T', bound=Callable)
 
 
-def event(name: str, producer: str = None):
+def event(name: str = None, producer: str = None):
     def wrapper(func: 'T') -> 'T':
         @wraps(func)
         def inner_wrapper(self: 'Union[BaseModel, Type[BaseModel]]', *args, **kwargs):
@@ -25,8 +25,9 @@ def event(name: str, producer: str = None):
             if producer_ is None:
                 if isinstance(self, type):
                     raise ValueError('`producer` must be specified when decorating a class method')
-                producer_ = self.full_name
-            evt = Event(name, producer=producer_)
+                producer_ = self.uri
+            name_ = name or func.__name__
+            evt = Event(name_, producer=producer_)
             evt.start()
             try:
                 result = func(self, *args, **kwargs)

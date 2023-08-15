@@ -40,6 +40,7 @@ class Stage(BaseModel):
     """
 
     name_arg = 'name'
+    type_name = 'stage'
 
     def __init__(self, *args, input_table=None, output_table=None, **kwargs) -> None:
         name = kwargs.get(self.name_arg, None)

@@ -39,7 +39,9 @@ logger = logging.getLogger(__name__)
 class Workflow(BaseModel, ABC):
     name_arg = 'name'
 
-    def __init__(self, *args, **kwargs):
+    type_name = 'workflow'
+
+    def __init__(self, schedule=None, *args, **kwargs):
         if len(args) > 0:
             name = args[0]
         else:
@@ -47,6 +49,7 @@ class Workflow(BaseModel, ABC):
         super().__init__(name, *args, **kwargs)
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.logger = logging.getLogger(__name__)
+        self.schedule = schedule
         self._script = None
         self._init_params = (args, kwargs)
 
