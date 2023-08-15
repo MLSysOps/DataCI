@@ -457,7 +457,7 @@ def get_all_latest_workflow_schedule():
                      , name
                      , version
                      , schedule
-                     , ROW_NUMBER() OVER (PARTITION BY workspace, name ORDER BY version DESC) AS rk
+                     , ROW_NUMBER() OVER (PARTITION BY workspace, name ORDER BY timestamp DESC) AS rk
                 FROM   workflow
             )
             WHERE rk = 1

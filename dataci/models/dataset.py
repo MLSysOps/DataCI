@@ -30,6 +30,7 @@ from dataci.db.dataset import (
 )
 from dataci.utils import hash_binary
 from .base import BaseModel
+from ..decorators.event import event
 
 if TYPE_CHECKING:
     from typing import Optional, Union, Type
@@ -397,6 +398,7 @@ class Dataset(BaseModel):
         create_one_dataset(config)
         return self.reload(config)
 
+    @event('dataset_publish')
     def publish(self, version_tag=None):
         self.save()
         # Check if the stage is already published

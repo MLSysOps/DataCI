@@ -18,6 +18,7 @@ from airflow.operators.python import PythonOperator as _PythonOperator
 from airflow.utils.decorators import fixup_decorator_warning_stack
 
 from dataci.models import Workflow, Stage, Dataset
+from dataci.server.trigger import Trigger as _Trigger, EVENT_QUEUE, QUEUE_END
 
 if TYPE_CHECKING:
     from typing import Callable, Any
@@ -224,3 +225,18 @@ class PythonOperator(Stage, _PythonOperator):
         with open(publish_file_path, 'w') as f:
             f.write(self.script)
         return self
+
+
+class Trigger(_Trigger):
+    def runner(self):
+        while True:
+            event = EVENT_QUEUE.get()
+            if event is QUEUE_END:
+                break
+            self.logger.debug(f'Received event: {event}')
+            if event not in self._schedule_map:
+                continue
+            for workflow_identifier in self._schedule_map[event]:
+                # Trigger airflow dag FIXME
+                trigger_dag(dag_id=workflow_identifier)
+                self.logger.debug(f'Put workflow {workflow_identifier} into execution queue')
