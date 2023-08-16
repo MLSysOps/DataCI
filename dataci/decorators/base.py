@@ -34,6 +34,10 @@ class DecoratedOperatorStageMixin:
         return self._stage.full_name
 
     @property
+    def identifier(self):
+        return self._stage.identifier
+
+    @property
     def create_date(self):
         return self._stage.create_date
 

@@ -26,11 +26,12 @@ from dataci.db.workflow import (
 from .workspace import Workspace
 from .base import BaseModel
 from .stage import Stage
+from .event import Event
 # from dataci.run import Run
 from ..utils import hash_binary
 
 if TYPE_CHECKING:
-    from typing import Optional, Iterable
+    from typing import Optional, Iterable, Sequence
     from dataci.models import Dataset
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ class Workflow(BaseModel, ABC):
 
     type_name = 'workflow'
 
-    def __init__(self, schedule=None, *args, **kwargs):
+    def __init__(self, *args, trigger=None, **kwargs):
         if len(args) > 0:
             name = args[0]
         else:
@@ -49,7 +50,8 @@ class Workflow(BaseModel, ABC):
         super().__init__(name, *args, **kwargs)
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.logger = logging.getLogger(__name__)
-        self.schedule = schedule
+        self.trigger: 'Sequence[Event]' = trigger or list()
+
         self._script = None
         self._init_params = (args, kwargs)
 
@@ -106,6 +108,7 @@ class Workflow(BaseModel, ABC):
             },
             'script': self.script,
             'timestamp': int(self.create_date.timestamp()) if self.create_date else None,
+            'trigger': [str(evt) for evt in self.trigger],
             'input_datasets': [dataset.dict(id_only=True) for dataset in self.input_datasets],
             'output_datasets': [],
         }
@@ -167,6 +170,7 @@ class Workflow(BaseModel, ABC):
 
         self.version = config['version']
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
+        self.trigger = [Event.from_str(evt) for evt in config['trigger']]
         if 'script' in config:
             self._script = config['script']
         if 'dag' in config:

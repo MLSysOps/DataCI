@@ -6,6 +6,7 @@ Email: yuanmingleee@gmail.com
 Date: Aug 15, 2023
 """
 import logging
+from urllib.parse import urlparse
 
 import requests
 
@@ -15,13 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 class Event(object):
-    def __init__(self, name, producer, status=None):
+    def __init__(self, name, type, producer, status='*'):
         self.name = name
+        self.type = type
         self.producer = producer
         self.status = status
-
-    def __repr__(self):
-        return f'<Event {self.producer}:{self.name}:{self.status}>'
 
     def start(self):
         self.status = 'start'
@@ -41,9 +40,20 @@ class Event(object):
             return
         r = requests.post(
             f'http://{SERVER_ADDRESS}:{SERVER_PORT}/events'
-            f'?producer={self.producer}&name={self.name}&status={self.status}',
+            f'?type={self.type}&producer={self.producer}&name={self.name}&status={self.status}',
         )
         if r.status_code != 200:
             logger.error(f'Failed to set event {self.producer}:{self.name}:{self.status}')
         else:
             logger.debug(f'Set event {self.producer}:{self.name}:{self.status}')
+
+    @classmethod
+    def from_str(cls, event_str):
+        type, producer, name, status = event_str.split(':')
+        return cls(name, type, producer, status)
+
+    def __repr__(self):
+        return f'<Event {self.type}:{self.producer}:{self.name}:{self.status}>'
+
+    def __str__(self):
+        return f'{self.type}:{self.producer}:{self.name}:{self.status}'

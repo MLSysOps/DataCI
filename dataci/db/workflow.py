@@ -6,13 +6,16 @@ Email: yuanmingleee@gmail.com
 Date: Mar 13, 2023
 """
 import json
+from copy import deepcopy
 from textwrap import dedent
 
 from . import db_connection
 
 
-def create_one_workflow(workflow_dict):
+def create_one_workflow(config):
     """Create one workflow."""
+    workflow_dict = deepcopy(config)
+    workflow_dict['trigger'] = json.dumps(workflow_dict['trigger'], sort_keys=True)
     dag = workflow_dict.pop('dag')
     workflow_dict['dag'] = json.dumps(dag['edge'], sort_keys=True)
     workflow_dag_node_dict = dag['node']
@@ -21,8 +24,8 @@ def create_one_workflow(workflow_dict):
         cur = db_connection.cursor()
         cur.execute(
             """
-            INSERT INTO workflow (workspace, name, version, timestamp, dag)
-            VALUES (:workspace, :name, :version, :timestamp, :dag)
+            INSERT INTO workflow (workspace, name, version, timestamp, schedule, dag)
+            VALUES (:workspace, :name, :version, :timestamp, :trigger, :dag)
             """,
             workflow_dict,
         )
@@ -199,7 +202,7 @@ def get_one_workflow_by_version(workspace, name, version):
             'timestamp': workflow[4],
             'params': '',
             'flag': '',
-            'schedule': '',
+            'trigger': json.loads(workflow[7]),
             'dag': {
                 'edge': json.loads(workflow[8]),
             }

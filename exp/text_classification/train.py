@@ -26,7 +26,7 @@ from torch.utils.collect_env import get_pretty_env_info
 from torch.utils.data import Dataset, DataLoader, random_split
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-from dataci.decorators import stage
+from dataci.plugins.decorators import stage
 
 LOG_FILE_NAME = 'out.log'
 

@@ -18,7 +18,7 @@ from alaas.server.executors import TorchALWorker
 from docarray import Document, DocumentArray
 from transformers import pipeline, AutoTokenizer
 
-from dataci.decorators import stage
+from dataci.plugins.decorators import stage
 
 logger = logging.getLogger(__name__)
 

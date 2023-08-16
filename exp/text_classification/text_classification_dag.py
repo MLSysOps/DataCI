@@ -8,7 +8,8 @@ Date: Jul 30, 2023
 import os
 from datetime import datetime
 
-from dataci.decorators import Dataset, stage, dag
+from dataci.plugins.decorators import Dataset, stage, dag
+from dataci.models import Event
 from exp.text_classification.data_augmentation import text_augmentation
 from exp.text_classification.data_selection import select_data
 from exp.text_classification.predict import main as predict_text_classification
@@ -25,7 +26,10 @@ def config_predict_args(train_output_path, test_dataset_path):
     return [f'--test_dataset={test_dataset_path}', f'--model_name={os.path.join(train_output_path, "model")}']
 
 
-@dag(start_date=datetime(2020, 7, 30))
+@dag(
+    start_date=datetime(2020, 7, 30),
+    trigger=[Event('publish', 'dataset', 'yelp_review_test@202010_test', 'success')],
+)
 def text_classification():
     raw_dataset_train = Dataset.get('yelp_review_test@202010_test')
     raw_dataset_val = Dataset.get('yelp_review_test@202010_test', file_reader=None)
@@ -40,4 +44,5 @@ def text_classification():
 
 if __name__ == '__main__':
     dag = text_classification()
-    dag.test()
+    dag.publish()
+    # dag.test()

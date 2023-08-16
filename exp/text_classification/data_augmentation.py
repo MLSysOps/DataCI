@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 import augly.text as textaugs
 
-from dataci.decorators import stage
+from dataci.plugins.decorators import stage
 
 
 @stage

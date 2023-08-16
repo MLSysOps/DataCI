@@ -113,7 +113,8 @@ class Stage(BaseModel):
         exec(script, globals(), local_dict)
         for v in local_dict.copy().values():
             # Stage is instantiated by operator class / a function decorated by @stage
-            if isinstance(v, (Stage, DecoratedOperatorStageMixin)):
+            if isinstance(v, (Stage, DecoratedOperatorStageMixin)) and \
+                    v.full_name == f'{config["workspace"]}.{config["name"]}':
                 self = v
                 break
         else:
