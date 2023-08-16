@@ -26,9 +26,8 @@ def event(name: str = None, producer: str = None):
             if producer_ is None:
                 if isinstance(self, type):
                     raise ValueError('`producer` must be specified when decorating a class method')
-                producer_ = self.uri
             name_ = name or func.__name__
-            evt = Event(name_, producer=producer_)
+            evt = Event(name_, producer=self.uri)
             evt.start()
             try:
                 result = func(self, *args, **kwargs)

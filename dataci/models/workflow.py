@@ -23,7 +23,7 @@ from dataci.db.workflow import (
     get_next_workflow_version_id, create_one_workflow_tag, get_one_workflow_by_tag,
     get_one_workflow_by_version,
 )
-from . import Workspace
+from .workspace import Workspace
 from .base import BaseModel
 from .stage import Stage
 # from dataci.run import Run

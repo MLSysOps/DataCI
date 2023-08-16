@@ -9,6 +9,9 @@ import configparser
 import logging
 import os
 from pathlib import Path
+from threading import Event as ThreadEvent
+
+import requests
 
 
 def init():
@@ -68,6 +71,19 @@ def load_config():
     logging.basicConfig(level=LOG_LEVEL)
     logging.info(f'Load configuration from {CONFIG_FILE}.')
 
+    # Try if server is available
+    try:
+        r = requests.get(f'http://{SERVER_ADDRESS}:{SERVER_PORT}/live')
+        if r.status_code == 200:
+            DISABLE_EVENT.clear()
+            logging.debug(f'DataCI server is live: {SERVER_ADDRESS}:{SERVER_PORT}')
+        logging.debug(f'DataCI server response: {r.status_code}')
+    except requests.exceptions.ConnectionError:
+        logging.warning(
+            f'DataCI server is not live: {SERVER_ADDRESS}:{SERVER_PORT}. Event trigger is disabled.'
+        )
+        DISABLE_EVENT.set()
+
 
 CACHE_ROOT = Path(os.environ.get('DATACI_CACHE_ROOT', Path.home() / '.dataci'))
 CONFIG_FILE = CACHE_ROOT / 'config.ini'
@@ -80,5 +96,6 @@ STORAGE_BACKEND = None
 # DataCI Trigger and Scheduler server
 SERVER_ADDRESS = '0.0.0.0'
 SERVER_PORT = 8000
+DISABLE_EVENT = ThreadEvent()
 
 load_config()

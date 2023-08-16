@@ -12,8 +12,7 @@ import logging
 import uvicorn
 from fastapi import FastAPI
 
-from dataci.config import SERVER_ADDRESS, SERVER_PORT
-from dataci.models.event import DISABLE_EVENT
+from dataci.config import SERVER_ADDRESS, SERVER_PORT, DISABLE_EVENT
 from dataci.plugins.orchestrator.airflow import Trigger
 from dataci.server.trigger import EVENT_QUEUE, QUEUE_END
 

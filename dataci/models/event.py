@@ -6,28 +6,12 @@ Email: yuanmingleee@gmail.com
 Date: Aug 15, 2023
 """
 import logging
-from threading import Event as ThreadEvent
 
 import requests
 
-from dataci.config import SERVER_ADDRESS, SERVER_PORT
+from dataci.config import SERVER_ADDRESS, SERVER_PORT, DISABLE_EVENT
 
 logger = logging.getLogger(__name__)
-
-DISABLE_EVENT = ThreadEvent()
-
-# Try if server is available
-try:
-    r = requests.get(f'http://{SERVER_ADDRESS}:{SERVER_PORT}/live')
-    if r.status_code == 200:
-        DISABLE_EVENT.clear()
-        logger.debug(f'DataCI server is live: {SERVER_ADDRESS}:{SERVER_PORT}')
-    logger.debug(f'DataCI server response: {r.status_code}')
-except requests.exceptions.ConnectionError:
-    logger.warning(
-        f'DataCI server is not live: {SERVER_ADDRESS}:{SERVER_PORT}. Event trigger is disabled.'
-    )
-    DISABLE_EVENT.set()
 
 
 class Event(object):
@@ -57,7 +41,7 @@ class Event(object):
             return
         r = requests.post(
             f'http://{SERVER_ADDRESS}:{SERVER_PORT}/events'
-            f'?producer={self.producer}&event={self.name}&status={self.status}',
+            f'?producer={self.producer}&name={self.name}&status={self.status}',
         )
         if r.status_code != 200:
             logger.error(f'Failed to set event {self.producer}:{self.name}:{self.status}')
