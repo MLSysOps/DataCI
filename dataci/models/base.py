@@ -73,7 +73,7 @@ class BaseModel(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def get(cls, name, version=None):
+    def get(cls, name, version=None, not_found_ok=False):
         pass
 
     # @classmethod

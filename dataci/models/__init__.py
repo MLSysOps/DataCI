@@ -5,13 +5,13 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Feb 20, 2023
 """
-
-from .workspace import Workspace
+from .base import BaseModel
 from .dataset import Dataset
 from .event import Event
 from .stage import Stage
 from .workflow import Workflow
+from .workspace import Workspace
 
 __all__ = [
-    'Workspace', 'Dataset', 'Event', 'Workflow', 'Stage',
+    'BaseModel', 'Workspace', 'Dataset', 'Event', 'Workflow', 'Stage',
 ]

@@ -7,6 +7,7 @@ Date: Jun 11, 2023
 """
 import inspect
 import re
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -177,9 +178,8 @@ class Trigger(_Trigger):
             if event is QUEUE_END:
                 break
             self.logger.debug(f'Received event: {event}')
-            if event not in self._schedule_map:
-                continue
-            for workflow_identifier in self._schedule_map[event]:
-                # Trigger airflow dag FIXME
-                trigger_dag(dag_id=workflow_identifier)
-                self.logger.debug(f'Put workflow {workflow_identifier} into execution queue')
+            workflow_identifiers = self.get(event)
+            for workflow_identifier in workflow_identifiers:
+                # Trigger airflow dag
+                self.logger.info('Triggering workflow: %s', workflow_identifier)
+                subprocess.run(['airflow', 'trigger_dag', workflow_identifier])

@@ -421,7 +421,7 @@ class Dataset(BaseModel):
         return self.reload(config)
 
     @classmethod
-    def get(cls, name: str, version=None, file_reader='auto', file_writer='csv'):
+    def get(cls, name: str, version=None, not_found_ok=False, file_reader='auto', file_writer='csv'):
         workspace, name, version_or_tag = cls.parse_data_model_get_identifier(name, version)
 
         if version_or_tag is None or cls.VERSION_TAG_PATTERN.match(version_or_tag) is not None:
@@ -432,6 +432,12 @@ class Dataset(BaseModel):
             if version_or_tag.lower() == 'none':
                 version_or_tag = None
             config = get_one_dataset_by_version(workspace, name, version_or_tag)
+
+        # Check if the dataset is found
+        if config is None:
+            if not_found_ok:
+                return None
+            raise ValueError(f'Dataset {workspace}.{name}@{version_or_tag} not found.')
 
         config['file_reader'] = file_reader
         config['file_writer'] = file_writer

@@ -307,7 +307,7 @@ def get_one_workflow_by_tag(workspace, name, tag):
             'timestamp': config[4],
             'params': '',
             'flag': '',
-            'schedule': '',
+            'trigger': json.loads(config[6]),
             'dag': {
                 'edge': json.loads(config[8]),
             }
@@ -472,7 +472,7 @@ def get_all_latest_workflow_schedule():
                 'workspace': workflow[0],
                 'name': workflow[1],
                 'version': workflow[2] if workflow[2] != '' else None,
-                'schedule': workflow[3].split(',') if workflow[3] != '' else list(),  # schedule is a list
+                'trigger': json.loads(workflow[3]),
             } for workflow in cur.fetchall()
         ]
 

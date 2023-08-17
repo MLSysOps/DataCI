@@ -29,10 +29,9 @@ def live():
 
 
 @app.post('/events')
-def set_event(type: str, producer: str, name: str, status: str = None):
-    status = status or ''
-    EVENT_QUEUE.put(f'{type}:{producer}:{name}:{status}')
-    logger.debug(f'Received event {type}:{producer}:{name}:{status}')
+def set_event(type: str, producer: str, name: str, alias: str = '', status: str = '*'):
+    EVENT_QUEUE.put(f'{type}:{producer}:{name}:{status}:{alias}')
+    logger.debug(f'Received event {type}:{producer}:{name}:{status}:{alias}')
     return {'status': 'ok'}
 
 

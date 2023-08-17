@@ -210,7 +210,7 @@ def get_one_dataset_by_version(workspace, name, version='latest'):
         'workspace': po[0],
         'name': po[1],
         'version': po[2],
-        'version_tag': f'v{po[3]}' if po[3] is not None else None,
+        'version_tag': po[3],
         'log_message': po[4],
         'timestamp': po[5],
         'id_column': po[6],
