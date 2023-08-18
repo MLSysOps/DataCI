@@ -7,14 +7,12 @@ Date: May 02, 2023
 """
 import abc
 import fnmatch
-import itertools
 import logging
 from collections import defaultdict
 from queue import Queue
 from threading import Event as ThreadEvent, Thread
 
 from dataci.db.workflow import get_all_latest_workflow_schedule
-from dataci.models import Event
 
 logger = logging.getLogger(__name__)
 
@@ -48,27 +46,13 @@ class Trigger(abc.ABC):
             if self._scanner_flag.wait(60):
                 break
 
-    def get(self, event_pattern):
-        # Parse event pattern
-        event = Event.from_str(event_pattern)
-        # Get all possible event patterns
-        event_type_patterns = {event.producer_type, '*'}
-        producer_patterns = {
-            event.producer,  # workspace_name.producer_name@version
-            event.producer.split('@')[0],  # workspace_name.producer_name
-            event.producer.split('@')[0] + '@*',  # workspace_name.producer_name@*
-            event.producer.split('@')[0] + '@' + event.producer_alias,  # workspace_name.producer_name@version_tag
-            '*',
-        }
-        event_name_patterns = {event.name, '*'}
-        status_patterns = {event.status, '*'}
-
-        event_list = {
-            ':'.join(patterns)
-            for patterns in itertools.product(
-                event_type_patterns, producer_patterns, event_name_patterns, status_patterns
-            )
-        }
+    def get(self, event_str):
+        # Substitute event producer name with producer alias
+        producer_type, producer, event_name, status, alias = event_str.split(':')
+        event_list = {':'.join([producer_type, producer, event_name, status])}
+        if alias:
+            producer = producer.split('@')[0] + '@' + alias
+            event_list.add(':'.join([producer_type, producer, event_name, status]))
 
         # Get all workflows that subscribe to the event
         # Since the event in scheduler map is a glob pattern, we need to use fnmatch to match the raised event

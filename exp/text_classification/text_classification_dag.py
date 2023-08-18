@@ -28,7 +28,7 @@ def config_predict_args(train_output_path, test_dataset_path):
 
 @dag(
     start_date=datetime(2020, 7, 30),
-    trigger=[Event('publish', 'dataset', 'yelp_review_test@202010_test', 'success')],
+    trigger=[Event('publish', 'yelp_review_test@202010_test', producer_type='dataset', status='success')],
 )
 def text_classification():
     raw_dataset_train = Dataset.get('yelp_review_test@202010_test')

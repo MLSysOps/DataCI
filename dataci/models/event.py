@@ -9,13 +9,17 @@ import logging
 
 import requests
 
-from dataci.config import SERVER_ADDRESS, SERVER_PORT, DISABLE_EVENT
+from dataci.config import SERVER_ADDRESS, SERVER_PORT, DISABLE_EVENT, DEFAULT_WORKSPACE
 
 logger = logging.getLogger(__name__)
 
 
 class Event(object):
     def __init__(self, name, producer, producer_type, status='*', producer_alias=None):
+        # FIXME: temp solution: Patch default workspace name if not provided
+        if '.' not in producer:
+            producer = f'{DEFAULT_WORKSPACE}.{producer}'
+
         self.name = name
         self.producer_type = producer_type
         self.producer = producer

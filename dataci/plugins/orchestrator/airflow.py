@@ -8,6 +8,7 @@ Date: Jun 11, 2023
 import inspect
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -182,4 +183,4 @@ class Trigger(_Trigger):
             for workflow_identifier in workflow_identifiers:
                 # Trigger airflow dag
                 self.logger.info('Triggering workflow: %s', workflow_identifier)
-                subprocess.run(['airflow', 'trigger_dag', workflow_identifier])
+                subprocess.run([sys.executable, '-m', 'airflow', 'dags', 'trigger', workflow_identifier])
