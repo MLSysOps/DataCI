@@ -23,10 +23,10 @@ from dataci.db.workflow import (
     get_next_workflow_version_id, create_one_workflow_tag, get_one_workflow_by_tag,
     get_one_workflow_by_version,
 )
-from .workspace import Workspace
 from .base import BaseModel
-from .stage import Stage
 from .event import Event
+from .stage import Stage
+from .workspace import Workspace
 # from dataci.run import Run
 from ..utils import hash_binary
 
@@ -43,11 +43,7 @@ class Workflow(BaseModel, ABC):
     type_name = 'workflow'
 
     def __init__(self, *args, trigger=None, **kwargs):
-        if len(args) > 0:
-            name = args[0]
-        else:
-            name = kwargs.get(self.name_arg)
-        super().__init__(name, *args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.logger = logging.getLogger(__name__)
         self.trigger: 'Sequence[Event]' = trigger or list()
@@ -169,6 +165,7 @@ class Workflow(BaseModel, ABC):
             return self
 
         self.version = config['version']
+        self.version_tag = config['version_tag'] if 'version_tag' in config else None
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
         self.trigger = [Event.from_str(evt) for evt in config['trigger']]
         if 'script' in config:

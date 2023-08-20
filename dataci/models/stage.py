@@ -176,7 +176,6 @@ class Stage(BaseModel):
         create_one_stage(config)
         return self.reload(config)
 
-    @abc.abstractmethod
     def publish(self):
         """Publish the stage to the workspace."""
         # Save the stage to the workspace first

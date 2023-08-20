@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from textwrap import indent
 from typing import TYPE_CHECKING
 
 import networkx as nx
@@ -17,6 +18,7 @@ from airflow.models import DAG as _DAG
 from airflow.operators.python import PythonOperator as _PythonOperator
 
 from dataci.models import Workflow, Stage, Dataset
+from dataci.plugins.orchestrator.utils import parse_func_params
 from dataci.server.trigger import Trigger as _Trigger, EVENT_QUEUE, QUEUE_END
 
 if TYPE_CHECKING:
@@ -30,7 +32,13 @@ class DAG(Workflow, _DAG):
     """
     BACKEND = 'airflow'
 
-    name_arg = 'dag_id'
+    def __init__(self, dag_id, *args, **kwargs):
+        # If dag id is overridden by workspace--name--version, extract the name
+        if re.match(r'\w+--\w+--[\da-f]+', dag_id):
+            name = dag_id.split('--')[1]
+        else:
+            name = dag_id
+        super().__init__(name, *args, dag_id=dag_id, **kwargs)
 
     @property
     def stages(self):
@@ -65,17 +73,21 @@ class DAG(Workflow, _DAG):
     def script(self):
         if self._script is None:
             with open(self.fileloc, 'r') as f:
-                script = f.read()
+                script_origin = f.read()
             # Remove stage import statements:
             # from xxx import stage_name / import stage_name
             stage_name_pattern = '|'.join([stage.name for stage in self.stages])
             import_pattern = re.compile(
                 rf'^(?:from\s+[\w.]+\s+)?import\s+(?:{stage_name_pattern})[\r\t\f ]*\n', flags=re.MULTILINE
             )
-            script = import_pattern.sub('', script)
+            script = import_pattern.sub('', script_origin)
 
             # Insert the stage scripts before the DAG script:
             for stage in self.stages:
+                stage_script = stage.script
+                # Avoid double copy two stage within the same script
+                if stage_script in script or stage_script in script_origin:
+                    continue
                 script = stage.script + '\n' * 2 + script
 
             self._script = script
@@ -84,13 +96,47 @@ class DAG(Workflow, _DAG):
     def publish(self):
         """Publish the DAG to the backend."""
         super().publish()
+        dag_id = f'{self.workspace.name}--{self.name}--{self.version}'
         # Copy the script content to the published file
-        publish_file_path = (Path.home() / 'airflow' / 'dags' / self.name).with_suffix('.py')
+        publish_file_path = (Path.home() / 'airflow' / 'dags' / dag_id).with_suffix('.py')
         # Create parent dir if not exists
         publish_file_path.parent.mkdir(parents=True, exist_ok=True)
+        # Adjust the workflow name
+        # Use workspace__name__version as dag id
+        # Match @dag(...) pattern
+        #    ([^\S\r\n]*) match group matches the indent before @dag(...)
+        #    (?:[^()]*\([^()]*\))*  non-capture match group avoid nested round brackets in @dag(...) call
+        #    ((?:[^()]*\([^()]*\))*[^()]*) match group matches everything in @dag(...) call
+        dag_decorator_pattern = re.compile(r'([^\S\r\n]*)@dag\(((?:[^()]*\([^()]*\))*[^()]*)\)',
+                                           flags=re.MULTILINE | re.DOTALL)
+
+        script = self.script
+        # Parse the dag id from @dag(...) call
+        dag_decorator_match_grps = dag_decorator_pattern.findall(script)
+        if len(dag_decorator_match_grps) != 1:
+            raise ValueError(
+                f'@dag(...) decorator is not found or multiple @dag(...) decorators are '
+                f'found in dag definition: \n{script}'
+            )
+
+        from ..decorators import dag as dag_func
+
+        dag_decorator_indent, dag_decorator_args = dag_decorator_match_grps[0]
+        dag_args, dag_kwargs = parse_func_params(dag_decorator_args)
+        # get dag_id
+        bound = inspect.signature(dag_func).bind(*dag_args, **dag_kwargs)
+        # replace dag_id with workspace__name__version
+        bound.arguments['dag_id'] = f'"{dag_id}"'
+        # replace @dag(...) call with @dag(dag_id="workspace__name__version", ...)
+        dag_args, dag_kwargs = bound.args, bound.kwargs
+        dag_decorator_args = indent(',\n'.join(
+            dag_args + tuple(f'{arg_name}={arg_value!r}' for arg_name, arg_value in dag_kwargs.items())
+        ), dag_decorator_indent + ' ' * 4)
+        script = dag_decorator_pattern.sub(f'@dag(\n{dag_decorator_args}\n)', script)
+
         # Remove the published file if exists
         with open(publish_file_path, 'w') as f:
-            f.write(self.script)
+            f.write(script)
         return self
 
 
@@ -159,17 +205,6 @@ class PythonOperator(Stage, _PythonOperator):
                 script = f.read()
             self._script = script
         return self._script
-
-    def publish(self):
-        super().publish()
-        # Copy the script content to the published file
-        publish_file_path = (Path.home() / 'airflow' / 'plugins' / self.name).with_suffix('.py')
-        # Create parent dir if not exists
-        publish_file_path.parent.mkdir(parents=True, exist_ok=True)
-        # Remove the published file if exists
-        with open(publish_file_path, 'w') as f:
-            f.write(self.script)
-        return self
 
 
 class Trigger(_Trigger):
