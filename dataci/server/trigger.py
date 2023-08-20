@@ -12,7 +12,7 @@ from collections import defaultdict
 from queue import Queue
 from threading import Event as ThreadEvent, Thread
 
-from dataci.db.workflow import get_all_latest_workflow_schedule
+from dataci.db.workflow import get_all_workflow_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +36,14 @@ class Trigger(abc.ABC):
     def scan(self):
         # Scan for all registered schedule workflows upon events every 60 seconds.
         while True:
-            workflows = get_all_latest_workflow_schedule()
+            workflows = get_all_workflow_schedule()
             self.unsubscribe_all()
             for workflow_dict in workflows:
-                identifier = f'{workflow_dict["workspace"]}.{workflow_dict["name"]}@{workflow_dict["version"]}'
-                for event in workflow_dict['trigger']:
-                    self.subscribe(event, identifier)
+                # We do not care about non-published workflows, since those are not ready to be triggered
+                if workflow_dict['version_tag'] is not None:
+                    identifier = f'{workflow_dict["workspace"]}.{workflow_dict["name"]}@{workflow_dict["version_tag"]}'
+                    for event in workflow_dict['trigger']:
+                        self.subscribe(event, identifier)
             logger.debug(f'Current schedule map: {self._schedule_map}')
             if self._scanner_flag.wait(60):
                 break

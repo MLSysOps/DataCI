@@ -5,25 +5,15 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Jul 30, 2023
 """
-import os
 from datetime import datetime
 
-from dataci.plugins.decorators import Dataset, stage, dag
 from dataci.models import Event
+from dataci.plugins.decorators import Dataset, dag
+from exp.text_classification.config_args import config_train_args, config_predict_args
 from exp.text_classification.data_augmentation import text_augmentation
 from exp.text_classification.data_selection import select_data
 from exp.text_classification.predict import main as predict_text_classification
 from exp.text_classification.train import main as train_text_classification
-
-
-@stage
-def config_train_args(train_dataset_path, val_dataset_path):
-    return [f'--train_dataset={train_dataset_path}', f'--test_dataset={val_dataset_path}']
-
-
-@stage
-def config_predict_args(train_output_path, test_dataset_path):
-    return [f'--test_dataset={test_dataset_path}', f'--model_name={os.path.join(train_output_path, "model")}']
 
 
 @dag(
@@ -42,7 +32,8 @@ def text_classification():
     predict_text_classification(config_predict_args(train_output_path, raw_dataset_val))
 
 
+dag = text_classification()
+
 if __name__ == '__main__':
-    dag = text_classification()
     dag.publish()
     # dag.test()

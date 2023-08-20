@@ -71,6 +71,7 @@ class DAG(Workflow, _DAG):
 
     @property
     def script(self):
+        # TODO: pack the multiple scripts into a zip file
         if self._script is None:
             with open(self.fileloc, 'r') as f:
                 script_origin = f.read()
@@ -88,7 +89,11 @@ class DAG(Workflow, _DAG):
                 # Avoid double copy two stage within the same script
                 if stage_script in script or stage_script in script_origin:
                     continue
-                script = stage.script + '\n' * 2 + script
+                # Remove __main__ guard
+                stage_script = re.sub(
+                    r'if\s+__name__\s+==\s+(?:"__main__"|\'__main__\'):(\n\s{4}.*)+', '', stage_script
+                )
+                script = stage_script + '\n' * 2 + script
 
             self._script = script
         return self._script
@@ -96,7 +101,7 @@ class DAG(Workflow, _DAG):
     def publish(self):
         """Publish the DAG to the backend."""
         super().publish()
-        dag_id = f'{self.workspace.name}--{self.name}--{self.version}'
+        dag_id = f'{self.workspace.name}--{self.name}--{self.version_tag}'
         # Copy the script content to the published file
         publish_file_path = (Path.home() / 'airflow' / 'dags' / dag_id).with_suffix('.py')
         # Create parent dir if not exists
@@ -111,6 +116,12 @@ class DAG(Workflow, _DAG):
                                            flags=re.MULTILINE | re.DOTALL)
 
         script = self.script
+        # FIXME: we need some trick for airflow to recognize the dag
+        #     Add a commented line with import airflow dag, otherwise airflow will not scan the script
+        script = '# Dummy line to trigger airflow scan\n' \
+                 '# from airflow.decorator import dag\n' + \
+                 script
+
         # Parse the dag id from @dag(...) call
         dag_decorator_match_grps = dag_decorator_pattern.findall(script)
         if len(dag_decorator_match_grps) != 1:
@@ -130,13 +141,16 @@ class DAG(Workflow, _DAG):
         # replace @dag(...) call with @dag(dag_id="workspace__name__version", ...)
         dag_args, dag_kwargs = bound.args, bound.kwargs
         dag_decorator_args = indent(',\n'.join(
-            dag_args + tuple(f'{arg_name}={arg_value!r}' for arg_name, arg_value in dag_kwargs.items())
+            dag_args + tuple(f'{arg_name}={arg_value}' for arg_name, arg_value in dag_kwargs.items())
         ), dag_decorator_indent + ' ' * 4)
         script = dag_decorator_pattern.sub(f'@dag(\n{dag_decorator_args}\n)', script)
 
         # Remove the published file if exists
         with open(publish_file_path, 'w') as f:
             f.write(script)
+
+        self.logger.info(f'Published workflow: {self}')
+
         return self
 
 
@@ -217,5 +231,6 @@ class Trigger(_Trigger):
             workflow_identifiers = self.get(event)
             for workflow_identifier in workflow_identifiers:
                 # Trigger airflow dag
-                self.logger.info('Triggering workflow: %s', workflow_identifier)
-                subprocess.run([sys.executable, '-m', 'airflow', 'dags', 'trigger', workflow_identifier])
+                dag_id = workflow_identifier.replace('.', '--').replace('@', '--')
+                self.logger.info(f'Triggering workflow {workflow_identifier}, Airflow dag_id={dag_id}')
+                subprocess.run([sys.executable, '-m', 'airflow', 'dags', 'trigger', dag_id])

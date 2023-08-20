@@ -449,21 +449,42 @@ def get_many_workflow(workspace, name, version=None):
         return workflow_list
 
 
-def get_all_latest_workflow_schedule():
+def get_all_workflow_schedule(latest_only=True):
     with db_connection:
         cur = db_connection.cursor()
         cur.execute(
-            """
-            SELECT workspace, name, version, schedule
-            FROM   (
-                SELECT workspace
-                     , name
-                     , version
-                     , schedule
-                     , ROW_NUMBER() OVER (PARTITION BY workspace, name ORDER BY timestamp DESC) AS rk
-                FROM   workflow
+            f"""
+            WITH base AS (
+                SELECT workspace, name, version, schedule
+                FROM   (
+                    SELECT workspace
+                         , name
+                         , version
+                         , schedule
+                    FROM   workflow
+                )
             )
-            WHERE rk = 1
+            , tag AS (
+                SELECT *
+                FROM (
+                    SELECT workspace
+                         , name
+                         , version
+                         , tag
+                         , ROW_NUMBER() OVER (PARTITION BY workspace, name ORDER BY tag DESC) AS rk
+                    FROM   workflow_tag
+                )
+                {"WHERE  rk = 1" if latest_only else ''}
+            )
+            SELECT base.workspace
+                 , base.name
+                 , base.version
+                 , tag.tag
+                 , base.schedule
+            FROM   base
+            JOIN   tag
+            ON     base.workspace = tag.workspace
+            AND    base.name = tag.name
             ;
             """
         )
@@ -472,7 +493,8 @@ def get_all_latest_workflow_schedule():
                 'workspace': workflow[0],
                 'name': workflow[1],
                 'version': workflow[2] if workflow[2] != '' else None,
-                'trigger': json.loads(workflow[3]),
+                'version_tag': f'v{workflow[3]}' if workflow[3] else None,
+                'trigger': json.loads(workflow[4]),
             } for workflow in cur.fetchall()
         ]
 
