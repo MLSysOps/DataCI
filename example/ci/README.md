@@ -17,6 +17,13 @@ streamlit run config_ci.py
 ```
 
 Add Action -> Create a new CI Action -> Add Jobs -> Manual Run
+You can build the workflow interactively with the UI:
+
+```shell
+streamlit run config_ci.py
+```
+
+[![Add CI to Existing workflow]](https://github.com/MLSysOps/DataCI/assets/36268431/36e3bf70-b678-4fd9-945b-196afb829f79)
 
 ## 4. Use a new version of input dataset
 
