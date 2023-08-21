@@ -63,8 +63,9 @@ def create_one_workflow(config):
         return workflow_id
 
 
-def create_one_workflow_tag(workflow_tag_dict):
+def create_one_workflow_tag(config):
     """Create one workflow tag."""
+    workflow_tag_dict = deepcopy(config)
     workflow_tag_dict['version_tag'] = int(workflow_tag_dict['version_tag'][1:])  # remove 'v' prefix
 
     with db_connection:

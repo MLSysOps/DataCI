@@ -8,12 +8,14 @@ Date: Aug 20, 2023
 import re
 
 
-def parse_func_params(s):
+def parse_func_params(s: str):
     # Parse nested parentheses, we only care about the top level
     words = list()
     word_temp = ''
     levels = list()
-    for c in s:
+    s = list(s)
+    while s:
+        c = s.pop(0)
         if c == '(':
             levels.append('(')
         elif c == '[':
@@ -26,10 +28,16 @@ def parse_func_params(s):
             levels.pop()
         elif c == '}' and levels[-1] == '{':
             levels.pop()
+        elif c == '#':  # comment line
+            # pop until the end of line
+            while s and s.pop(0) != '\n':
+                pass
+            continue
         elif c == ',' and len(levels) == 0:
             words.append(word_temp.strip())
             word_temp = ''
             continue
+
         word_temp += c
     if word_temp := word_temp.strip():
         words.append(word_temp)
