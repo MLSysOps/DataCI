@@ -235,8 +235,8 @@ class Dataset(BaseModel):
             self,
             name,
             dataset_files=None,
-            file_reader: 'Union[str, Type[DataFileIO]]' = 'auto',
-            file_writer: 'Union[str, Type[DataFileIO]]' = 'csv',
+            file_reader: 'Union[str, Type[DataFileIO], None]' = 'auto',
+            file_writer: 'Union[str, Type[DataFileIO], None]' = 'csv',
             id_column='id',
             **kwargs,
     ):
