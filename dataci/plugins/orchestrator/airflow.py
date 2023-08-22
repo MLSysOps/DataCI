@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 import networkx as nx
 from airflow.api.client.local_client import Client
+from airflow_client.client import ApiClient
 from airflow.models import DAG as _DAG
 from airflow.operators.python import PythonOperator as _PythonOperator
 
@@ -108,7 +109,9 @@ class DAG(Workflow, _DAG):
         """Publish the DAG to the backend."""
         super().publish()
         # Copy the script content to the published file
-        publish_file_path = (Path.home() / 'airflow' / 'dags' / self.backend_id).with_suffix('.py')
+        publish_file_path = (
+                Path.home() / 'airflow' / 'dags' /
+                self.workspace.name / self.name / self.version_tag).with_suffix('.py')
         # Create parent dir if not exists
         publish_file_path.parent.mkdir(parents=True, exist_ok=True)
         # Adjust the workflow name
@@ -154,6 +157,10 @@ class DAG(Workflow, _DAG):
         with open(publish_file_path, 'w') as f:
             f.write(script)
 
+        # Airflow re-serialize the dag file
+        subprocess.call([sys.executable, '-m', 'airflow', 'dags', 'reserialize', '-S', str(publish_file_path)])
+        # Airflow unpause the dag
+        subprocess.call([sys.executable, '-m', 'airflow', 'dags', 'unpause', self.backend_id])
         self.logger.info(f'Published workflow: {self}')
 
         return self

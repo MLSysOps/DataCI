@@ -95,7 +95,8 @@ data pipeline.
     Note that the you should write pipeline testing and trigger code aside from the pipeline definition code.
     Otherwise, the pipeline will be triggered every time when you import the pipeline definition code.
     
-    The text process CI pipeline will be triggered and run.
+    The text process CI pipeline will be triggered and run. Go to [pipeline runs UI](http://localhost:8080/taskinstance/list/?_flt_3_dag_id=testspace--text_process_ci--v1)
+    to check the pipeline run result.
 
 4. Automatically trigger the pipeline by publish a new version of input dataset:
 
@@ -113,7 +114,8 @@ data pipeline.
     ```
     
     Upon the publish of the new version of input dataset, the text process CI pipeline is automatically 
-    triggered and run.
+    triggered and run. Go to [pipeline runs UI](http://localhost:8080/taskinstance/list/?_flt_3_dag_id=testspace--text_process_ci--v1)
+    to check the pipeline run result.
 
 ## More Examples
 
