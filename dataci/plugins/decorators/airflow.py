@@ -19,6 +19,7 @@ from airflow.utils.decorators import fixup_decorator_warning_stack
 from dataci.decorators.base import DecoratedOperatorStageMixin
 from dataci.models import Stage, Dataset as _Dataset
 from ..orchestrator.airflow import PythonOperator, DAG
+from dataci.config import DISABLE_WORKFLOW_BUILD
 
 if TYPE_CHECKING:
     from typing import Callable
@@ -203,6 +204,15 @@ def dag(
                 # set file location to caller source path
                 back = sys._getframe().f_back
                 dag_obj.fileloc = back.f_code.co_filename if back else ""
+
+                # disable dag building when stage is building
+                # this is to prevent recursive call dag building when written in the same script as stage
+                if DISABLE_WORKFLOW_BUILD.is_set():
+                    dag_obj.log.warning(
+                        "DAG building is disabled when stage is building. To disable this warning, "
+                        "write dag definition in a separate file."
+                    )
+                    return dag_obj
 
                 # Invoke function to create operators in the DAG scope.
                 f(**f_kwargs)

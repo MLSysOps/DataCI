@@ -110,7 +110,9 @@ class Stage(BaseModel):
         # Build class object from script
         # TODO: make the build process more secure with sandbox / allowed safe methods
         local_dict = locals()
-        exec(script, globals(), local_dict)
+        # Disable the workflow build in script
+        script = 'import dataci\ndataci.config.DISABLE_WORKFLOW_BUILD.set()\n' + script
+        exec(script, None, local_dict)
         for v in local_dict.copy().values():
             # Stage is instantiated by operator class / a function decorated by @stage
             if isinstance(v, (Stage, DecoratedOperatorStageMixin)) and \

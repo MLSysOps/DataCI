@@ -98,4 +98,7 @@ SERVER_ADDRESS = '0.0.0.0'
 SERVER_PORT = 8000
 DISABLE_EVENT = ThreadEvent()
 
+# Helper for disable dag build in `exec`
+DISABLE_WORKFLOW_BUILD = ThreadEvent()
+
 load_config()
