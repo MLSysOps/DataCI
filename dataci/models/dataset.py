@@ -86,7 +86,7 @@ class CSVFileIO(DataFileIO):
 
     def write(self, records, indices=None):
         if not isinstance(records, (pd.DataFrame, pd.Series)):
-            raise ValueError('CSVFileIO only supports writing pandas.Series or pandas.DataFrame to csv file')
+            records = pd.DataFrame(records)
         records.to_csv(self.file_path, index=indices)
         # update the file length
         self._len = len(records)
@@ -229,7 +229,7 @@ class Dataset(BaseModel):
         r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(latest|none|[\w*]+))?$', re.IGNORECASE
     )
     # any alphanumeric string that is not a pure 'latest', 'none', or hex string
-    VERSION_TAG_PATTERN = re.compile(r'^(?!^latest$|^none$|^[\da-f]+$)\w+$', flags=re.IGNORECASE)
+    VERSION_TAG_PATTERN = re.compile(r'^(?!^latest$|^none$|^[\da-f]+$)\w[\w\-]*$', flags=re.IGNORECASE)
 
     def __init__(
             self,
@@ -411,7 +411,8 @@ class Dataset(BaseModel):
         if version_tag is None or self.VERSION_TAG_PATTERN.match(version_tag) is None:
             raise ValueError(
                 f'Dataset version_tag {version_tag} is not valid. '
-                f'Expect a alphanumeric string that is not a pure "latest", "none" or hex string.'
+                f'Expect a combination of alphanumeric, dash (-) string that is '
+                f'not a pure "latest", "none" or hex string.'
             )
 
         config = self.dict()

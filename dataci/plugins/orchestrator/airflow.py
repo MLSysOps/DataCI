@@ -14,6 +14,7 @@ from textwrap import indent
 from typing import TYPE_CHECKING
 
 import networkx as nx
+from airflow.api.client.local_client import Client
 from airflow.models import DAG as _DAG
 from airflow.operators.python import PythonOperator as _PythonOperator
 
@@ -53,6 +54,10 @@ class DAG(Workflow, _DAG):
         return g
 
     @property
+    def backend_id(self):
+        return f'{self.workspace.name}--{self.dag_id}--{self.version_tag}'
+
+    @property
     def input_datasets(self):
         dataset_names = set()
         for stage in self.stages:
@@ -89,21 +94,21 @@ class DAG(Workflow, _DAG):
                 # Avoid double copy two stage within the same script
                 if stage_script in script or stage_script in script_origin:
                     continue
-                # Remove __main__ guard
-                stage_script = re.sub(
-                    r'if\s+__name__\s+==\s+(?:"__main__"|\'__main__\'):(\n\s{4}.*)+', '', stage_script
-                )
                 script = stage_script + '\n' * 2 + script
 
-            self._script = script
+            # Remove the __main__ guard
+            script = re.sub(
+                r'if\s+__name__\s+==\s+(?:"__main__"|\'__main__\'):(\n\s{4}.*)+', '', script
+            )
+
+            self._script = script.strip()
         return self._script
 
     def publish(self):
         """Publish the DAG to the backend."""
         super().publish()
-        dag_id = f'{self.workspace.name}--{self.name}--{self.version_tag}'
         # Copy the script content to the published file
-        publish_file_path = (Path.home() / 'airflow' / 'dags' / dag_id).with_suffix('.py')
+        publish_file_path = (Path.home() / 'airflow' / 'dags' / self.backend_id).with_suffix('.py')
         # Create parent dir if not exists
         publish_file_path.parent.mkdir(parents=True, exist_ok=True)
         # Adjust the workflow name
@@ -137,7 +142,7 @@ class DAG(Workflow, _DAG):
         # get dag_id
         bound = inspect.signature(dag_func).bind(*dag_args, **dag_kwargs)
         # replace dag_id with workspace__name__version
-        bound.arguments['dag_id'] = f'"{dag_id}"'
+        bound.arguments['dag_id'] = f'"{self.backend_id}"'
         # replace @dag(...) call with @dag(dag_id="workspace__name__version", ...)
         dag_args, dag_kwargs = bound.args, bound.kwargs
         dag_decorator_args = indent(',\n'.join(
@@ -152,6 +157,17 @@ class DAG(Workflow, _DAG):
         self.logger.info(f'Published workflow: {self}')
 
         return self
+
+    def run(self, **kwargs):
+        c = Client(None)
+        self.logger.info(f'Manual run workflow: {self}')
+        c.trigger_dag(self.backend_id, **kwargs)
+
+    def test(self, **kwargs):
+        super(Workflow, self).test(**kwargs)  # noqa
+
+    def backfill(self, **kwargs):
+        super(Workflow, self).run(**kwargs)  # noqa
 
 
 class PythonOperator(Stage, _PythonOperator):
@@ -217,7 +233,12 @@ class PythonOperator(Stage, _PythonOperator):
             fileloc = inspect.getfile(self.python_callable)
             with open(fileloc, 'r') as f:
                 script = f.read()
-            self._script = script
+
+            # Remove the __main__ guard
+            script = re.sub(
+                r'if\s+__name__\s+==\s+(?:"__main__"|\'__main__\'):(\n\s{4}.*)+', '', script
+            )
+            self._script = script.strip()
         return self._script
 
 

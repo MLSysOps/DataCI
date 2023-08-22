@@ -195,6 +195,8 @@ def get_one_workflow_by_version(workspace, name, version):
             )
 
         workflow = cur.fetchone()
+        if workflow is None:
+            return None
         workflow_dict = {
             'workspace': workflow[0],
             'name': workflow[1],

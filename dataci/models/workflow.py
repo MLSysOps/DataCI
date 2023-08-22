@@ -195,7 +195,6 @@ class Workflow(BaseModel, ABC):
         # Save the used stages (only if the stage is not saved)
         for stage in self.stages:
             stage.save()
-            logger.info(f'Saved stage: {stage}')
 
         # Get config after call save on all stages, since the stage version might be updated
         config = self.dict()
@@ -237,7 +236,6 @@ class Workflow(BaseModel, ABC):
         # Publish the used stages
         for stage in self.stages:
             stage.publish()
-            logger.info(f'Published stage: {stage}')
 
         config = self.dict()
         # Since publish, we generate the latest version
@@ -277,3 +275,18 @@ class Workflow(BaseModel, ABC):
             return workflow_dict
 
         return workflow_list
+
+    @abc.abstractmethod
+    def run(self, **kwargs):
+        """Submit a triggered workflow run remotely."""
+        pass
+
+    @abc.abstractmethod
+    def test(self, **kwargs):
+        """Test run the workflow locally."""
+        pass
+
+    @abc.abstractmethod
+    def backfill(self, **kwargs):
+        """Submit a back-fill workflow run remotely."""
+        pass

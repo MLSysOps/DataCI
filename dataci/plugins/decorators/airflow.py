@@ -239,4 +239,8 @@ class Dataset:
 
     @classmethod
     def get(cls, name: str, version: str = None, file_reader='auto', file_writer='csv'):
-        return _Dataset.get(name, version=version, file_reader=file_reader, file_writer=file_writer)
+        # Dummy dataset get, create a dataset object with name and version
+        workspace, name, version = _Dataset.parse_data_model_get_identifier(name, version)
+        dataset = _Dataset(f'{workspace}.{name}', file_reader=file_reader, file_writer=file_writer)
+        dataset.version = version
+        return dataset

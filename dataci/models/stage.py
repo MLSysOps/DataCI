@@ -28,8 +28,6 @@ from ..utils import hash_binary
 if TYPE_CHECKING:
     from typing import Optional
 
-logger = logging.getLogger(__name__)
-
 
 class Stage(BaseModel):
     """Stage mixin class.
@@ -50,7 +48,7 @@ class Stage(BaseModel):
         self.output_table: dict = output_table or dict()
         super().__init__(name, *args, **kwargs)
         self.create_date: 'Optional[datetime]' = None
-        # Output is saved after the stage is run, this is for the descendant stages to use
+        self.logger = logging.getLogger(__name__)
         self._backend = 'airflow'
         self.params = dict()
         self._script = None
@@ -184,10 +182,13 @@ class Stage(BaseModel):
         self.save()
         # Check if the stage is already published
         if self.version_tag is not None:
+            self.logger.warning(f'Stage {self} is already published with version_tag={self.version_tag}')
             return self
         config = self.dict()
         config['version_tag'] = str(get_next_stage_version_tag(config['workspace'], config['name']))
         create_one_stage_tag(config)
+
+        self.logger.info(f'Published stage: {self} with version_tag={config["version_tag"]}')
 
         return self.reload(config)
 
