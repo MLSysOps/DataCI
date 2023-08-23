@@ -167,7 +167,7 @@ class DAG(Workflow, _DAG):
 
     def run(self, **kwargs):
         c = Client(None)
-        self.logger.info(f'Manual run workflow: {self}')
+        self.logger.info(f'Manual run workflow: {self} (dag_id={self.backend_id})')
         c.trigger_dag(self.backend_id, **kwargs)
 
     def test(self, **kwargs):
@@ -260,5 +260,12 @@ class Trigger(_Trigger):
             for workflow_identifier in workflow_identifiers:
                 # Trigger airflow dag
                 dag_id = workflow_identifier.replace('.', '--').replace('@', '--')
-                self.logger.info(f'Triggering workflow {workflow_identifier}, Airflow dag_id={dag_id}')
-                subprocess.run([sys.executable, '-m', 'airflow', 'dags', 'trigger', dag_id])
+                self.logger.info(f'Event {event} trigger workflow: Workflow({workflow_identifier}) (dag_id={dag_id})')
+                try:
+                    c = Client(None)
+                    response = c.trigger_dag(dag_id)
+                    if response is not None:
+                        self.logger.info(f'Triggered workflow run: {response["dag_id"]}.{response["dag_run_id"]}')
+                except Exception as e:
+                    self.logger.error(f'Failed to trigger workflow: {workflow_identifier} (dag_id={dag_id})')
+                    self.logger.error(e)
