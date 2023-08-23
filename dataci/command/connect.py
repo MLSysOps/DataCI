@@ -9,8 +9,6 @@ CLI for dataci connector APIs.
 """
 import click
 
-from dataci.connector.s3 import connect as s3_connect
-
 
 @click.group()
 def connect():
@@ -27,6 +25,8 @@ def connect():
 @click.option('-u', '--endpoint-url', type=str, help='S3 endpoint url')
 def s3(key, secret, endpoint_url):
     """CLI for connect to S3."""
+    from dataci.connector.s3 import connect as s3_connect
+
     s3_connect(
         key=key,
         secret=secret,

@@ -9,6 +9,7 @@ import configparser
 import logging
 import os
 from pathlib import Path
+from textwrap import dedent
 from threading import Event as ThreadEvent
 
 import requests
@@ -20,24 +21,28 @@ def init():
     """
     CONFIG_FILE.parent.mkdir(exist_ok=True)
     with CONFIG_FILE.open('w') as f:
-        f.write("""[CORE]
-# The database file
-db_file = {db_file}
-# The log directory
-log_dir = {log_dir}
-# The default log level
-log_level = {log_level}
-# The default workspace
-default_workspace = {workspace}
-# Storage backend
-storage_backend = {storage_backend}
-""".format(
+        f.write(dedent("""
+        [CORE]
+        # The database file
+        db_file = {db_file}
+        # The log directory
+        log_dir = {log_dir}
+        # The default log level
+        log_level = {log_level}
+        # The default workspace
+        default_workspace = {workspace}
+        # Storage backend
+        storage_backend = {storage_backend}
+        # Orchestration backend
+        orchestration_backend = {orchestration_backend}
+        """.format(
             workspace='default',
             db_file=str(CACHE_ROOT / 'dataci.db'),
             log_dir=str(CACHE_ROOT / 'log'),
             log_level='INFO',
             storage_backend='local',
-        ))
+            orchestration_backend='local',
+        )).strip())
     logging.info(f'Create configuration file {CONFIG_FILE}.')
 
     CONFIG_FILE.chmod(0o600)

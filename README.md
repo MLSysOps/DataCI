@@ -8,21 +8,24 @@ A tool to record data-science triplets (🗂️ `dataset`, 📏 `pipeline`, 📊
 
 ## Installation
 
-### PyPI install
-
-WIP
-
-### Manual install
+Manual install DataCI package from source code:
 
 ```shell
 pip install -e .
 ```
 
-Start DataCI server
+Initialize DataCI by:
 
 ```shell
-dataci init  # For the first time, initialize the project
-dataci server start
+dataci init
+```
+
+⚠️ This command will initialize the DataCI, you should run this command only once when installing.
+
+Start DataCI server by:
+
+```shell
+dataci start
 ```
 
 ## Quick Start

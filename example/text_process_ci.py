@@ -2,10 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 Author: Li Yuanming
-Email: yuanming.li@alibaba-inc.com
+Email: yuanmingleee@gmail.com
 Date: Aug 22, 2023
 """
 import augly.text as textaugs
+
 from dataci.plugins.decorators import stage as task
 
 
@@ -44,6 +45,8 @@ def text_process_ci():
 text_process_ci_pipeline = text_process_ci()
 
 if __name__ == '__main__':
+    import time
+
     from dataci.models import Dataset
 
     # Prepare the input dataset, you can either provide a list or a file path
@@ -57,12 +60,14 @@ if __name__ == '__main__':
     ]).publish(version_tag='2020-10')
 
     # Test the pipeline locally
-    text_process_ci_pipeline.test()
+    # text_process_ci_pipeline.test()
     # Publish the pipeline
     text_process_ci_pipeline.publish()
     # Run the pipeline on the server
     text_process_ci_pipeline.run()
 
+    print('Wait for the previous trigger pipeline run to finish...')
+    time.sleep(15)
     # DataCI auto track the new version of yelp_review dataset
     yelp_review_dataset_v2 = Dataset('yelp_review', dataset_files=[
         {'date': '2020-11-02 00:59:29', 'review_id': 'LTr95e6eOmLc7S_1WxM88Q', 'stars': 5.0,
