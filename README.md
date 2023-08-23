@@ -112,7 +112,7 @@ data pipeline.
             {'data': '2020-11-18 06:38:46', 'review_id': 'YqTMxlbebNBDcKYTIUvrdw', 'stars': 5.0, 'text': "You won't regret stopping here, hidden gem with great food and a laid back and comfortable atmosphere, a place you can gather with friends and they will treat you like family while you're there.",},
         ]).publish(version_tag='2020-11')
     ```
-    
+    Before executing the above code, please wait some time for the previous manual triggered run to finish.
     Upon the publish of the new version of input dataset, the text process CI pipeline is automatically 
     triggered and run. Go to [pipeline runs dashboard](http://localhost:8080/taskinstance/list/?_flt_3_dag_id=testspace--text_process_ci--v1)
     to check the pipeline run result.
