@@ -6,16 +6,17 @@ Email: yuanmingleee@gmail.com
 Date: Mar 09, 2023
 """
 import logging
+import sqlite3
 
-from dataci.db import db_connection
+from dataci.config import DB_FILE
 
 logger = logging.getLogger(__name__)
+
+db_connection = sqlite3.connect(DB_FILE)
 
 # Drop all tables
 with db_connection:
     db_connection.executescript("""
-    DROP TABLE IF EXISTS benchmark;
-    DROP TABLE IF EXISTS run;
     DROP TABLE IF EXISTS dataset_tag;
     DROP TABLE IF EXISTS dataset;
     DROP TABLE IF EXISTS workflow_dag_node;
@@ -123,31 +124,6 @@ with db_connection:
         UNIQUE (workspace, name, version),
         FOREIGN KEY (workspace, name, version)
             REFERENCES dataset (workspace, name, version)
-    );
-
-    CREATE TABLE run
-    (
-        run_num INTEGER,
-        workflow_name TEXT,
-        workflow_version TEXT,
-        FOREIGN KEY (workflow_name, workflow_version) REFERENCES workflow (name, version),
-        PRIMARY KEY (workflow_name, workflow_version, run_num)
-    );
-    
-    CREATE TABLE benchmark
-    (
-        type                  TEXT,
-        ml_task               TEXT,
-        train_dataset_name    TEXT,
-        train_dataset_version TEXT,
-        test_dataset_name     TEXT,
-        test_dataset_version  TEXT,
-        model_name            TEXT,
-        train_kwargs          TEXT,
-        result_dir            TEXT,
-        timestamp             INTEGER,
-        FOREIGN KEY (train_dataset_name, train_dataset_version) REFERENCES dataset (name, version),
-        FOREIGN KEY (test_dataset_name, test_dataset_version) REFERENCES dataset (name, version)
     );
     """)
 logger.info('Create all tables.')

@@ -6,17 +6,17 @@ Email: yuanmingleee@gmail.com
 Date: May 01, 2023
 """
 import json
+import sqlite3
 from textwrap import dedent
 
-from . import db_connection
+from dataci.config import DB_FILE
 
 
 def create_one_stage(stage_dict):
     stage_dict = stage_dict.copy()
     stage_dict['params'] = json.dumps(stage_dict['params'])
 
-    with db_connection:
-        cur = db_connection.cursor()
+    with sqlite3.connect(DB_FILE).cursor() as cur:
         cur.execute(
             """
             INSERT INTO stage (workspace, name, version, params, script_path, timestamp)
@@ -31,8 +31,7 @@ def create_one_stage_tag(stage_dict):
     stage_dict = stage_dict.copy()
     stage_dict['version_tag'] = int(stage_dict['version_tag'][1:])  # 'v1' -> 1
 
-    with db_connection:
-        cur = db_connection.cursor()
+    with sqlite3.connect(DB_FILE).cursor() as cur:
         cur.execute(
             """
             INSERT INTO stage_tag (workspace, name, version, tag)
@@ -44,8 +43,7 @@ def create_one_stage_tag(stage_dict):
 
 
 def exist_stage(workspace, name, version):
-    with db_connection:
-        cur = db_connection.cursor()
+    with sqlite3.connect(DB_FILE).cursor() as cur:
         if version.startswith('v'):
             version = version[1:]
             cur.execute(
@@ -85,8 +83,7 @@ def exist_stage(workspace, name, version):
 
 
 def get_one_stage_by_version(workspace, name, version='latest'):
-    with db_connection:
-        cur = db_connection.cursor()
+    with sqlite3.connect(DB_FILE).cursor() as cur:
         # version is a hex string version
         if version == 'latest':
             cur.execute(
@@ -179,8 +176,7 @@ def get_one_stage_by_version(workspace, name, version='latest'):
 
 
 def get_one_stage_by_tag(workspace, name, version_tag='latest'):
-    with db_connection:
-        cur = db_connection.cursor()
+    with sqlite3.connect(DB_FILE).cursor() as cur:
         if version_tag == 'latest':
             cur.execute(
                 dedent("""
@@ -275,8 +271,7 @@ def get_one_stage_by_tag(workspace, name, version_tag='latest'):
 def get_many_stages(workspace, name, version=None, all=False):
     # replace None with '', since None will lead to issues in SQL
     version = version or ''
-    with db_connection:
-        cur = db_connection.cursor()
+    with sqlite3.connect(DB_FILE).cursor() as cur:
         if version == '':
             # Get the head version
             cur.execute(
@@ -355,8 +350,7 @@ def get_many_stages(workspace, name, version=None, all=False):
 
 
 def get_next_stage_version_tag(workspace, name):
-    with db_connection:
-        cur = db_connection.cursor()
+    with sqlite3.connect(DB_FILE).cursor() as cur:
         cur.execute(
             """
             SELECT COALESCE(MAX(tag), 0) + 1

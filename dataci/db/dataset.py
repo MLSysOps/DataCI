@@ -5,14 +5,14 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Mar 11, 2023
 """
+import sqlite3
 from textwrap import dedent
 
-from . import db_connection
+from dataci.config import DB_FILE
 
 
 def create_one_dataset(dataset_dict):
-    with db_connection:
-        cur = db_connection.cursor()
+    with sqlite3.connect(DB_FILE).cursor() as cur:
         cur.execute(
             dedent("""
             INSERT INTO dataset (
@@ -53,8 +53,7 @@ def create_one_dataset(dataset_dict):
 
 
 def create_one_dataset_tag(dataset_tag_dict):
-    with db_connection:
-        cur = db_connection.cursor()
+    with sqlite3.connect(DB_FILE).cursor() as cur:
         cur.execute(
             dedent("""
             INSERT INTO dataset_tag (
@@ -80,8 +79,7 @@ def create_one_dataset_tag(dataset_tag_dict):
 
 
 def exist_dataset_by_version(workspace, name, version):
-    with db_connection:
-        cur = db_connection.cursor()
+    with sqlite3.connect(DB_FILE).cursor() as cur:
         cur = cur.execute(
             dedent("""
             SELECT EXISTS(
@@ -104,8 +102,7 @@ def exist_dataset_by_version(workspace, name, version):
 
 def get_one_dataset_by_version(workspace, name, version='latest'):
     version = version or 'latest'
-    with db_connection:
-        cur = db_connection.cursor()
+    with sqlite3.connect(DB_FILE).cursor() as cur:
         if version == 'latest':
             cur.execute(
                 dedent("""
@@ -220,8 +217,7 @@ def get_one_dataset_by_version(workspace, name, version='latest'):
 
 
 def get_one_dataset_by_tag(workspace, name, tag):
-    with db_connection:
-        cur = db_connection.cursor()
+    with sqlite3.connect(DB_FILE).cursor() as cur:
         if tag == 'latest':
             cur.execute(dedent("""
             WITH base AS (
@@ -328,9 +324,9 @@ def get_one_dataset_by_tag(workspace, name, tag):
 
 
 def get_many_datasets(workspace, name, version=None, all=False):
-    with db_connection:
+    with sqlite3.connect(DB_FILE).cursor() as cur:
         if version == 'latest':
-            dataset_po_iter = db_connection.execute(f"""
+            dataset_po_iter = cur.execute(f"""
                 --beginsql
                 WITH selected_dataset AS (
                     SELECT workspace
@@ -370,7 +366,7 @@ def get_many_datasets(workspace, name, version=None, all=False):
                 --endsql
                 """, (workspace, name,))
         else:
-            dataset_po_iter = db_connection.execute(f"""
+            dataset_po_iter = cur.execute(f"""
                 --beginsql
                 WITH selected_dataset AS (
                     SELECT workspace
