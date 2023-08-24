@@ -1,12 +1,24 @@
 # Data CI
 
-A tool to record data-science triplets (🗂️ `dataset`, 📏 `pipeline`, 📊 `results`)
+DataCI is a comprehensive platform for track your data-centric AI pipeline in dynamic streaming data settings. It 
+provides rich APIs for seamless streaming dataset management, data-centric pipeline development, versioning 
+and evaluation on streaming scenarios.
 
-- 🗂️ Versioning every data and its code with accumulated human data-pipeline-building knowledge
-- 📏 Easy pipeline debugging with interatives
-- 📊 One-click data-centric benchmarking with comprehensive dataset report
+DataCI is featured for
+- 🐣 **Easy to use**: enable DataCI management by only few lines of modification to your 
+  existing data-centric functions and pipelines
+- 🗂️ **Version Control**: Track versions of streaming data, data-centric pipelines, running results and their lineages
+- 📊 **Auto Benchmark**: Evaluate pipeline automatically on new streaming data and data-centric functions
 
-## Installation
+This project is still under development. Please feel free to open an issue if you have any questions or suggestions.
+- [Installation](#installation-construction)
+- [Quick Start](#quick-start-truck)
+- [Examples (for Advanced Usages)](#examples-books)
+- [Citation](#citation-seedling)
+- [Contributors](#contributors-sparkles)
+- [License](#lincese-page-facing-up)
+
+## Installation :construction:
 
 Manual install DataCI package from source code:
 
@@ -20,7 +32,7 @@ Initialize DataCI by:
 dataci init
 ```
 
-⚠️ This command will initialize the DataCI, you should run this command only once when installing.
+:warning: This command will initialize the DataCI, you should run this command only once when installing.
 
 Start DataCI server by:
 
@@ -28,7 +40,7 @@ Start DataCI server by:
 dataci start
 ```
 
-## Quick Start
+## Quick Start :truck:
 
 With few lines of modification, you can easily track every version of the input, output data and code for your existing
 data pipeline.
@@ -117,19 +129,20 @@ data pipeline.
     ```
     Before executing the above code, please wait some time for the previous manual triggered run to finish.
     Upon the publish of the new version of input dataset, the text process CI pipeline is automatically 
-    triggered and run. Go to [pipeline runs dashboard](http://localhost:8080/taskinstance/list/?_flt_3_dag_id=testspace--text_process_ci--v1)
+    triggered and evaluate on the new version of streaming data. 
+    Go to [pipeline runs dashboard](http://localhost:8080/taskinstance/list/?_flt_3_dag_id=testspace--text_process_ci--v1)
     to check the pipeline run result.
 
 You may see the above example script [here](./example/text_process_ci.py).
 
-## More Examples
+## Examples :books:
+
+We have provided several examples to demonstrate the advanced usage of DataCI:
 
 - [Play with the CI](./example/ci/README.md)
-- [Build Text Classification Dataset](./docs/Create_Text_Classification_Dataset.md) [Jupyter Notebooks](./docs/Create_Text_Classification_Dataset.ipynb)
-- [Data-centric Benchmark: Compare Different Dataset Versions](./docs/Data-centric_Benchmark.md)
-- [Data Analysis for Performance Checking and Debugging](./docs/Data_Analysis.md)
+- [Build Text Classification Dataset](./example/create_text_classification_dataset) [Jupyter Notebooks](./example/create_text_classification_dataset/Create_Text_Classification_Dataset.ipynb)
 
-## Citation
+## Citation :seedling:
 
 Our tech report is available at [arXiv:2306.15538](https://arxiv.org/abs/2306.15538)
 and [DMLR@ICML'23](https://dmlr.ai/assets/accepted-papers/42/CameraReady/DataCI_v3_camera_ready.pdf). Please cite as:
@@ -143,6 +156,10 @@ and [DMLR@ICML'23](https://dmlr.ai/assets/accepted-papers/42/CameraReady/DataCI_
 }
 ```
 
-## Contributors
+## Contributors :sparkles:
+- Yuanming Li
+- Huaizheng Zhang
+- Yizheng Huang
 
-## License
+## License :page_facing_up:
+This repository is open-sourced under [MIT License](./LICENSE).

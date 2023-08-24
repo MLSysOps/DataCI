@@ -83,6 +83,12 @@ class Workspace(object):
     def connect(self):
         os.makedirs(self.root_dir, exist_ok=True)
         if STORAGE_BACKEND == 'local':
+            # Create a local workspace directory
+            self.root_dir.mkdir(parents=True, exist_ok=True)
+            self.data_dir.mkdir(exist_ok=True)
+            self.stage_dir.mkdir(exist_ok=True)
+            self.tmp_dir.mkdir(exist_ok=True)
+            self.tmp_dir.mkdir(exist_ok=True)
             return
 
         from dataci.connector.s3 import connect as connect_s3, mount_bucket

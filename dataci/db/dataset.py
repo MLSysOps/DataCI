@@ -12,7 +12,8 @@ from dataci.config import DB_FILE
 
 
 def create_one_dataset(dataset_dict):
-    with sqlite3.connect(DB_FILE).cursor() as cur:
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
         cur.execute(
             dedent("""
             INSERT INTO dataset (
@@ -53,7 +54,8 @@ def create_one_dataset(dataset_dict):
 
 
 def create_one_dataset_tag(dataset_tag_dict):
-    with sqlite3.connect(DB_FILE).cursor() as cur:
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
         cur.execute(
             dedent("""
             INSERT INTO dataset_tag (
@@ -79,7 +81,8 @@ def create_one_dataset_tag(dataset_tag_dict):
 
 
 def exist_dataset_by_version(workspace, name, version):
-    with sqlite3.connect(DB_FILE).cursor() as cur:
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
         cur = cur.execute(
             dedent("""
             SELECT EXISTS(
@@ -102,7 +105,8 @@ def exist_dataset_by_version(workspace, name, version):
 
 def get_one_dataset_by_version(workspace, name, version='latest'):
     version = version or 'latest'
-    with sqlite3.connect(DB_FILE).cursor() as cur:
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
         if version == 'latest':
             cur.execute(
                 dedent("""
@@ -217,7 +221,8 @@ def get_one_dataset_by_version(workspace, name, version='latest'):
 
 
 def get_one_dataset_by_tag(workspace, name, tag):
-    with sqlite3.connect(DB_FILE).cursor() as cur:
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
         if tag == 'latest':
             cur.execute(dedent("""
             WITH base AS (
@@ -324,7 +329,8 @@ def get_one_dataset_by_tag(workspace, name, tag):
 
 
 def get_many_datasets(workspace, name, version=None, all=False):
-    with sqlite3.connect(DB_FILE).cursor() as cur:
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
         if version == 'latest':
             dataset_po_iter = cur.execute(f"""
                 --beginsql

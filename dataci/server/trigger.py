@@ -45,7 +45,7 @@ class Trigger(abc.ABC):
                     for event in workflow_dict['trigger']:
                         self.subscribe(event, identifier)
             logger.debug(f'Current schedule map: {self._schedule_map}')
-            if self._scanner_flag.wait(60):
+            if self._scanner_flag.wait(10):
                 break
 
     def get(self, event_str):

@@ -21,7 +21,8 @@ def create_one_workflow(config):
     workflow_dict['dag'] = json.dumps(dag['edge'], sort_keys=True)
     workflow_dag_node_dict = dag['node']
 
-    with sqlite3.connect(DB_FILE).cursor() as cur:
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
         cur.execute(
             """
             INSERT INTO workflow (workspace, name, version, timestamp, schedule, dag)
@@ -68,7 +69,8 @@ def create_one_workflow_tag(config):
     workflow_tag_dict = deepcopy(config)
     workflow_tag_dict['version_tag'] = int(workflow_tag_dict['version_tag'][1:])  # remove 'v' prefix
 
-    with sqlite3.connect(DB_FILE).cursor() as cur:
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
         cur.execute(
             """
             INSERT INTO workflow_tag (workspace, name, version, tag)
@@ -81,7 +83,8 @@ def create_one_workflow_tag(config):
 
 def exist_workflow_by_version(workspace, name, version):
     """Check if the workflow exists."""
-    with sqlite3.connect(DB_FILE).cursor() as cur:
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
         cur.execute(
             dedent(f"""
                     SELECT EXISTS(
@@ -104,7 +107,8 @@ def exist_workflow_by_version(workspace, name, version):
 def exist_workflow_by_tag(workspace, name, tag):
     """Check if the workflow exists."""
     tag = int(tag[1:])  # remove 'v' prefix
-    with sqlite3.connect(DB_FILE).cursor() as cur:
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
         cur.execute(
             dedent("""
                     SELECT EXISTS(
@@ -125,7 +129,8 @@ def exist_workflow_by_tag(workspace, name, tag):
 
 
 def get_one_workflow_by_version(workspace, name, version):
-    with sqlite3.connect(DB_FILE).cursor() as cur:
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
         if version is None:
             # Get the latest version
             cur.execute(
@@ -234,7 +239,8 @@ def get_one_workflow_by_version(workspace, name, version):
 
 
 def get_one_workflow_by_tag(workspace, name, tag):
-    with sqlite3.connect(DB_FILE).cursor() as cur:
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
         if tag is None or tag == 'latest':
             cur.execute(
                 dedent("""
@@ -340,7 +346,8 @@ def get_one_workflow_by_tag(workspace, name, tag):
 def get_many_workflow(workspace, name, version=None):
     # replace None with '', since None will lead to issues in SQL
     version = version or ''
-    with sqlite3.connect(DB_FILE).cursor() as cur:
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
         if version == '':
             # Get the head version
             cur.execute(
@@ -447,7 +454,8 @@ def get_many_workflow(workspace, name, version=None):
 
 
 def get_all_workflow_schedule(latest_only=True):
-    with sqlite3.connect(DB_FILE).cursor() as cur:
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
         cur.execute(
             f"""
             WITH base AS (
@@ -496,7 +504,8 @@ def get_all_workflow_schedule(latest_only=True):
 
 
 def get_next_workflow_version_id(workspace, name):
-    with sqlite3.connect(DB_FILE).cursor() as cur:
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
         cur.execute(
             """
             SELECT COALESCE(MAX(CAST(tag AS INTEGER)), 0) + 1

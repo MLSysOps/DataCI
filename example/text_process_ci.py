@@ -39,8 +39,6 @@ def text_process_ci():
     Dataset(name='text_aug', dataset_files=text_aug_df)
 
 
-# some more
-
 # Build the pipeline
 text_process_ci_pipeline = text_process_ci()
 
@@ -50,6 +48,7 @@ if __name__ == '__main__':
     from dataci.models import Dataset
 
     # Prepare the input dataset, you can either provide a list or a file path
+    print('Prepare the input streaming dataset...')
     yelp_review_dataset = Dataset('yelp_review', dataset_files=[
         {'date': '2020-10-05 00:44:08', 'review_id': 'HWRpzNHPqjA4pxN5863QUA', 'stars': 5.0,
          'text': "I called Anytime on Friday afternoon about the number pad lock on my front door. After several questions, the gentleman asked me if I had changed the battery.", },
@@ -58,16 +57,21 @@ if __name__ == '__main__':
         {'date': '2020-10-17 06:58:09', 'review_id': '7CDDSuzoxTr4H5N4lOi9zw', 'stars': 4.0,
          'text': "I love coming here for my fruit and vegetables. It is always fresh and a great variety. The bags of already diced veggies are a huge time saver.", },
     ]).publish(version_tag='2020-10')
+    print(yelp_review_dataset)
 
     # Test the pipeline locally
-    # text_process_ci_pipeline.test()
+    print('Test the pipeline locally...')
+    text_process_ci_pipeline.test()
     # Publish the pipeline
+    print('Publish the pipeline...')
     text_process_ci_pipeline.publish()
     # Run the pipeline on the server
+    print('Manual trigger the pipeline run on the server...')
     text_process_ci_pipeline.run()
 
     print('Wait for the previous trigger pipeline run to finish...')
     time.sleep(15)
+    print('Publish the new version of input streaming dataset...')
     # DataCI auto track the new version of yelp_review dataset
     yelp_review_dataset_v2 = Dataset('yelp_review', dataset_files=[
         {'date': '2020-11-02 00:59:29', 'review_id': 'LTr95e6eOmLc7S_1WxM88Q', 'stars': 5.0,
@@ -77,8 +81,14 @@ if __name__ == '__main__':
         {'data': '2020-11-18 06:38:46', 'review_id': 'YqTMxlbebNBDcKYTIUvrdw', 'stars': 5.0,
          'text': "You won't regret stopping here, hidden gem with great food and a laid back and comfortable atmosphere, a place you can gather with friends and they will treat you like family while you're there.", },
     ]).publish(version_tag='2020-11')
+    print(yelp_review_dataset_v2)
     # Upon publishing of the new version of input dataset, the text process CI pipeline is automatically triggered
     # and run on the server.
+    print(
+        'Upon publishing of the new version of input dataset, '
+        'the text process CI pipeline is automatically triggered and evaluate on '
+        'the new version of input streaming dataset.'
+    )
     print(
         f'Visit the pipeline run dashboard at '
         f'http://localhost:8080/taskinstance/list/?_flt_3_dag_id={text_process_ci_pipeline.backend_id} \n'
