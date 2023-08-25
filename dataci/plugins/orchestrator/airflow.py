@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING
 
 import networkx as nx
 from airflow.api.client.local_client import Client
-from airflow_client.client import ApiClient
 from airflow.models import DAG as _DAG
 from airflow.operators.python import PythonOperator as _PythonOperator
 
@@ -168,7 +167,8 @@ class DAG(Workflow, _DAG):
     def run(self, **kwargs):
         c = Client(None)
         self.logger.info(f'Manual run workflow: {self} (dag_id={self.backend_id})')
-        c.trigger_dag(self.backend_id, **kwargs)
+        response = c.trigger_dag(self.backend_id, **kwargs)
+        return response['dag_run_id'] if response else None
 
     def test(self, **kwargs):
         super(Workflow, self).test(**kwargs)  # noqa

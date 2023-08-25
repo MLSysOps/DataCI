@@ -223,7 +223,7 @@ class Dataset(BaseModel):
 
     VERSION_PATTERN = re.compile(r'latest|none|\w+', flags=re.IGNORECASE)
     GET_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
-        r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|none|\w+))?$', flags=re.IGNORECASE
+        r'^(?:([a-z]\w*)\.)?([a-z]\w*)(?:@(latest|none|\w[\w-]*))?$', flags=re.IGNORECASE
     )
     LIST_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
         r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(latest|none|[\w*]+))?$', re.IGNORECASE

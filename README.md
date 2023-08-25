@@ -21,9 +21,17 @@ This project is still under development. Please feel free to open an issue if yo
 ## Installation :construction:
 
 Manual install DataCI package from source code:
-
 ```shell
 pip install -e .
+```
+:warning: For pipeline orchestration backend framework (i.e., [Apache-Airflow](https://airflow.apache.org/)), you may 
+need to install manually since the version to meet your deployment can be different.
+Here is a snapshot for [quick installation](https://airflow.apache.org/docs/apache-airflow/stable/installation/installing-from-pypi.html):
+```shell
+AIRFLOW_VERSION=2.6.1
+PYTHON_VERSION="$(python --version | cut -d " " -f 2 | cut -d "." -f 1-2)"
+CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
+pip install "apache-airflow[celery]==${AIRFLOW_VERSION}" --constraint "${CONSTRAINT_URL}"
 ```
 
 Initialize DataCI by:
@@ -124,7 +132,7 @@ data pipeline.
         yelp_review_dataset = Dataset('yelp_review', dataset_files=[
             {'date': '2020-11-02 00:59:29', 'review_id': 'LTr95e6eOmLc7S_1WxM88Q', 'stars': 5.0, 'text': "First of all the owner and staff went above and beyond to make us feel comfortable and protected during covid.  Secondly, the bar had fantastic drinks",},
             {'date': '2020-11-16 22:07:48', 'review_id': 'UhA9H0LK59qZegWOxyotcA', 'stars': 5.0, 'text': "Herbies is awesome! My brunch was perfect, service, food, and drinks! I will definitely continue coming back.",},
-            {'data': '2020-11-18 06:38:46', 'review_id': 'YqTMxlbebNBDcKYTIUvrdw', 'stars': 5.0, 'text': "You won't regret stopping here, hidden gem with great food and a laid back and comfortable atmosphere, a place you can gather with friends and they will treat you like family while you're there.",},
+            {'date': '2020-11-18 06:38:46', 'review_id': 'YqTMxlbebNBDcKYTIUvrdw', 'stars': 5.0, 'text': "You won't regret stopping here, hidden gem with great food and a laid back and comfortable atmosphere, a place you can gather with friends and they will treat you like family while you're there.",},
         ]).publish(version_tag='2020-11')
     ```
     Before executing the above code, please wait some time for the previous manual triggered run to finish.
