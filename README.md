@@ -76,7 +76,7 @@ data pipeline.
     
     
     @dag(
-        start_date=datetime(2020, 7, 30), schedule_interval=None,
+        start_date=datetime(2020, 7, 30), schedule=None,
         trigger=[Event('publish', 'yelp_review@*', producer_type='dataset', status='success')],
     )
     def text_process_ci():

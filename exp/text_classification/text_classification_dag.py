@@ -9,10 +9,10 @@ from datetime import datetime
 
 from dataci.models import Event
 from dataci.plugins.decorators import Dataset, dag
-from exp.text_classification.data_augmentation import text_augmentation
-from exp.text_classification.data_selection import select_data
-from exp.text_classification.predict import main as predict_text_classification
-from exp.text_classification.train import main as train_text_classification
+from exp.text_classification.step00_data_augmentation import text_augmentation
+from exp.text_classification.step01_data_selection import select_data
+from exp.text_classification.step03_predict import main as predict_text_classification
+from exp.text_classification.step02_train import main as train_text_classification
 
 
 @dag(
