@@ -113,7 +113,7 @@ data pipeline.
         # Publish the pipeline
         text_process_ci_pipeline.publish()
         # Run the pipeline on the server
-        text_process_ci_pipeline.run()
+        run_id = text_process_ci_pipeline.run()
     ```
     Note that the you should write pipeline testing and trigger code aside from the pipeline definition code.
     Otherwise, the pipeline will be triggered every time when you import the pipeline definition code.

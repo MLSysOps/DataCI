@@ -122,22 +122,25 @@ def collate_fn(batch):
     return new_batch
 
 
-def setup_dataloader(args, tokenizer, logger):
+def setup_dataloader(
+        test_dataset, tokenizer, batch_size,
+        preprocessing_num_workers, id_col, text_col, label_col, logger
+):
     test_dataset = TextDataset(
-        args.test_dataset, id_column=args.id_col, text_column=args.text_col, label_column=args.label_col,
+        test_dataset, id_column=id_col, text_column=text_col, label_column=label_col,
         tokenizer=tokenizer,
     )
     logger.info(f'Test dataset size: {len(test_dataset)}')
 
     test_dataloader = DataLoader(
-        test_dataset, batch_size=args.batch_size, collate_fn=collate_fn,
-        num_workers=args.preprocessing_num_workers,
+        test_dataset, batch_size=batch_size, collate_fn=collate_fn,
+        num_workers=preprocessing_num_workers,
     )
     return test_dataloader
 
 
 @torch.no_grad()
-def val_one_epoch(args, model, dataloader, epoch_num, test=False, logger=...):
+def val_one_epoch(model, dataloader, epoch_num, device, logger, logging_steps: int, test=False):
     stage_name = 'test' if test else 'val'
     val_loss_list, val_acc_list, batch_time_list = list(), list(), list()
     val_pred_results = list()
@@ -146,7 +149,7 @@ def val_one_epoch(args, model, dataloader, epoch_num, test=False, logger=...):
         batch_start_time = time.time()
         ids = batch.pop('ids')
         for k, v in batch.items():
-            batch[k] = v.to(args.device)
+            batch[k] = v.to(device)
         labels = batch['labels']
         outputs = model(**batch)
         loss = outputs.loss
@@ -173,7 +176,7 @@ def val_one_epoch(args, model, dataloader, epoch_num, test=False, logger=...):
                 'probabilities': probs.tolist(),
             })
 
-        if idx % args.logging_steps == 0:
+        if idx % logging_steps == 0:
             logger.info(f'[Epoch{epoch_num}][Step {idx}] {stage_name}_loss={loss.item()}, {stage_name}_acc={acc}')
 
     val_loss_epoch = np.average(val_loss_list).item()
@@ -202,28 +205,36 @@ def val_one_epoch(args, model, dataloader, epoch_num, test=False, logger=...):
 
 
 @stage(task_id='predict_text_classification')
-def main(args=None):
-    args = parse_args(args)
-
+def main(
+        *,
+        test_dataset: str, exp_root='outputs',
+        id_col: str = 'review_id', text_col: str = 'text', label_col: str = 'stars',
+        num_classes: int = 2, batch_size: int = 512, preprocessing_num_workers: int = 4,
+        model_name: str = 'bert-base-uncased', tokenizer_name: str = 'bert-base-uncased',
+        logging_steps: int = 100, seed: int = 42,
+        device: str = 'cuda' if torch.cuda.is_available() else 'cpu',
+        **kwargs
+):
     # Prepare exp directory
-    args.exp_root = args.exp_root / '_'.join([
+    exp_root = Path(exp_root)
+    exp_root = exp_root / '_'.join([
         f'{datetime.now().strftime("%Y%m%d-%H%M%S")}',
         f"task=text_classification",
-        # f"model={args.model_name}",
-        f"b={args.batch_size}",
-        f"j={args.preprocessing_num_workers}",
+        # f"model={model_name}",
+        f"b={batch_size}",
+        f"j={preprocessing_num_workers}",
     ])
-    args.exp_root.mkdir(exist_ok=True, parents=True)
-    args.log_path = args.exp_root / LOG_FILE_NAME
-    args.checkpoint_dir = args.exp_root / 'checkpoint'
-    args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    args.metrics_dir = args.exp_root / 'metrics'
-    args.metrics_dir.mkdir(parents=True, exist_ok=True)
-    args.pred_dir = args.exp_root / 'pred'
-    args.pred_dir.mkdir(parents=True, exist_ok=True)
+    exp_root.mkdir(exist_ok=True, parents=True)
+    log_path = exp_root / LOG_FILE_NAME
+    checkpoint_dir = exp_root / 'checkpoint'
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    metrics_dir = exp_root / 'metrics'
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+    pred_dir = exp_root / 'pred'
+    pred_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.seed:
-        set_seed(args.seed)
+    if seed:
+        set_seed(seed)
 
     # Set up logging
     # 1. Make one log on every process with the configuration for debugging.
@@ -235,32 +246,37 @@ def main(args=None):
     )
     logger = logging.getLogger(__name__)
     # 2. Setup logging to file
-    logger.addHandler(logging.FileHandler(args.log_path))
+    logger.addHandler(logging.FileHandler(log_path))
 
     # Collect environment information
     logger.info(get_pretty_env_info())
 
     # Load the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
     # Load dataset
-    test_dataloader = setup_dataloader(args, tokenizer, logger=logger)
+    test_dataloader = setup_dataloader(
+        test_dataset=test_dataset, tokenizer=tokenizer, batch_size=batch_size,
+        preprocessing_num_workers=preprocessing_num_workers, id_col=id_col, text_col=text_col, label_col=label_col,
+        logger=logger,
+    )
     # Load model
-    model = AutoModelForSequenceClassification.from_pretrained(args.model_name, num_labels=args.num_classes)
-    model = model.to(args.device)
+    model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=num_classes)
+    model = model.to(device)
 
     test_metrics_dict, test_pred_result = val_one_epoch(
-        args, model, test_dataloader, epoch_num=None, test=True, logger=logger,
+        model, test_dataloader, epoch_num=0, test=True, logger=logger, logging_steps=logging_steps, device=device,
     )
     # Save test results and metrics
-    logger.info(f"Saving test metrics and predictions to {args.exp_root}")
+    logger.info(f"Saving test metrics and predictions to {exp_root}")
     # 1. Save test metrics to JSON file
-    with open(args.metrics_dir / 'test_metrics.json', 'w') as f:
+    with open(metrics_dir / 'test_metrics.json', 'w') as f:
         json.dump(test_metrics_dict, f)
     # 2. Save test prediction to CSV file
-    pd.DataFrame(test_pred_result).to_csv(args.pred_dir / 'test_preds.csv', index=False)
+    pd.DataFrame(test_pred_result).to_csv(pred_dir / 'test_preds.csv', index=False)
 
-    return str(args.exp_root)
+    return str(exp_root)
 
 
 if __name__ == '__main__':
-    main.test()
+    args = parse_args()
+    main.test(**vars(args))

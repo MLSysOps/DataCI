@@ -23,7 +23,7 @@ from dataci.plugins.decorators import dag, Dataset
 
 
 @dag(
-    start_date=datetime(2020, 7, 30), schedule_interval=None,
+    start_date=datetime(2020, 7, 30), schedule=None,
     trigger=[Event('publish', 'yelp_review@*', producer_type='dataset', status='success')],
 )
 def text_process_ci():
@@ -67,7 +67,13 @@ if __name__ == '__main__':
     text_process_ci_pipeline.publish()
     # Run the pipeline on the server
     print('Manual trigger the pipeline run on the server...')
-    text_process_ci_pipeline.run()
+    run_id = text_process_ci_pipeline.run()
+    print(f'Pipeline run id: {run_id}')
+    print(
+        f'Visit the pipeline run dashboard at '
+        f'http://localhost:8080/taskinstance/list/?_flt_3_dag_id={text_process_ci_pipeline.backend_id} \n'
+        f'to see the pipeline run result.'
+    )
 
     print('Wait for the previous trigger pipeline run to finish...')
     time.sleep(15)
