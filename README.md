@@ -5,10 +5,12 @@ provides rich APIs for seamless streaming dataset management, data-centric pipel
 and evaluation on streaming scenarios.
 
 DataCI is featured for
-- 🐣 **Easy to use**: enable DataCI management by only few lines of modification to your 
+- :hatching_chick: **Easy to use**: Enable DataCI management by only few lines of modification to your
   existing data-centric functions and pipelines
-- 🗂️ **Version Control**: Track versions of streaming data, data-centric pipelines, running results and their lineages
-- 📊 **Auto Benchmark**: Evaluate pipeline automatically on new streaming data and data-centric functions
+- :card_index_dividers: **Version Control**: Track versions of streaming data, data-centric pipelines, running results
+  and their lineages
+- :ocean: **Streaming Simulation**: Testbed for developing and evaluating data-centric pipelines under simulated
+  streaming settings (WIP)
 
 This project is still under development. Please feel free to open an issue if you have any questions or suggestions.
 - [Installation](#installation-construction)
@@ -16,7 +18,7 @@ This project is still under development. Please feel free to open an issue if yo
 - [Examples (for Advanced Usages)](#examples-books)
 - [Citation](#citation-seedling)
 - [Contributors](#contributors-sparkles)
-- [License](#lincese-page-facing-up)
+- [License](#license-page_facing_up)
 
 ## Installation :construction:
 
@@ -94,6 +96,9 @@ data pipeline.
     # Build the pipeline
     text_process_ci_pipeline = text_process_ci()
     ```
+   We write the workflow process in a function `text_process_ci` in a normal way, and then decorate it with `@dag` to
+   convert it to a DataCI tracked workflow. With the `trigger` argument, we can specify the trigger event for the
+   pipeline. In this example, the pipeline will be triggered when a new version of `yelp_review` dataset is published.
 
 3. Manually run the pipeline:
 
@@ -110,18 +115,18 @@ data pipeline.
         ]).publish(version_tag='2020-10')
         # Test the pipeline locally
         text_process_ci_pipeline.test()
-        # Publish the pipeline
+        # Publish the pipeline: text_process_ci@v1 and its stage text_augmentation@v1 will be tracked
         text_process_ci_pipeline.publish()
         # Run the pipeline on the server
         run_id = text_process_ci_pipeline.run()
     ```
-    Note that the you should write pipeline testing and trigger code aside from the pipeline definition code.
-    Otherwise, the pipeline will be triggered every time when you import the pipeline definition code.
-    
-    The text process CI pipeline will be triggered and run. Go to [pipeline runs dashboard](http://localhost:8080/taskinstance/list/?_flt_3_dag_id=testspace--text_process_ci--v1)
-    to check the pipeline run result.
+   The text process CI pipeline will be triggered and run. Go
+   to [pipeline runs dashboard](http://localhost:8080/taskinstance/list/?_flt_3_dag_id=testspace--text_process_ci--v1)
+   to check the pipeline run result.  
+   Note that the you should write pipeline testing and trigger code aside from the pipeline definition code.
+   Otherwise, the pipeline will be triggered every time when you import the pipeline definition code.
 
-4. Automatically trigger the pipeline by publish a new version of input dataset:
+4. Automatically trigger the CI pipeline by publish a new version of input dataset:
 
     ```python
     from dataci.models import Dataset
@@ -148,7 +153,7 @@ You may see the above example script [here](./example/text_process_ci.py).
 We have provided several examples to demonstrate the advanced usage of DataCI:
 
 - [Play with the CI](./example/ci/README.md)
-- [Build Text Classification Dataset](./example/create_text_classification_dataset) [Jupyter Notebooks](./example/create_text_classification_dataset/Create_Text_Classification_Dataset.ipynb)
+- [Build Text Classification Dataset](./example/create_text_classification_dataset/README.md)
 
 ## Citation :seedling:
 
