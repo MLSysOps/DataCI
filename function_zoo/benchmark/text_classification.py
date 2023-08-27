@@ -138,18 +138,21 @@ def collate_fn(batch):
     return new_batch
 
 
-def setup_dataloader(args, tokenizer, logger):
+def setup_dataloader(
+        train_dataset, test_dataset, split_ratio, tokenizer, batch_size,
+        preprocessing_num_workers, id_col, text_col, label_col, logger
+):
     train_dataset = TextDataset(
-        args.train_dataset, id_column=args.id_col, text_column=args.text_col, label_column=args.label_col,
+        train_dataset, id_column=id_col, text_column=text_col, label_column=label_col,
         tokenizer=tokenizer,
     )
     test_dataset = TextDataset(
-        args.test_dataset, id_column=args.id_col, text_column=args.text_col, label_column=args.label_col,
+        test_dataset, id_column=id_col, text_column=text_col, label_column=label_col,
         tokenizer=tokenizer,
     )
 
     # Split the dataset into training and validation sets
-    train_size = int(args.split_ratio * len(train_dataset))
+    train_size = int(split_ratio * len(train_dataset))
     val_size = len(train_dataset) - train_size
     train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
 
@@ -157,21 +160,23 @@ def setup_dataloader(args, tokenizer, logger):
     logger.info(f'Test dataset size: {len(test_dataset)}')
 
     train_dataloader = DataLoader(
-        train_dataset, batch_size=args.batch_size, collate_fn=collate_fn,
-        num_workers=args.preprocessing_num_workers,
+        train_dataset, batch_size=batch_size, collate_fn=collate_fn,
+        num_workers=preprocessing_num_workers,
     )
     val_dataloader = DataLoader(
-        val_dataset, batch_size=args.batch_size, collate_fn=collate_fn,
-        num_workers=args.preprocessing_num_workers,
+        val_dataset, batch_size=batch_size, collate_fn=collate_fn,
+        num_workers=preprocessing_num_workers,
     )
     test_dataloader = DataLoader(
-        test_dataset, batch_size=args.batch_size, collate_fn=collate_fn,
-        num_workers=args.preprocessing_num_workers,
+        test_dataset, batch_size=batch_size, collate_fn=collate_fn,
+        num_workers=preprocessing_num_workers,
     )
     return train_dataloader, val_dataloader, test_dataloader
 
 
-def train_one_epoch(args, model, dataloader, optimizer, epoch_num, logger):
+def train_one_epoch(
+        model, dataloader, optimizer, epoch_num, max_train_steps_per_epoch, device, logger, logging_steps
+):
     train_loss_list, train_acc_list, batch_time_list = list(), list(), list()
     train_pred_results = list()
     model.train()
@@ -181,7 +186,7 @@ def train_one_epoch(args, model, dataloader, optimizer, epoch_num, logger):
         optimizer.zero_grad()
         ids = batch.pop('ids')
         for k, v in batch.items():
-            batch[k] = v.to(args.device)
+            batch[k] = v.to(device)
         labels = batch['labels']
         outputs = model(**batch)
         loss = outputs.loss
@@ -211,10 +216,10 @@ def train_one_epoch(args, model, dataloader, optimizer, epoch_num, logger):
                 'probabilities': probs.tolist(),
             })
 
-        if idx > args.max_train_steps_per_epoch:
+        if idx > max_train_steps_per_epoch:
             # Reach the max steps for this epoch, skip to next epoch
             break
-        if idx % args.logging_steps == 0:
+        if idx % logging_steps == 0:
             logger.info(f'[Epoch{epoch_num}][Step {idx}] train_loss={loss.item()}, train_acc={acc}')
 
     train_loss_epoch = np.average(train_loss_list).item()
@@ -241,7 +246,9 @@ def train_one_epoch(args, model, dataloader, optimizer, epoch_num, logger):
 
 
 @torch.no_grad()
-def val_one_epoch(args, model, dataloader, epoch_num, test=False, logger=...):
+def val_one_epoch(
+        model, dataloader, epoch_num, max_val_steps_per_epoch, logger, logging_steps, device, test=False
+):
     stage_name = 'test' if test else 'val'
     val_loss_list, val_acc_list, batch_time_list = list(), list(), list()
     val_pred_results = list()
@@ -250,7 +257,7 @@ def val_one_epoch(args, model, dataloader, epoch_num, test=False, logger=...):
         batch_start_time = time.time()
         ids = batch.pop('ids')
         for k, v in batch.items():
-            batch[k] = v.to(args.device)
+            batch[k] = v.to(device)
         labels = batch['labels']
         outputs = model(**batch)
         loss = outputs.loss
@@ -277,11 +284,11 @@ def val_one_epoch(args, model, dataloader, epoch_num, test=False, logger=...):
                 'probabilities': probs.tolist(),
             })
 
-        if idx > args.max_val_steps_per_epoch:
+        if idx > max_val_steps_per_epoch:
             # Reach the max steps for this epoch, skip to next epoch
             break
 
-        if idx % args.logging_steps == 0:
+        if idx % logging_steps == 0:
             logger.info(f'[Epoch{epoch_num}][Step {idx}] {stage_name}_loss={loss.item()}, {stage_name}_acc={acc}')
 
     val_loss_epoch = np.average(val_loss_list).item()
@@ -310,32 +317,41 @@ def val_one_epoch(args, model, dataloader, epoch_num, test=False, logger=...):
     return val_metrics_dict, val_pred_results
 
 
-@stage(task_id='train_text_classification_model')
-def main(args=None):
-    args = parse_args(args)
-
+@stage(task_id='train_text_classification_model', multiple_outputs=True)
+def main(
+        *,
+        train_dataset: str, test_dataset: str, exp_root: str = 'outputs',
+        num_classes: int = 2, split_ratio: float = 0.95,
+        tokenizer_name: str = 'bert-base-uncased',
+        id_col: str = 'review_id', text_col: str = 'text', label_col: str = 'stars',
+        model_name: str = 'bert-base-uncased', learning_rate: float = 1e-5, batch_size: int = 512,
+        preprocessing_num_workers: int = 4,
+        epochs: int = 3, max_train_steps_per_epoch: int = 1e38, max_val_steps_per_epoch: int = 1e38,
+        logging_steps: int = 100,
+        seed: int = 42, device: str = 'cuda' if torch.cuda.is_available() else 'cpu', **kwargs
+):
     # Prepare exp directory
-    args.exp_root = Path(args.exp_root)
-    args.exp_root = args.exp_root / '_'.join([
+    exp_root = Path(exp_root)
+    exp_root = exp_root / '_'.join([
         f'{datetime.now().strftime("%Y%m%d-%H%M%S")}',
         f"task=text_classification",
-        # f"model={args.model_name}",
-        f"lr={args.learning_rate:.2E}",
-        f"b={args.batch_size}",
-        f"j={args.preprocessing_num_workers}",
+        # f"model={model_name}",
+        f"lr={learning_rate:.2E}",
+        f"b={batch_size}",
+        f"j={preprocessing_num_workers}",
     ])
-    print(f"Experiment root directory: {args.exp_root}")
-    args.exp_root.mkdir(exist_ok=True, parents=True)
-    args.log_path = args.exp_root / LOG_FILE_NAME
-    args.checkpoint_dir = args.exp_root / 'checkpoint'
-    args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    args.metrics_dir = args.exp_root / 'metrics'
-    args.metrics_dir.mkdir(parents=True, exist_ok=True)
-    args.pred_dir = args.exp_root / 'pred'
-    args.pred_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Experiment root directory: {exp_root}")
+    exp_root.mkdir(exist_ok=True, parents=True)
+    log_path = exp_root / LOG_FILE_NAME
+    checkpoint_dir = exp_root / 'checkpoint'
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    metrics_dir = exp_root / 'metrics'
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+    pred_dir = exp_root / 'pred'
+    pred_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.seed:
-        set_seed(args.seed)
+    if seed:
+        set_seed(seed)
 
     # Set up logging
     # 1. Make one log on every process with the configuration for debugging.
@@ -354,65 +370,77 @@ def main(args=None):
     logger.info(get_pretty_env_info())
 
     # Load the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
     # Load dataset
-    train_dataloader, val_dataloader, test_dataloader = setup_dataloader(args, tokenizer, logger)
+    train_dataloader, val_dataloader, test_dataloader = setup_dataloader(
+        train_dataset=train_dataset, test_dataset=test_dataset, batch_size=batch_size,
+        preprocessing_num_workers=preprocessing_num_workers, split_ratio=split_ratio,
+        id_col=id_col, text_col=text_col, label_col=label_col,
+        tokenizer=tokenizer, logger=logger
+    )
     # Load model
-    model = AutoModelForSequenceClassification.from_pretrained(args.model_name, num_labels=args.num_classes)
-    model = model.to(args.device)
+    model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=num_classes)
+    model = model.to(device)
 
     # Set up the optimizer
     optimizer = AdamW(model.parameters(), lr=5e-5)
 
     # Train the model
-    for epoch in range(args.epochs):
+    for epoch in range(epochs):
         # train loop
         train_metrics_dict, train_pred_result = train_one_epoch(
-            args, model, train_dataloader, optimizer, epoch, logger=logger
+            model=model, optimizer=optimizer, dataloader=train_dataloader, epoch_num=epoch,
+            max_train_steps_per_epoch=max_train_steps_per_epoch,
+            device=device, logger=logger, logging_steps=logging_steps,
         )
         # Validation loop
         val_metrics_dict, val_pred_result = val_one_epoch(
-            args, model, val_dataloader, epoch, test=False, logger=logger
+            model=model, dataloader=test_dataloader, epoch_num=epoch, max_val_steps_per_epoch=max_val_steps_per_epoch,
+            test=True, device=device, logger=logger, logging_steps=logging_steps,
         )
 
         # Save loggings and results
-        logger.info(f"Saving model checkpoint, metrics, and predictions to {args.exp_root}")
+        logger.info(f"Saving model checkpoint, metrics, and predictions to {exp_root}")
         # 1. Save model checkpoint
         checkpoint_dict = {
             'epoch': epoch,
-            'name': args.model_name,
+            'name': model_name,
             'state_dict': model.state_dict(),
             'optimizer': optimizer.state_dict(),
         }
-        torch.save(checkpoint_dict, args.checkpoint_dir / f"epoch={epoch}.pt")
+        torch.save(checkpoint_dict, checkpoint_dir / f"epoch={epoch}.pt")
         # 2. Save metrics to JSON file
-        with open(args.metrics_dir / f'train_metrics_epoch={epoch}.json', 'w') as f:
+        with open(metrics_dir / f'train_metrics_epoch={epoch}.json', 'w') as f:
             json.dump(train_metrics_dict, f)
-        with open(args.metrics_dir / f'val_metrics_epoch={epoch}.json', 'w') as f:
+        with open(metrics_dir / f'val_metrics_epoch={epoch}.json', 'w') as f:
             json.dump(val_metrics_dict, f)
         # 3. Save prediction to CSV file
-        pd.DataFrame(train_pred_result).to_csv(args.pred_dir / f'train_preds_epoch={epoch}.csv', index=False)
-        pd.DataFrame(val_pred_result).to_csv(args.pred_dir / f'val_preds_epoch={epoch}.csv', index=False)
+        pd.DataFrame(train_pred_result).to_csv(pred_dir / f'train_preds_epoch={epoch}.csv', index=False)
+        pd.DataFrame(val_pred_result).to_csv(pred_dir / f'val_preds_epoch={epoch}.csv', index=False)
         # 4. Copy log file
-        shutil.copy(tmp_log_path.name, args.log_path)
+        shutil.copy(tmp_log_path.name, log_path)
 
     test_metrics_dict, test_pred_result = val_one_epoch(
-        args, model, test_dataloader, epoch_num=None, test=True, logger=logger,
+        model=model, dataloader=test_dataloader, epoch_num=0, max_val_steps_per_epoch=max_val_steps_per_epoch,
+        test=True, device=device, logger=logger, logging_steps=logging_steps,
     )
     # Save final model
-    model.save_pretrained(args.exp_root / 'model')
+    model.save_pretrained(exp_root / 'model')
     # Save test results and metrics
-    logger.info(f"Saving test metrics and predictions to {args.exp_root}")
+    logger.info(f"Saving test metrics and predictions to {exp_root}")
     # 1. Save test metrics to JSON file
-    with open(args.metrics_dir / 'test_metrics.json', 'w') as f:
+    with open(metrics_dir / 'test_metrics.json', 'w') as f:
         json.dump(test_metrics_dict, f)
     # 2. Save test prediction to CSV file
-    pd.DataFrame(test_pred_result).to_csv(args.pred_dir / 'test_preds.csv', index=False)
+    pd.DataFrame(test_pred_result).to_csv(pred_dir / 'test_preds.csv', index=False)
     # 3. Copy log file
-    shutil.copy(tmp_log_path.name, args.log_path)
+    shutil.copy(tmp_log_path.name, log_path)
 
-    return str(args.exp_root)
+    return {
+        'output': str(exp_root), 'model': str(exp_root / 'model')
+    }
 
 
 if __name__ == '__main__':
-    main.test()
+    args = parse_args()
+    main.test(**vars(args))

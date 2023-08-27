@@ -1,12 +1,24 @@
 In this tutorial, we are simulate a real-world case by using Yelp dataset and sending them to a pre-built
 sentiment analysis pipeline in a streaming mode.
 
+The scripts of this tutorial is available, you may run them at:
+
+- [Section 2: Build a Sentiment Analysis Pipeline](./2.build_sentiment_analysis_pipeline.py)
+- [Section 3: Simulate the Streaming Data Settings](./3.simulate_streaming_data.py)
+- [Section 4: Continuously improve the data pipeline](./4.continuously_improve_data_pipeline.py)
+
 # 0. Before We Start
 
-Before we start, make sure you have installed DataCI and started the server:
+This tutorial use the following libraries, you need to manually installed:
+
+- [AugLy](https://github.com/facebookresearch/AugLy)
+- [PyTorch](https://pytorch.org/get-started/locally/)
+- [Huggingface Transformers](https://huggingface.co/docs/transformers/installation)
+- [ALaaS](https://github.com/MLSysOps/Active-Learning-as-a-Service)
+
+After that, start DataCI server:
 
 ```shell
-dataci init # This command will initialize the DataCI, you should run this command only once
 dataci start
 ```
 
@@ -31,7 +43,7 @@ We are downloading two versions of the training and validation datasets:
 In this section, we will build a sentiment analysis pipeline by using the Yelp review dataset. The pipeline will
 perform the following tasks:
 
-1. Text augmentation: augment the text data by using the [augly](https://github.com/facebookresearch/AugLy)
+1. Text augmentation: augment the text data by using the [AugLy](https://github.com/facebookresearch/AugLy)
 2. Data selection: select the most informative data for training by using
    the [Active Learning as a Service (ALaaS)](https://github.com/MLSysOps/Active-Learning-as-a-Service)
 3. Text classification training and offline evaluation: train a text classification model and evaluate it using the
@@ -148,7 +160,6 @@ def sentiment_analysis():
     data_selection_df = select_data(text_aug_dataset, 5000, 'bert-base-uncased')
     data_select_dataset = Dataset(name='data_selection', dataset_files=data_selection_df, file_reader=None)
     train_outputs = train_text_classification(train_dataset=data_select_dataset, test_dataset=raw_dataset_val)
-    predict_text_classification(model_name=train_outputs['model'], test_dataset=raw_dataset_val)
 
 
 sentiment_analysis_pipeline = sentiment_analysis()
@@ -177,7 +188,10 @@ if __name__ == '__main__':
     print(f'Run the pipeline with run_id: {run_id}')
 ```
 
-# 2. Simulate the Streaming Data Settings
+Go to [pipeline runs dashboard](http://localhost:8080/taskinstance/list/?_flt_3_dag_id=default--sentiment_analysis--v1)
+to check the pipeline run result.
+
+# 3. Simulate the Streaming Data Settings
 
 In the real world, the data is not static, it is continuously generated. In this section, we will simulate the
 streaming data scenario by sending a new batch of data to the pipeline.
@@ -199,14 +213,17 @@ from dataci.models import Workflow
 
 # Obtain the sentiment analysis pipeline v1 from DataCI pipeline registry:
 sentiment_analysis_pipeline = Workflow.get('sentiment_analysis@v1')
-# Run the pipeline with the new dataset:
+# Run the pipeline with the new dataset, nothing need to be changed in the pipeline code
 sentiment_analysis_pipeline.run()
 ```
 
 Alternatively, we can let DataCI automatically trigger the pipeline run upon a new dataset is published,
 please refer to the [DataCI Trigger Tutorial]() (WIP).
 
-# 3. Continuously improve the data pipeline
+Go to [pipeline runs dashboard](http://localhost:8080/taskinstance/list/?_flt_3_dag_id=default--sentiment_analysis--v1)
+to check the pipeline run result.
+
+# 4. Continuously improve the data pipeline
 
 As the time goes, we want to improve the data pipeline by try new data augmentation methods and new data selection
 methods. In this section, we will modify the existing data pipeline by using a new text augmentation method. Then we

@@ -140,11 +140,11 @@ data pipeline.
             {'date': '2020-11-18 06:38:46', 'review_id': 'YqTMxlbebNBDcKYTIUvrdw', 'stars': 5.0, 'text': "You won't regret stopping here, hidden gem with great food and a laid back and comfortable atmosphere, a place you can gather with friends and they will treat you like family while you're there.",},
         ]).publish(version_tag='2020-11')
     ```
-    Before executing the above code, please wait some time for the previous manual triggered run to finish.
-    Upon the publish of the new version of input dataset, the text process CI pipeline is automatically 
-    triggered and evaluate on the new version of streaming data. 
-    Go to [pipeline runs dashboard](http://localhost:8080/taskinstance/list/?_flt_3_dag_id=testspace--text_process_ci--v1)
-    to check the pipeline run result.
+   Before executing the above code, please wait some time for the previous manual triggered run to finish.
+   Upon the publish of the new version of input dataset, the text process CI pipeline is automatically
+   triggered and evaluate on the new version of streaming data.
+   Go to [pipeline runs dashboard](http://localhost:8080/taskinstance/list/?_flt_3_dag_id=default--text_process_ci--v1)
+   to check the pipeline run result.
 
 You may see the above example script [here](./example/text_process_ci.py).
 
@@ -153,7 +153,7 @@ You may see the above example script [here](./example/text_process_ci.py).
 We have provided several examples to demonstrate the advanced usage of DataCI:
 
 - [Play with the CI](./example/ci/README.md)
-- [Build Text Classification Dataset](./example/create_text_classification_dataset/README.md)
+- [Continuous Text Classification Development with Streaming Data](example/continuous_text_classification_dev/README.md)
 
 ## Citation :seedling:
 
