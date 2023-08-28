@@ -3,6 +3,7 @@ sentiment analysis pipeline in a streaming mode.
 
 The scripts of this tutorial is available, you may run them at:
 
+- [Section 1: Prepare the Yelp Dataset as Streaming Data](./1.prepare_yelp_dataset.py)
 - [Section 2: Build a Sentiment Analysis Pipeline](./2.build_sentiment_analysis_pipeline.py)
 - [Section 3: Simulate the Streaming Data Settings](./3.simulate_streaming_data.py)
 - [Section 4: Continuously improve the data pipeline](./4.continuously_improve_data_pipeline.py)
@@ -24,18 +25,22 @@ dataci start
 
 # 1. Prepare the Yelp Dataset as Streaming Data
 
-We are going to use the [Yelp Review Dataset](https://www.yelp.com/dataset). as the streaming data source.
-We have processed the Yelp reivew dataset into a daily-based dataset by its `date`.
+We are going to use the [Yelp Review Dataset](https://www.yelp.com/dataset) as the streaming data source.
+We have processed the Yelp review dataset into a daily-based dataset by its `date`.
 In this tutorial, we will only use the data from 2020-09-01 to 2020-11-30 to simulate the streaming data scenario.
-We are downloading two versions of the training and validation datasets:
 
-- `yelp_review_train@2020-10`: contains reviews from 2020-09-01 to 2020-10-15
-- `yelp_review_val@2020-10`: contains reviews from 2020-10-16 to 2020-10-31
-- `yelp_review_train@2020-11`: contains reviews from 2020-10-01 to 2020-11-15
-- `yelp_review_val@2020-11`: contains reviews from 2020-11-16 to 2020-11-30
+Assume we are at end of October, we will use the latest available datasets as the training and validation 
+datasets, respectively.
+- `yelp_review_train_2020-10`: from 2020-09-01 to 2020-10-15
+- `yelp_review_val_2020-10`: from 2020-10-16 to 2020-10-31
 
-```
+```python
+from dataci.models import Dataset
 
+DATA_URL_BASE = 'https://zenodo.org/record/8288433/files'
+
+yelp_review_train = Dataset('yelp_review_train', dataset_files=f'{DATA_URL_BASE}/yelp_review_train_2020-10.csv').publish()
+yelp_review_val = Dataset('yelp_review_val', dataset_files=f'{DATA_URL_BASE}/yelp_review_val_2020-10.csv').publish()
 ```
 
 # 2. Build a Sentiment Analysis Pipeline
@@ -198,12 +203,16 @@ streaming data scenario by sending a new batch of data to the pipeline.
 
 Assume that one month later, we have another batch of review data from Yelp, we create a new training and validation
 dataset by using the new data:
+- `yelp_review_train_2020-11`: from 2020-10-01 to 2020-11-15
+- `yelp_review_val_2020-11`: from 2020-11-16 to 2020-11-30
 
 ```python
 from dataci.models import Dataset
 
-Dataset(name='yelp_review_train', dataset_files='').publish('2020-11')
-Dataset(name='yelp_review_val', dataset_files='').publish('2020-11')
+DATA_URL_BASE = 'https://zenodo.org/record/8288433/files'
+
+train_dataset = Dataset('yelp_review_train', dataset_files=f'{DATA_URL_BASE}/yelp_review_train_2020-11.csv').publish()
+val_dataset = Dataset('yelp_review_val', dataset_files=f'{DATA_URL_BASE}/yelp_review_val_2020-11.csv').publish()
 ````
 
 Run the pipeline with the new dataset:

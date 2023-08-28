@@ -8,8 +8,10 @@ Date: Aug 28, 2023
 from dataci.models import Dataset, Workflow
 
 print('Publishing new dataset version...')
-yelp_review_train_v2 = Dataset(name='yelp_review_train', dataset_files='').publish('2020-11')
-yelp_review_val_v2 = Dataset(name='yelp_review_val', dataset_files='').publish('2020-11')
+DATA_URL_BASE = 'https://zenodo.org/record/8288433/files'
+
+yelp_review_train_v2 = Dataset('yelp_review_train', dataset_files=f'{DATA_URL_BASE}/yelp_review_train_2020-11.csv').publish()
+yelp_review_val_v2 = Dataset('yelp_review_val', dataset_files=f'{DATA_URL_BASE}/yelp_review_val_2020-11.csv').publish()
 print(yelp_review_train_v2, yelp_review_val_v2)
 
 # Obtain the sentiment analysis pipeline v1 from DataCI pipeline registry:

@@ -18,7 +18,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pandas as pd
+import requests
 from pandas.core.util.hashing import hash_pandas_object
+from tqdm import tqdm
 
 from dataci.db.dataset import (
     get_many_datasets,
@@ -263,10 +265,33 @@ class Dataset(BaseModel):
 
     @dataset_files.setter
     def dataset_files(self, value):
-        # dataset_files is a S3 path
         # FIXME: only support single file
         if isinstance(value, (str, Path)):
-            if str(value).startswith('s3://'):
+            if str(value).startswith('https://') or str(value).startswith('http://'):
+                # dataset_files is a http path
+                cache_dir = tempfile.NamedTemporaryFile(
+                    mode='w',
+                    suffix='.' + value.split('/')[-1].split('.')[-1],
+                    dir=self.workspace.tmp_dir, delete=False
+                ).name
+                # get size
+                with requests.head(value, headers={'Accept-Encoding': 'none'}, allow_redirects=True) as r:
+                    size = int(r.headers.get('content-length', -1))
+
+                # download
+                logger.info(f'Downloading dataset from {value} to {cache_dir}')
+                downloaded = 0
+                with requests.get(value, stream=True) as r:
+                    r.raise_for_status()
+                    with open(cache_dir, 'wb') as f:
+                        tbar = tqdm(desc=f'Download {cache_dir}', total=size, unit='iB', ascii=' >=', unit_scale=True)
+                        for chunk in r.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                            tbar.update(len(chunk))
+                self._dataset_files = cache_dir
+
+            elif str(value).startswith('s3://'):
+                # dataset_files is a S3 path
                 from dataci.connector.s3 import download as s3_download
 
                 # Download to local cache directory
