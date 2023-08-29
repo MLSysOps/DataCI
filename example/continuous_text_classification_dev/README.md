@@ -70,68 +70,26 @@ def text_augmentation(df):
 
 ## Stage 2: data selection
 
-We utilize the [Active Learning as a Service (ALaaS)](https://github.com/MLSysOps/Active-Learning-as-a-Service)
-system to select the most informative data for training.
+We select the most informative data for training. DataCI provides a built-in data selection stage using
+the [Active Learning as a Service (ALaaS)](https://github.com/MLSysOps/Active-Learning-as-a-Service) system, you can use it directly by importing from 
+our data-centric function zoo:
 
 ```python
-import logging
-import os
+from function_zoo.data_selection.alaas import data_selection
+```
+You can always check the source code of the function by access its `script` attribute:
+```python
+print(data_selection.script)
+```
 
-import pandas as pd
-import torch
-from alaas.server.executors import TorchALWorker
-from docarray import Document, DocumentArray
-from transformers import pipeline, AutoTokenizer
-
-from dataci.plugins.decorators import stage
-
-logger = logging.getLogger(__name__)
-
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-
-
-@stage
-def select_data(df, num_samples: int, model_name, strategy: str = 'RandomSampling', device: str = None):
-    text_list = df['text'].tolist()
-    device = device or 'cuda' if torch.cuda.is_available() else 'cpu'
-
-    # Start ALaaS server in a separate process
-    logger.info('Start AL Worker')
-    al_worker = TorchALWorker(
-        model_name=model_name,
-        model_repo="huggingface/pytorch-transformers",
-        device=device,
-        strategy=strategy,
-        minibatch_size=1024,
-        tokenizer_model="bert-base-uncased",
-        task="text-classification",
-    )
-    # Monkey patch the model
-    tokenizer = AutoTokenizer.from_pretrained(al_worker._tokenizer_model)
-    al_worker._model = pipeline(
-        al_worker._task,
-        model=al_worker._model_name,
-        tokenizer=tokenizer,
-        device=al_worker._convert_torch_device(),
-        padding=True, truncation=True, max_length=256, return_all_scores=True
-    )
-
-    # Prepare data for ALWorker
-    doc_list = []
-    for txt in text_list:
-        doc_list.append(Document(text=txt, mime_type='text'))
-
-    queries = al_worker.query(
-        DocumentArray(doc_list),
-        parameters={'budget': num_samples, 'n_drop': None}
-    ).to_list()
-    query_df = pd.DataFrame(queries, columns=['text'])
-
-    # Get back selected rows
-    logger.info('Get selected rows by selected text')
-    selected_df = df.merge(query_df, on='text', how='inner')
-
-    return selected_df
+By calling the `data_selection` function (later in pipeline define), it randomly select 5000 data from the input
+dataset:
+```python
+@dag(...)
+def sentiment_analysis():
+    ...
+    data_selection_df = data_selection(text_aug_dataset, num_samples=5000, strategy='RandomSampling')
+    ...
 ```
 
 ## Stage 3: text classification training and offline evaluation
@@ -162,7 +120,7 @@ def sentiment_analysis():
 
     text_aug_df = text_augmentation(raw_dataset_train)
     text_aug_dataset = Dataset(name='text_aug', dataset_files=text_aug_df)
-    data_selection_df = select_data(text_aug_dataset, 5000, 'bert-base-uncased')
+    data_selection_df = data_selection(text_aug_dataset, num_samples=5000, strategy='RandomSampling')
     data_select_dataset = Dataset(name='data_selection', dataset_files=data_selection_df, file_reader=None)
     train_outputs = train_text_classification(train_dataset=data_select_dataset, test_dataset=raw_dataset_val)
 
