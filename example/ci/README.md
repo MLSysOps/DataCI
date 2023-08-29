@@ -1,14 +1,5 @@
 ## 1. Initialize the project
 
-```shell
-bash init.sh
-```
-
-## 2. Build Text Augmentation Workflow V1
-
-```shell
-python build_workflow_v1.py
-```
 
 ## 3. Build CI for the workflow interactively
 

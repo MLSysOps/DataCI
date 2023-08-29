@@ -152,8 +152,8 @@ You may see the above example script [here](./example/text_process_ci.py).
 
 We have provided several examples to demonstrate the advanced usage of DataCI:
 
-- [Play with the CI](./example/ci/README.md)
 - [Continuous Text Classification Development with Streaming Data](example/continuous_text_classification_dev/README.md)
+- [DataCI Playground](./example/ci/README.md) (WIP)
 
 ## Citation :seedling:
 

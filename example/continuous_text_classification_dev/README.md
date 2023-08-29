@@ -2,11 +2,11 @@ In this tutorial, we are simulate a real-world case by using Yelp dataset and se
 sentiment analysis pipeline in a streaming mode.
 
 The scripts of this tutorial is available, you may run them at:
-
-- [Section 1: Prepare the Yelp Dataset as Streaming Data](./1.prepare_yelp_dataset.py)
-- [Section 2: Build a Sentiment Analysis Pipeline](./2.build_sentiment_analysis_pipeline.py)
-- [Section 3: Simulate the Streaming Data Settings](./3.simulate_streaming_data.py)
-- [Section 4: Continuously improve the data pipeline](./4.continuously_improve_data_pipeline.py)
+- [Before We Start](#0-before-we-start)
+- [Section 1: Prepare the Yelp Dataset as Streaming Data](#1-prepare-the-yelp-dataset-as-streaming-data) [:scroll: code](./1.prepare_yelp_dataset_as_streaming_data.py)
+- [Section 2: Build a Sentiment Analysis Pipeline](#2-build-a-sentiment-analysis-pipeline) [:scroll: code](./2.build_sentiment_analysis_pipeline.py)
+- [Section 3: Simulate the Streaming Data Settings](#3-simulate-the-streaming-data-settings) [:scroll: code](./3.simulate_streaming_data.py)
+- [Section 4: Continuously improve the data pipeline](#4-continuously-improve-the-data-pipeline) [:scroll: code](./4.continuously_improve_data_pipeline.py)
 
 # 0. Before We Start
 

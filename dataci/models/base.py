@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Author: Li Yuanming
-Email: yuanming.li@alibaba-inc.com
+Email: yuanmingleee@gmail.com
 Date: May 03, 2023
 """
 import abc
