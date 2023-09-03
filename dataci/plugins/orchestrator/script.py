@@ -9,6 +9,8 @@ DataCI Workflow and Stage script extractor
 """
 import ast
 import inspect
+import os
+import tokenize
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -29,7 +31,8 @@ def locate_main_block(tree):
         if not (len(ops) == 1 and isinstance(ops[0], ast.Eq)):
             continue
         # Check comparators == '__main__'
-        if not (len(comparators) == 1 and isinstance(comparators[0], ast.Constant) and comparators[0].value == '__main__'):
+        if not (len(comparators) == 1 and isinstance(comparators[0], ast.Constant) and comparators[
+            0].value == '__main__'):
             continue
         nodes.append(node)
 
@@ -138,3 +141,52 @@ def locate_dag_function(tree, dag_name: 'str', dag_deco_cls='dataci.plugins.deco
             dag_nodes.append(node)
 
     return dag_nodes
+
+
+def get_source_segment(script: 'str', node: 'ast.AST', *, padded: 'bool' = False):
+    """Get source code segment of the *source* that generated *node*.
+    Fix for ast.get_source_segment() in case of missing function decorator.
+
+    If some location information (`lineno`, `end_lineno`, `col_offset`,
+    or `end_col_offset`) is missing, return None.
+
+    If *padded* is `True`, the first line of a multi-line statement will
+    be padded with spaces to match its original position.
+    """
+    lines = list()
+    if isinstance(node, ast.FunctionDef):
+        for deco_node in node.decorator_list:
+            # To include '@' with decorator, shift the col_offset to the left by 1
+            deco_node.col_offset -= 1
+            lines.append(ast.get_source_segment(script, deco_node, padded=padded))
+            deco_node.col_offset += 1
+
+    # Get the node block padding
+    node_block_padding = node.body[-1].col_offset
+    node_end_lineno, node_end_col_offset = node.end_lineno, node.end_col_offset
+
+    # Patch line ending comment
+    tokens = list(tokenize.generate_tokens(iter(script.splitlines(keepends=True)).__next__))
+    for token in tokens:
+        # Locate the end of node token
+        if token.end[0] < node_end_lineno:
+            continue
+        if token.end[0] == node_end_lineno and token.end[1] <= node_end_col_offset:
+            continue
+        # At the node's end line, search for the first comment token: xxxx # comment
+        if token.start[0] == node_end_lineno and token.type == tokenize.COMMENT:
+            node.end_col_offset = token.end[1]
+            continue
+        # Only allow comment / NL  / Newline token after the node's end line
+        if token.type not in (tokenize.COMMENT, tokenize.NL, tokenize.NEWLINE):
+            break
+        # Search for comment lines in the node block, otherwise stop
+        elif token.type == tokenize.COMMENT:
+            if token.start[1] != node_block_padding:
+                break
+            node.end_lineno, node.end_col_offset = token.end
+
+    lines.append(ast.get_source_segment(script, node, padded=padded))
+    node.end_lineno, node.end_col_offset = node_end_lineno, node_end_col_offset
+
+    return '\n'.join(lines)
