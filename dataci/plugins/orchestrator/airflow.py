@@ -5,12 +5,12 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Jun 11, 2023
 """
+import ast
 import inspect
 import re
 import subprocess
 import sys
 from pathlib import Path
-from textwrap import indent
 from typing import TYPE_CHECKING
 
 import networkx as nx
@@ -19,7 +19,8 @@ from airflow.models import DAG as _DAG
 from airflow.operators.python import PythonOperator as _PythonOperator
 
 from dataci.models import Workflow, Stage, Dataset
-from dataci.plugins.orchestrator.utils import parse_func_params
+from dataci.plugins.orchestrator.script import locate_main_block, get_source_segment, \
+    locate_dag_function
 from dataci.server.trigger import Trigger as _Trigger, EVENT_QUEUE, QUEUE_END
 
 if TYPE_CHECKING:
@@ -88,6 +89,16 @@ class DAG(Workflow, _DAG):
             )
             script = import_pattern.sub('', script_origin)
 
+            tree = ast.parse(script)
+            remove_nodes = list()
+            # __main__ block
+            remove_nodes.extend(locate_main_block(tree))
+            remove_code_snippets = list()
+            for n in remove_nodes:
+                remove_code_snippets.append(get_source_segment(script, n, padded=True))
+            for snippet in remove_code_snippets:
+                script = script.replace(snippet, '')
+
             # Insert the stage scripts before the DAG script:
             for stage in self.stages:
                 stage_script = stage.script
@@ -95,11 +106,6 @@ class DAG(Workflow, _DAG):
                 if stage_script in script or stage_script in script_origin:
                     continue
                 script = stage_script + '\n' * 2 + script
-
-            # Remove the __main__ guard
-            script = re.sub(
-                r'if\s+__name__\s+==\s+(?:"__main__"|\'__main__\'):(\n\s{4}.*)+', '', script
-            )
 
             self._script = script.strip()
         return self._script
@@ -115,12 +121,6 @@ class DAG(Workflow, _DAG):
         publish_file_path.parent.mkdir(parents=True, exist_ok=True)
         # Adjust the workflow name
         # Use workspace__name__version as dag id
-        # Match @dag(...) pattern
-        #    ([^\S\r\n]*) match group matches the indent before @dag(...)
-        #    (?:[^()]*\([^()]*\))*  non-capture match group avoid nested round brackets in @dag(...) call
-        #    ((?:[^()]*\([^()]*\))*[^()]*) match group matches everything in @dag(...) call
-        dag_decorator_pattern = re.compile(r'([^\S\r\n]*)@dag\(((?:[^()]*\([^()]*\))*[^()]*)\)',
-                                           flags=re.MULTILINE | re.DOTALL)
 
         script = self.script
         # FIXME: we need some trick for airflow to recognize the dag
@@ -130,27 +130,34 @@ class DAG(Workflow, _DAG):
                  script
 
         # Parse the dag id from @dag(...) call
-        dag_decorator_match_grps = dag_decorator_pattern.findall(script)
-        if len(dag_decorator_match_grps) != 1:
+        dag_nodes, deco_nodes = locate_dag_function(ast.parse(script), self.name)
+        if len(dag_nodes) != 1:
             raise ValueError(
                 f'@dag(...) decorator is not found or multiple @dag(...) decorators are '
                 f'found in dag definition: \n{script}'
             )
+        dag_node, deco_node = dag_nodes[0], deco_nodes[0]
 
         from ..decorators import dag as dag_func
 
-        dag_decorator_indent, dag_decorator_args = dag_decorator_match_grps[0]
-        dag_args, dag_kwargs = parse_func_params(dag_decorator_args)
         # get dag_id
+        # TODO: use full syntax tree parser to get and modify the dag_id https://github.com/Instagram/LibCST
+        dag_args, dag_kwargs = deco_node.args, {kwarg.arg: kwarg.value for kwarg in deco_node.keywords}
         bound = inspect.signature(dag_func).bind(*dag_args, **dag_kwargs)
-        # replace dag_id with workspace__name__version
-        bound.arguments['dag_id'] = f'"{self.backend_id}"'
+        dag_id = ast.literal_eval(bound.arguments.get('dag_id', 'None'))
+        deco_node.col_offset -= 1
+        deco_code = get_source_segment(script, deco_node, padded=True)
+        deco_node.col_offset += 1
+        if dag_id is None:
+            # Add dag_id="workspace--name--version" to @dag(...) call
+            new_deco_code = re.sub(r'@dag\s*\(', f'@dag("{self.backend_id}", ', deco_code, 1)
+        else:
+            # Replace dag_id with workspace__name__version
+            new_deco_code = deco_code.replace(dag_id, self.backend_id, 1)
         # replace @dag(...) call with @dag(dag_id="workspace__name__version", ...)
-        dag_args, dag_kwargs = bound.args, bound.kwargs
-        dag_decorator_args = indent(',\n'.join(
-            dag_args + tuple(f'{arg_name}={arg_value}' for arg_name, arg_value in dag_kwargs.items())
-        ), dag_decorator_indent + ' ' * 4)
-        script = dag_decorator_pattern.sub(f'@dag(\n{dag_decorator_args}\n)', script)
+        dag_code_snippet = get_source_segment(script, dag_node, padded=True)
+        new_dag_code_snippet = dag_code_snippet.replace(deco_code, new_deco_code, 1)
+        script = script.replace(dag_code_snippet, new_dag_code_snippet, 1)
 
         # Remove the published file if exists
         with open(publish_file_path, 'w') as f:
@@ -241,10 +248,15 @@ class PythonOperator(Stage, _PythonOperator):
             with open(fileloc, 'r') as f:
                 script = f.read()
 
-            # Remove the __main__ guard
-            script = re.sub(
-                r'if\s+__name__\s+==\s+(?:"__main__"|\'__main__\'):(\n\s{4}.*)+', '', script
-            )
+            tree = ast.parse(script)
+            remove_nodes = list()
+            # __main__ block
+            remove_nodes.extend(locate_main_block(tree))
+            remove_code_snippets = list()
+            for n in remove_nodes:
+                remove_code_snippets.append(get_source_segment(script, n, padded=True))
+            for snippet in remove_code_snippets:
+                script = script.replace(snippet, '')
             self._script = script.strip()
         return self._script
 
