@@ -51,6 +51,7 @@ class Stage(BaseModel):
         self.logger = logging.getLogger(__name__)
         self._backend = 'airflow'
         self.params = dict()
+        self._fileloc = None
         self._script = None
 
     @property
@@ -67,6 +68,10 @@ class Stage(BaseModel):
                 source_code = inspect.getsource(getattr(self, '__wrapped__'))
             self._script = source_code
         return self._script
+
+    @property
+    def fileloc(self):
+        return self._fileloc
 
     @abc.abstractmethod
     def test(self, *args, **kwargs):
@@ -99,17 +104,11 @@ class Stage(BaseModel):
     def from_dict(cls, config: dict):
         from dataci.decorators.base import DecoratedOperatorStageMixin
 
-        # Get script from stage code directory
-        workspace = Workspace(config['workspace'])
-        with open(workspace.stage_dir / config['script_path']) as f:
-            script = f.read()
-
-        config['script'] = script
         # Build class object from script
         # TODO: make the build process more secure with sandbox / allowed safe methods
         local_dict = locals()
         # Disable the workflow build in script
-        script = 'import dataci\ndataci.config.DISABLE_WORKFLOW_BUILD.set()\n' + script
+        script = 'import dataci\ndataci.config.DISABLE_WORKFLOW_BUILD.set()\n' + config['script']
         exec(script, None, local_dict)
         for v in local_dict.copy().values():
             # Stage is instantiated by operator class / a function decorated by @stage
@@ -200,6 +199,15 @@ class Stage(BaseModel):
             config = get_one_stage_by_tag(workspace, name, version_or_tag)
         else:
             config = get_one_stage_by_version(workspace, name, version_or_tag)
+
+        if config is None:
+            return
+        # Get script from stage code directory
+        workspace = Workspace(config['workspace'])
+        with open(workspace.stage_dir / config['script_path']) as f:
+            script = f.read()
+        config['script'] = script
+
         stage = cls.from_dict(config)
         return stage
 

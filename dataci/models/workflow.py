@@ -111,24 +111,17 @@ class Workflow(BaseModel, ABC):
 
     @classmethod
     def from_dict(cls, config: 'dict'):
-        # Get script from stage code directory
-        workspace = Workspace(config['workspace'])
-        with (workspace.workflow_dir / config['name'] / config['version']).with_suffix('.py').open() as f:
-            script = f.read()
-        # Update script
-        config['script'] = script
-
         # Build class object from script
         # TODO: make the build process more secure with sandbox / allowed safe methods
         local_dict = locals()
-        exec(script, local_dict, local_dict)
+        exec(config['script'], local_dict, local_dict)
         for v in local_dict.copy().values():
             # Stage is instantiated by operator class / a function decorated by @stage
             if isinstance(v, Workflow):
                 self = v
                 break
         else:
-            raise ValueError(f'Workflow not found by script:\n{script}')
+            raise ValueError(f'Workflow not found by script:\n{config["script"]}')
         return self.reload(config)
 
     def __repr__(self) -> str:
@@ -256,6 +249,12 @@ class Workflow(BaseModel, ABC):
             if version.lower() == 'none':
                 version = None
             config = get_one_workflow_by_version(workspace, name, version)
+        # Get script from stage code directory
+        workspace = Workspace(config['workspace'])
+        with (workspace.workflow_dir / config['name'] / config['version']).with_suffix('.py').open() as f:
+            script = f.read()
+        # Update script
+        config['script'] = script
 
         return cls.from_dict(config)
 

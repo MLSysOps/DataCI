@@ -7,6 +7,7 @@ Date: Jun 11, 2023
 """
 import ast
 import inspect
+import os.path
 import re
 import subprocess
 import sys
@@ -79,15 +80,10 @@ class DAG(Workflow, _DAG):
     def script(self):
         # TODO: pack the multiple scripts into a zip file
         if self._script is None:
+            file_dict = dict()
+            fileloc_root_dir = Path(self.fileloc).parent
             with open(self.fileloc, 'r') as f:
-                script_origin = f.read()
-            # Remove stage import statements:
-            # from xxx import stage_name / import stage_name
-            stage_name_pattern = '|'.join([stage.name for stage in self.stages])
-            import_pattern = re.compile(
-                rf'^(?:from\s+[\w.]+\s+)?import\s+(?:{stage_name_pattern})[\r\t\f ]*\n', flags=re.MULTILINE
-            )
-            script = import_pattern.sub('', script_origin)
+                script = f.read()
 
             tree = ast.parse(script)
             remove_nodes = list()
@@ -98,17 +94,22 @@ class DAG(Workflow, _DAG):
                 remove_code_snippets.append(get_source_segment(script, n, padded=True))
             for snippet in remove_code_snippets:
                 script = script.replace(snippet, '')
+            file_dict[self.fileloc] = (script, [f'workflow:{self.name}'])
 
             # Insert the stage scripts before the DAG script:
             for stage in self.stages:
-                stage_script = stage.script
-                # Avoid double copy two stage within the same script
-                if stage_script in script or stage_script in script_origin:
-                    continue
-                script = stage_script + '\n' * 2 + script
+                # Already include
+                if stage.fileloc in file_dict:
+                    file_dict[stage.fileloc][1].append(f'stage:{stage.name}')
+                else:
+                    file_dict[stage.fileloc] = (stage.script, [f'stage:{stage.name}'])
 
-            self._script = script.strip()
-        return self._script
+            # Use relative path to root dir
+            self._script = [
+                (os.path.relpath(fileloc, fileloc_root_dir), *file_dict[fileloc])
+                for fileloc in sorted(file_dict.keys())
+            ]
+        return {script[0]: script[1] for script in self._script}
 
     def publish(self):
         """Publish the DAG to the backend."""
@@ -189,6 +190,7 @@ class PythonOperator(Stage, _PythonOperator):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._fileloc = inspect.getsourcefile(self.python_callable)
         self.__init_args = (*args, *kwargs.items())
 
     def execute_callable(self) -> 'Any':
@@ -244,8 +246,7 @@ class PythonOperator(Stage, _PythonOperator):
     @property
     def script(self):
         if self._script is None:
-            fileloc = inspect.getfile(self.python_callable)
-            with open(fileloc, 'r') as f:
+            with open(self.fileloc, 'r') as f:
                 script = f.read()
 
             tree = ast.parse(script)
