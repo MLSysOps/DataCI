@@ -6,12 +6,15 @@ Email: yuanmingleee@gmail.com
 Date: Jun 11, 2023
 """
 import ast
+import atexit
 import inspect
 import os.path
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 import networkx as nx
@@ -25,7 +28,7 @@ from dataci.plugins.orchestrator.script import locate_main_block, get_source_seg
 from dataci.server.trigger import Trigger as _Trigger, EVENT_QUEUE, QUEUE_END
 
 if TYPE_CHECKING:
-    from typing import Any
+    from typing import Any, List
 
 
 class DAG(Workflow, _DAG):
@@ -34,6 +37,7 @@ class DAG(Workflow, _DAG):
     over the DAGs.
     """
     BACKEND = 'airflow'
+    _script_tempdir_registry: 'List[TemporaryDirectory]' = list()
 
     def __init__(self, dag_id, *args, **kwargs):
         # If dag id is overridden by workspace--name--version, extract the name
@@ -80,7 +84,11 @@ class DAG(Workflow, _DAG):
     def script(self):
         # TODO: pack the multiple scripts into a zip file
         if self._script is None:
-            file_dict = dict()
+            tempdir_obj = TemporaryDirectory(dir=self.workspace.tmp_dir)
+            # Add to registry to remove at exit
+            DAG._script_tempdir_registry.append(tempdir_obj)
+            # File list: file absolute path
+            filelist = list()
             fileloc_root_dir = Path(self.fileloc).parent
             with open(self.fileloc, 'r') as f:
                 script = f.read()
@@ -94,36 +102,35 @@ class DAG(Workflow, _DAG):
                 remove_code_snippets.append(get_source_segment(script, n, padded=True))
             for snippet in remove_code_snippets:
                 script = script.replace(snippet, '')
-            file_dict[self.fileloc] = (script, [f'workflow:{self.name}'])
+            self.entry_file = os.path.relpath(self.fileloc, fileloc_root_dir)
 
             # Insert the stage scripts before the DAG script:
             for stage in self.stages:
-                # Already include
-                if stage.fileloc in file_dict:
-                    file_dict[stage.fileloc][1].append(f'stage:{stage.name}')
-                else:
-                    file_dict[stage.fileloc] = (stage.script, [f'stage:{stage.name}'])
+                # Skip if already include in file list
+                if not stage.fileloc in filelist:
+                    filelist.append(stage.fileloc)
+                    fileloc = os.path.relpath(stage.fileloc, fileloc_root_dir)
+                    # Write to tempdir with relative path
+                    with open(os.path.join(tempdir_obj.name, fileloc), 'w') as f:
+                        f.write(stage.script)
 
-            # Use relative path to root dir
-            self._script = [
-                (os.path.relpath(fileloc, fileloc_root_dir), *file_dict[fileloc])
-                for fileloc in sorted(file_dict.keys())
-            ]
-        return {script[0]: script[1] for script in self._script}
+            self._script = tempdir_obj.name
+        return self._script
 
     def publish(self):
         """Publish the DAG to the backend."""
         super().publish()
         # Copy the script content to the published file
-        publish_file_path = (
-                Path.home() / 'airflow' / 'dags' /
-                self.workspace.name / self.name / self.version_tag).with_suffix('.py')
-        # Create parent dir if not exists
-        publish_file_path.parent.mkdir(parents=True, exist_ok=True)
-        # Adjust the workflow name
-        # Use workspace__name__version as dag id
+        publish_dir = Path.home() / 'airflow' / 'dags' / self.workspace.name / self.name / self.version_tag
+        # Clear dir if exists
+        if publish_dir.exists():
+            publish_dir.rmdir()
+        shutil.copytree(self.script, publish_dir)
 
-        script = self.script
+        # Adjust the workflow name in dag script (entry file)
+        # Use workspace__name__version as dag id
+        dag_script_path = publish_dir / self.entry_file
+        script = dag_script_path.read_text()
         # FIXME: we need some trick for airflow to recognize the dag
         #     Add a commented line with import airflow dag, otherwise airflow will not scan the script
         script = '# Dummy line to trigger airflow scan\n' \
@@ -161,11 +168,11 @@ class DAG(Workflow, _DAG):
         script = script.replace(dag_code_snippet, new_dag_code_snippet, 1)
 
         # Remove the published file if exists
-        with open(publish_file_path, 'w') as f:
+        with open(dag_script_path, 'w') as f:
             f.write(script)
 
         # Airflow re-serialize the dag file
-        subprocess.call([sys.executable, '-m', 'airflow', 'dags', 'reserialize', '-S', str(publish_file_path)])
+        subprocess.call([sys.executable, '-m', 'airflow', 'dags', 'reserialize', '-S', str(publish_dir)])
         # Airflow unpause the dag
         subprocess.call([sys.executable, '-m', 'airflow', 'dags', 'unpause', self.backend_id])
         self.logger.info(f'Published workflow: {self}')

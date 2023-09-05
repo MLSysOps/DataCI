@@ -9,9 +9,12 @@ import abc
 import itertools
 import json
 import logging
+import os
+import shutil
 from abc import ABC
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import networkx as nx
@@ -47,6 +50,7 @@ class Workflow(BaseModel, ABC):
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.logger = logging.getLogger(__name__)
         self.trigger: 'Sequence[Event]' = trigger or list()
+        self.entry_file = None
 
         self._script = None
         self._init_params = (args, kwargs)
@@ -103,6 +107,7 @@ class Workflow(BaseModel, ABC):
                 'edge': dag_edge_list,
             },
             'script': self.script,
+            'entry_file': self.entry_file,
             'timestamp': int(self.create_date.timestamp()) if self.create_date else None,
             'trigger': [str(evt) for evt in self.trigger],
             'input_datasets': [dataset.dict(id_only=True) for dataset in self.input_datasets],
@@ -113,8 +118,18 @@ class Workflow(BaseModel, ABC):
     def from_dict(cls, config: 'dict'):
         # Build class object from script
         # TODO: make the build process more secure with sandbox / allowed safe methods
-        local_dict = locals()
-        exec(config['script'], local_dict, local_dict)
+        local_dict = dict()
+        cwd = os.getcwd()
+        try:
+            os.chdir(config['script'])
+            entry_file = Path(config['entry_file'])
+            entry_module = '.'.join(entry_file.parts[:-1] + (entry_file.stem,))
+            exec(
+                f'import os, sys; sys.path.insert(0, os.getcwd()); from {entry_module} import *',
+                local_dict, local_dict
+            )
+        finally:
+            os.chdir(cwd)
         for v in local_dict.copy().values():
             # Stage is instantiated by operator class / a function decorated by @stage
             if isinstance(v, Workflow):
@@ -163,14 +178,18 @@ class Workflow(BaseModel, ABC):
         self.trigger = [Event.from_str(evt) for evt in config['trigger']]
         if 'script' in config:
             self._script = config['script']
+        if 'entry_file' in config:
+            self.entry_file = config['entry_file']
         if 'dag' in config:
             # Reload stages by stage config fetched from DB
             stage_mapping = dict()
             for stage_config in config['dag']['node'].values():
                 stage = Stage.get(f"{stage_config['workspace']}.{stage_config['name']}@{stage_config['version']}")
-                stage_mapping[stage.full_name] = stage
+                if stage is not None:
+                    stage_mapping[stage.full_name] = stage
             for stage in self.stages:
-                stage.reload(stage_mapping[stage.full_name].dict())
+                if stage.full_name in stage_mapping:
+                    stage.reload(stage_mapping[stage.full_name].dict())
         return self
 
     def save(self):
@@ -195,12 +214,13 @@ class Workflow(BaseModel, ABC):
         # Update create date
         config['timestamp'] = int(datetime.now().timestamp())
 
-        # Save the stage script to the workspace stage directory
+        # Copy the workflow temp folder to the workspace stage directory
         save_dir = self.workspace.workflow_dir / str(config['name'])
-        save_file_path = (save_dir / config['version']).with_suffix('.py')
-        save_dir.mkdir(parents=True, exist_ok=True)
-        with open(save_file_path, 'w') as f:
-            f.write(config['script'])
+        save_file_dir = save_dir / config['version']
+        if save_file_dir.exists():
+            save_file_dir.rmdir()
+        shutil.copytree(config['script'], save_file_dir)
+        config['script'] = str(save_file_dir)
 
         # Save the workflow
         create_one_workflow(config)
