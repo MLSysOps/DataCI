@@ -6,7 +6,6 @@ Email: yuanmingleee@gmail.com
 Date: Jun 11, 2023
 """
 import ast
-import atexit
 import inspect
 import os.path
 import re
@@ -45,6 +44,8 @@ class DAG(Workflow, _DAG):
             name = dag_id.split('--')[1]
         else:
             name = dag_id
+        # Preserve the script tempdir to prevent it from auto cleanup
+        self.__script_tempdir = None
         super().__init__(name, *args, dag_id=dag_id, **kwargs)
 
     @property
@@ -86,10 +87,11 @@ class DAG(Workflow, _DAG):
         if self._script is None:
             tempdir_obj = TemporaryDirectory(dir=self.workspace.tmp_dir)
             # Add to registry to remove at exit
-            DAG._script_tempdir_registry.append(tempdir_obj)
+            self.__script_tempdir = tempdir_obj
             # File list: file absolute path
             filelist = list()
             fileloc_root_dir = Path(self.fileloc).parent
+            self.entry_file = os.path.relpath(self.fileloc, fileloc_root_dir)
             with open(self.fileloc, 'r') as f:
                 script = f.read()
 
@@ -102,7 +104,10 @@ class DAG(Workflow, _DAG):
                 remove_code_snippets.append(get_source_segment(script, n, padded=True))
             for snippet in remove_code_snippets:
                 script = script.replace(snippet, '')
-            self.entry_file = os.path.relpath(self.fileloc, fileloc_root_dir)
+
+            with open(os.path.join(tempdir_obj.name, self.entry_file), 'w') as f:
+                f.write(script)
+            filelist.append(self.fileloc)
 
             # Insert the stage scripts before the DAG script:
             for stage in self.stages:
