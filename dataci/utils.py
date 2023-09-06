@@ -54,8 +54,10 @@ def hash_file(filepath):
     # Sort the file paths
     filepath_list.sort()
 
-    for filepath in filepath_list:
-        with open(filepath, 'rb') as f:
+    for path in filepath_list:
+        # hash relative name
+        sha_hash.update(os.path.relpath(path, filepath).encode())
+        with open(path, 'rb') as f:
             while True:
                 # Read file in as little chunks
                 buf = f.read(4096)

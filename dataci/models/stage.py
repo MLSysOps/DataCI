@@ -6,11 +6,13 @@ Email: yuanmingleee@gmail.com
 Date: Feb 20, 2023
 """
 import abc
-import inspect
 import json
 import logging
+import shutil
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 from dataci.db.stage import (
@@ -22,11 +24,11 @@ from dataci.db.stage import (
     get_many_stages, create_one_stage_tag
 )
 from .base import BaseModel
-from .workspace import Workspace
-from ..utils import hash_binary
+from ..utils import hash_binary, hash_file, cwd
 
 if TYPE_CHECKING:
-    from typing import Optional
+    from os import PathLike
+    from typing import Optional, Union
 
 
 class Stage(BaseModel):
@@ -51,27 +53,18 @@ class Stage(BaseModel):
         self.logger = logging.getLogger(__name__)
         self._backend = 'airflow'
         self.params = dict()
-        self._fileloc = None
-        self._script = None
+        self._script_dir: 'Optional[Union[PathLike, TemporaryDirectory]]' = None
+        self._entrypoint: 'Optional[Union[Path, PathLike]]' = None
 
     @property
     def script(self):
-        # Note: if the Stage object is created from exec, it is not able to get the source code by this function
-        # Therefore, we need to manual set the script passed to exec to self._script
-        if self._script is None:
-            # Get the source code of the class
-            try:
-                source_code = inspect.getsource(self.__class__)
-            except OSError:
-                # If the source code is not available, the class is probably dynamically generated
-                # We can get the source code from the wrapped function
-                source_code = inspect.getsource(getattr(self, '__wrapped__'))
-            self._script = source_code
-        return self._script
-
-    @property
-    def fileloc(self):
-        return self._fileloc
+        if self._script_dir is None:
+            return None
+        return {
+            'path':
+                self._script_dir.name if isinstance(self._script_dir, TemporaryDirectory) else str(self._script_dir),
+            'entrypoint': self._entrypoint,
+        }
 
     @abc.abstractmethod
     def test(self, *args, **kwargs):
@@ -97,28 +90,29 @@ class Stage(BaseModel):
             'version_tag': self.version_tag,
             'params': self.params,
             'script': self.script,
-            'timestamp': self.create_date.timestamp() if self.create_date else None,
+            'timestamp': int(self.create_date.timestamp()) if self.create_date else None,
         }
 
     @classmethod
     def from_dict(cls, config: dict):
         from dataci.decorators.base import DecoratedOperatorStageMixin
 
-        # Build class object from script
         # TODO: make the build process more secure with sandbox / allowed safe methods
-        local_dict = locals()
-        # Disable the workflow build in script
-        script = 'import dataci\ndataci.config.DISABLE_WORKFLOW_BUILD.set()\n' + config['script']
-        exec(script, None, local_dict)
+        local_dict = dict()
+        with cwd(config['script']['path']):
+            entry_file = Path(config['script']['entrypoint'])
+            entry_module = '.'.join(entry_file.parts[:-1] + (entry_file.stem,))
+            exec(
+                f'import os, sys; sys.path.insert(0, os.getcwd()); from {entry_module} import *',
+                local_dict, local_dict
+            )
         for v in local_dict.copy().values():
             # Stage is instantiated by operator class / a function decorated by @stage
-            if isinstance(v, (Stage, DecoratedOperatorStageMixin)) and \
-                    v.full_name == f'{config["workspace"]}.{config["name"]}':
+            if isinstance(v, DecoratedOperatorStageMixin):
                 self = v
                 break
         else:
-            raise ValueError(f'Stage not found by script: {config["script_path"]}\n{script}')
-
+            raise ValueError(f'Stage not found in directory:\n{config["script"]["path"]}')
         return self.reload(config)
 
     def __repr__(self):
@@ -136,7 +130,8 @@ class Stage(BaseModel):
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
         # Manual set the script to the stage object, as the script is not available in the exec context
         if 'script' in config:
-            self._script = config['script']
+            self._script_dir = config['script']['path']
+            self._entrypoint = config['script']['entrypoint']
         return self
 
     @property
@@ -146,7 +141,8 @@ class Stage(BaseModel):
             'workspace': config['workspace'],
             'name': config['name'],
             'params': config['params'],
-            'script': config['script'],
+            'script_dir': hash_file(config['script']['path']),
+            'entrypoint': config['script']['entrypoint'],
         }
         return hash_binary(json.dumps(fingerprint_dict, sort_keys=True).encode('utf-8'))
 
@@ -164,14 +160,13 @@ class Stage(BaseModel):
         config['timestamp'] = int(datetime.now().timestamp())
 
         # Save the stage script to the workspace stage directory
-        save_dir = self.workspace.stage_dir / str(config['name'])
-        save_file_path = (save_dir / config['version']).with_suffix('.py')
-        save_dir.mkdir(parents=True, exist_ok=True)
+        save_dir = self.workspace.stage_dir / str(config['name']) / str(version)
+        if save_dir.exists():
+            save_dir.rmdir()
+        shutil.copytree(config['script']['path'], save_dir)
 
         # Update the script path in the config
-        config['script_path'] = str(save_file_path.relative_to(self.workspace.stage_dir))
-        with open(save_file_path, 'w') as f:
-            f.write(config['script'])
+        config['script']['path'] = str(save_dir)
         create_one_stage(config)
         return self.reload(config)
 
@@ -202,11 +197,6 @@ class Stage(BaseModel):
 
         if config is None:
             return
-        # Get script from stage code directory
-        workspace = Workspace(config['workspace'])
-        with open(workspace.stage_dir / config['script_path']) as f:
-            script = f.read()
-        config['script'] = script
 
         stage = cls.from_dict(config)
         return stage

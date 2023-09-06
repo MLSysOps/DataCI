@@ -64,6 +64,7 @@ with db_connection:
         version     TEXT,
         params      TEXT,
         script_path TEXT,
+        entrypoint  TEXT,
         timestamp   INTEGER,
         PRIMARY KEY (workspace, name, version),
         UNIQUE (workspace, name, version)

@@ -92,21 +92,7 @@ class DAG(Workflow, _DAG):
             filelist = list()
             fileloc_root_dir = Path(self.fileloc).parent
             self.entry_file = os.path.relpath(self.fileloc, fileloc_root_dir)
-            with open(self.fileloc, 'r') as f:
-                script = f.read()
-
-            tree = ast.parse(script)
-            remove_nodes = list()
-            # __main__ block
-            remove_nodes.extend(locate_main_block(tree))
-            remove_code_snippets = list()
-            for n in remove_nodes:
-                remove_code_snippets.append(get_source_segment(script, n, padded=True))
-            for snippet in remove_code_snippets:
-                script = script.replace(snippet, '')
-
-            with open(os.path.join(tempdir_obj.name, self.entry_file), 'w') as f:
-                f.write(script)
+            shutil.copy2(self.fileloc, os.path.join(tempdir_obj.name, self.entry_file))
             filelist.append(self.fileloc)
 
             # Insert the stage scripts before the DAG script:
@@ -257,21 +243,13 @@ class PythonOperator(Stage, _PythonOperator):
 
     @property
     def script(self):
-        if self._script is None:
-            with open(self.fileloc, 'r') as f:
-                script = f.read()
-
-            tree = ast.parse(script)
-            remove_nodes = list()
-            # __main__ block
-            remove_nodes.extend(locate_main_block(tree))
-            remove_code_snippets = list()
-            for n in remove_nodes:
-                remove_code_snippets.append(get_source_segment(script, n, padded=True))
-            for snippet in remove_code_snippets:
-                script = script.replace(snippet, '')
-            self._script = script.strip()
-        return self._script
+        if self._script_dir is None:
+            self._script_dir = TemporaryDirectory(dir=self.workspace.tmp_dir)
+            self._entrypoint = os.path.basename(self._fileloc)
+            # Copy to tempdir with relative path
+            target_dir = os.path.join(self._script_dir.name, os.path.dirname(self._entrypoint))
+            shutil.copy2(self._fileloc, target_dir)
+        return super().script
 
 
 class Trigger(_Trigger):
