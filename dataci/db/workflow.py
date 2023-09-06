@@ -17,6 +17,8 @@ def create_one_workflow(config):
     """Create one workflow."""
     workflow_dict = deepcopy(config)
     workflow_dict['trigger'] = json.dumps(workflow_dict['trigger'], sort_keys=True)
+    workflow_dict['script_path'] = workflow_dict['script']['path']
+    workflow_dict['entrypoint'] = workflow_dict['script']['entrypoint']
     dag = workflow_dict.pop('dag')
     workflow_dict['dag'] = json.dumps(dag['edge'], sort_keys=True)
     workflow_dag_node_dict = dag['node']
@@ -25,8 +27,8 @@ def create_one_workflow(config):
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO workflow (workspace, name, version, timestamp, schedule, dag)
-            VALUES (:workspace, :name, :version, :timestamp, :trigger, :dag)
+            INSERT INTO workflow (workspace, name, version, timestamp, schedule, dag, script_path, entrypoint)
+            VALUES (:workspace, :name, :version, :timestamp, :trigger, :dag, :script_path, :entrypoint)
             """,
             workflow_dict,
         )
@@ -151,7 +153,17 @@ def get_one_workflow_by_version(workspace, name, version):
                     WHERE  workspace = :workspace
                     AND    name = :name
                 )
-                SELECT workspace, name, base.version, tag, base.timestamp, params, flag, schedule, dag
+                SELECT workspace
+                     , name
+                     , base.version
+                     , tag
+                     , base.timestamp
+                     , params
+                     , flag
+                     , schedule
+                     , dag
+                     , script_path
+                     , entrypoint
                 FROM   base
                 JOIN   latest
                 ON     base.timestamp = latest.timestamp
@@ -169,7 +181,7 @@ def get_one_workflow_by_version(workspace, name, version):
             cur.execute(
                 dedent("""
                 WITH base AS (
-                    SELECT workspace, name, version, timestamp, params, flag, schedule, dag
+                    SELECT *
                     FROM   workflow
                     WHERE  workspace = :workspace
                     AND    name = :name
@@ -182,7 +194,17 @@ def get_one_workflow_by_version(workspace, name, version):
                     AND    name = :name
                     AND    version = :version
                 )
-                SELECT workspace, name, base.version, tag, timestamp, params, flag, schedule, dag
+                SELECT workspace
+                     , name
+                     , base.version
+                     , tag
+                     , base.timestamp
+                     , params
+                     , flag
+                     , schedule
+                     , dag
+                     , script_path
+                     , entrypoint
                 FROM   base
                 LEFT JOIN tag
                 ON     base.version = tag.version
@@ -209,7 +231,11 @@ def get_one_workflow_by_version(workspace, name, version):
             'trigger': json.loads(workflow[7]),
             'dag': {
                 'edge': json.loads(workflow[8]),
-            }
+            },
+            'script': {
+                'path': workflow[9],
+                'entrypoint': workflow[10],
+            },
         }
         # Overwrite the query version for dag node
         version = workflow_dict['version']
@@ -255,12 +281,22 @@ def get_one_workflow_by_tag(workspace, name, tag):
                     FROM   tag
                 )
                 ,base AS (
-                    SELECT workspace, name, version, timestamp, params, flag, schedule, dag
+                    SELECT *
                     FROM   workflow
                     WHERE  workspace = :workspace
                     AND    name = :name
                 )
-                SELECT workspace, name, tag.version, tag.tag, timestamp, params, flag, schedule, dag
+                SELECT workspace
+                     , name
+                     , base.version
+                     , tag
+                     , base.timestamp
+                     , params
+                     , flag
+                     , schedule
+                     , dag
+                     , script_path
+                     , entrypoint
                 FROM   tag
                 JOIN   latest
                 ON     tag.tag = latest.tag
@@ -278,7 +314,7 @@ def get_one_workflow_by_tag(workspace, name, tag):
             cur.execute(
                 dedent("""
                 WITH base AS (
-                    SELECT workspace, name, version, timestamp, params, flag, schedule, dag
+                    SELECT *
                     FROM   workflow
                     WHERE  workspace = :workspace
                     AND    name = :name
@@ -290,7 +326,17 @@ def get_one_workflow_by_tag(workspace, name, tag):
                     AND    name = :name
                     AND    tag = :tag
                 )
-                SELECT workspace, name, base.version, tag, timestamp, params, flag, schedule, dag
+                SELECT workspace
+                     , name
+                     , base.version
+                     , tag
+                     , base.timestamp
+                     , params
+                     , flag
+                     , schedule
+                     , dag
+                     , script_path
+                     , entrypoint
                 FROM   base
                 JOIN   tag
                 ON     base.version = tag.version
@@ -314,7 +360,11 @@ def get_one_workflow_by_tag(workspace, name, tag):
             'trigger': json.loads(config[6]),
             'dag': {
                 'edge': json.loads(config[8]),
-            }
+            },
+            'script': {
+                'path': config[9],
+                'entrypoint': config[10],
+            },
         }
         # Overwrite the query version for dag node
         version = workflow_dict['version']

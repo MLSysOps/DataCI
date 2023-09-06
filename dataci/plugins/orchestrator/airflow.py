@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
+from collections import defaultdict
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
@@ -25,6 +26,7 @@ from dataci.models import Workflow, Stage, Dataset
 from dataci.plugins.orchestrator.script import locate_main_block, get_source_segment, \
     locate_dag_function
 from dataci.server.trigger import Trigger as _Trigger, EVENT_QUEUE, QUEUE_END
+from dataci.utils import hash_file
 
 if TYPE_CHECKING:
     from typing import Any, List
@@ -84,29 +86,45 @@ class DAG(Workflow, _DAG):
     @property
     def script(self):
         # TODO: pack the multiple scripts into a zip file
-        if self._script is None:
-            tempdir_obj = TemporaryDirectory(dir=self.workspace.tmp_dir)
-            # Add to registry to remove at exit
-            self.__script_tempdir = tempdir_obj
-            # File list: file absolute path
-            filelist = list()
-            fileloc_root_dir = Path(self.fileloc).parent
-            self.entry_file = os.path.relpath(self.fileloc, fileloc_root_dir)
-            shutil.copy2(self.fileloc, os.path.join(tempdir_obj.name, self.entry_file))
-            filelist.append(self.fileloc)
+        if self._script_dir is None:
+            self._script_dir = TemporaryDirectory(dir=self.workspace.tmp_dir)
+            target_dir = Path(self._script_dir.name)
+            entrypoint = Path(self.fileloc)
+            root_dir = entrypoint.parent
+            self._entrypoint = entrypoint.relative_to(root_dir).as_posix()
 
-            # Insert the stage scripts before the DAG script:
+            # Copy everything within the root dir
+            shutil.copytree(root_dir, target_dir, dirs_exist_ok=True)
+            # Scan dir
+            file_checksums, filemap = dict(), defaultdict(list)
+            for abs_file_name in target_dir.glob('**/*'):
+                if abs_file_name.is_dir():
+                    continue
+                rel_file_name = abs_file_name.relative_to(target_dir).as_posix()
+                file_checksums[rel_file_name] = hash_file(abs_file_name)
+                filemap[rel_file_name].append('workflow')
+
+            # Copy the script content of each stage to the workflow script dir
             for stage in self.stages:
-                # Skip if already include in file list
-                if not stage.fileloc in filelist:
-                    filelist.append(stage.fileloc)
-                    fileloc = os.path.relpath(stage.fileloc, fileloc_root_dir)
-                    # Write to tempdir with relative path
-                    with open(os.path.join(tempdir_obj.name, fileloc), 'w') as f:
-                        f.write(stage.script)
+                stage_root_dir = Path(stage.script['path'])
+                for abs_file_name in stage_root_dir.glob('**/*'):
+                    if abs_file_name.is_dir():
+                        continue
+                    rel_file_name = abs_file_name.relative_to(stage_root_dir).as_posix()
+                    file_checksum = hash_file(abs_file_name)
+                    if file_checksums.get(rel_file_name, file_checksum) != file_checksum:
+                        raise FileExistsError(
+                            f'Stage {stage.identifier} script file {rel_file_name} has different content '
+                            f'with other stages or workflow.\n'
+                            f'Found conflict source file from: {filemap[rel_file_name]}\n'
+                        )
+                    # Copy to workflow script dir with relative path
+                    if rel_file_name not in file_checksums:
+                        shutil.copy2(abs_file_name, target_dir)
+                        file_checksums[rel_file_name] = file_checksum
+                        filemap[rel_file_name].append(stage.identifier)
 
-            self._script = tempdir_obj.name
-        return self._script
+        return super().script
 
     def publish(self):
         """Publish the DAG to the backend."""

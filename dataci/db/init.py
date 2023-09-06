@@ -32,14 +32,16 @@ with db_connection:
     db_connection.executescript("""
     CREATE TABLE workflow
     (
-        workspace TEXT,
-        name      TEXT,
-        version   TEXT,
-        timestamp INTEGER,
-        params    TEXT,
-        flag      TEXT,
-        schedule  TEXT,
-        dag       TEXT,
+        workspace   TEXT,
+        name        TEXT,
+        version     TEXT,
+        timestamp   INTEGER,
+        params      TEXT,
+        flag        TEXT,
+        schedule    TEXT,
+        dag         TEXT,
+        script_path TEXT,
+        entrypoint  TEXT,
         PRIMARY KEY (workspace, name, version),
         UNIQUE (workspace, name, version)
     );

@@ -15,6 +15,7 @@ from abc import ABC
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 import networkx as nx
@@ -31,7 +32,7 @@ from .event import Event
 from .stage import Stage
 from .workspace import Workspace
 # from dataci.run import Run
-from ..utils import hash_binary
+from ..utils import hash_binary, cwd, hash_file
 
 if TYPE_CHECKING:
     from typing import Optional, Iterable, Sequence
@@ -50,9 +51,8 @@ class Workflow(BaseModel, ABC):
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.logger = logging.getLogger(__name__)
         self.trigger: 'Sequence[Event]' = trigger or list()
-        self.entry_file = None
-
-        self._script = None
+        self._script_dir = None
+        self._entrypoint = None
         self._init_params = (args, kwargs)
 
     @property
@@ -78,7 +78,13 @@ class Workflow(BaseModel, ABC):
 
     @property
     def script(self):
-        return self._script
+        if self._script_dir is None:
+            return None
+        return {
+            'path':
+                self._script_dir.name if isinstance(self._script_dir, TemporaryDirectory) else str(self._script_dir),
+            'entrypoint': self._entrypoint,
+        }
 
     def dict(self, id_only=False):
         if id_only:
@@ -107,7 +113,6 @@ class Workflow(BaseModel, ABC):
                 'edge': dag_edge_list,
             },
             'script': self.script,
-            'entry_file': self.entry_file,
             'timestamp': int(self.create_date.timestamp()) if self.create_date else None,
             'trigger': [str(evt) for evt in self.trigger],
             'input_datasets': [dataset.dict(id_only=True) for dataset in self.input_datasets],
@@ -119,24 +124,19 @@ class Workflow(BaseModel, ABC):
         # Build class object from script
         # TODO: make the build process more secure with sandbox / allowed safe methods
         local_dict = dict()
-        cwd = os.getcwd()
-        try:
-            os.chdir(config['script'])
-            entry_file = Path(config['entry_file'])
+        with cwd(config['script']['path']):
+            entry_file = Path(config['script']['entrypoint'])
             entry_module = '.'.join(entry_file.parts[:-1] + (entry_file.stem,))
             exec(
                 f'import os, sys; sys.path.insert(0, os.getcwd()); from {entry_module} import *',
                 local_dict, local_dict
             )
-        finally:
-            os.chdir(cwd)
         for v in local_dict.copy().values():
-            # Stage is instantiated by operator class / a function decorated by @stage
             if isinstance(v, Workflow):
                 self = v
                 break
         else:
-            raise ValueError(f'Workflow not found by script:\n{config["script"]}')
+            raise ValueError(f'Stage not found in directory:\n{config["script"]["path"]}')
         return self.reload(config)
 
     def __repr__(self) -> str:
@@ -161,8 +161,9 @@ class Workflow(BaseModel, ABC):
         fingerprint_dict = {
             'workspace': config['workspace'],
             'name': config['name'],
-            'script': config['script'],
             'stages': [stage.fingerprint for stage in self.stages],
+            'script_dir': hash_file(config['script']['path']),
+            'entrypoint': config['script']['entrypoint'],
         }
         return hash_binary(json.dumps(fingerprint_dict, sort_keys=True).encode('utf-8'))
 
@@ -177,9 +178,8 @@ class Workflow(BaseModel, ABC):
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
         self.trigger = [Event.from_str(evt) for evt in config['trigger']]
         if 'script' in config:
-            self._script = config['script']
-        if 'entry_file' in config:
-            self.entry_file = config['entry_file']
+            self._script_dir = config['script']['path']
+            self._entrypoint = config['script']['entrypoint']
         if 'dag' in config:
             # Reload stages by stage config fetched from DB
             stage_mapping = dict()
@@ -214,13 +214,13 @@ class Workflow(BaseModel, ABC):
         # Update create date
         config['timestamp'] = int(datetime.now().timestamp())
 
-        # Copy the workflow temp folder to the workspace stage directory
+        # Copy the workflow temp folder to the workspace workflow directory
         save_dir = self.workspace.workflow_dir / str(config['name'])
         save_file_dir = save_dir / config['version']
         if save_file_dir.exists():
             save_file_dir.rmdir()
-        shutil.copytree(config['script'], save_file_dir)
-        config['script'] = str(save_file_dir)
+        shutil.copytree(config['script']['path'], save_file_dir)
+        config['script']['path'] = save_file_dir.as_posix()
 
         # Save the workflow
         create_one_workflow(config)
@@ -269,12 +269,6 @@ class Workflow(BaseModel, ABC):
             if version.lower() == 'none':
                 version = None
             config = get_one_workflow_by_version(workspace, name, version)
-        # Get script from stage code directory
-        workspace = Workspace(config['workspace'])
-        with (workspace.workflow_dir / config['name'] / config['version']).with_suffix('.py').open() as f:
-            script = f.read()
-        # Update script
-        config['script'] = script
 
         return cls.from_dict(config)
 
