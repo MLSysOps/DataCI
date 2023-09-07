@@ -5,12 +5,17 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Jun 11, 2023
 """
+import ast
 import inspect
+import os.path
 import re
+import shutil
 import subprocess
 import sys
+import time
+from functools import partial
 from pathlib import Path
-from textwrap import indent
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 import networkx as nx
@@ -19,7 +24,8 @@ from airflow.models import DAG as _DAG
 from airflow.operators.python import PythonOperator as _PythonOperator
 
 from dataci.models import Workflow, Stage, Dataset
-from dataci.plugins.orchestrator.utils import parse_func_params
+from dataci.plugins.orchestrator.script import get_source_segment, \
+    locate_dag_function
 from dataci.server.trigger import Trigger as _Trigger, EVENT_QUEUE, QUEUE_END
 
 if TYPE_CHECKING:
@@ -67,7 +73,7 @@ class DAG(Workflow, _DAG):
                     dataset_names.add(v['name'] if isinstance(v, dict) else v)
         # Remove Ellipsis
         dataset_names.discard(...)
-        return map(Dataset.get, dataset_names)
+        return filter(None, map(partial(Dataset.get, not_found_ok=True), dataset_names))
 
     @property
     def output_datasets(self):
@@ -76,90 +82,92 @@ class DAG(Workflow, _DAG):
 
     @property
     def script(self):
-        # TODO: pack the multiple scripts into a zip file
-        if self._script is None:
-            with open(self.fileloc, 'r') as f:
-                script_origin = f.read()
-            # Remove stage import statements:
-            # from xxx import stage_name / import stage_name
-            stage_name_pattern = '|'.join([stage.name for stage in self.stages])
-            import_pattern = re.compile(
-                rf'^(?:from\s+[\w.]+\s+)?import\s+(?:{stage_name_pattern})[\r\t\f ]*\n', flags=re.MULTILINE
-            )
-            script = import_pattern.sub('', script_origin)
+        if self._script_dir is None:
+            base_dir = Path(self.fileloc)
+            self._script_dir = self._script_dir_local = base_dir.parent.as_posix()
+            self._entrypoint = os.path.basename(self.fileloc)
 
-            # Insert the stage scripts before the DAG script:
+        return super().script
+
+    @property
+    def stage_script_paths(self):
+        """Get all stage script relative paths."""
+        if len(self._stage_script_paths) == 0:
             for stage in self.stages:
-                stage_script = stage.script
-                # Avoid double copy two stage within the same script
-                if stage_script in script or stage_script in script_origin:
-                    continue
-                script = stage_script + '\n' * 2 + script
+                script_rel_dir = Path(stage.script['local_path']).relative_to(self.script['local_path']).as_posix()
+                self._stage_script_paths[stage.full_name] = script_rel_dir
 
-            # Remove the __main__ guard
-            script = re.sub(
-                r'if\s+__name__\s+==\s+(?:"__main__"|\'__main__\'):(\n\s{4}.*)+', '', script
-            )
-
-            self._script = script.strip()
-        return self._script
+        return self._stage_script_paths
 
     def publish(self):
         """Publish the DAG to the backend."""
         super().publish()
-        # Copy the script content to the published file
-        publish_file_path = (
-                Path.home() / 'airflow' / 'dags' /
-                self.workspace.name / self.name / self.version_tag).with_suffix('.py')
-        # Create parent dir if not exists
-        publish_file_path.parent.mkdir(parents=True, exist_ok=True)
-        # Adjust the workflow name
-        # Use workspace__name__version as dag id
-        # Match @dag(...) pattern
-        #    ([^\S\r\n]*) match group matches the indent before @dag(...)
-        #    (?:[^()]*\([^()]*\))*  non-capture match group avoid nested round brackets in @dag(...) call
-        #    ((?:[^()]*\([^()]*\))*[^()]*) match group matches everything in @dag(...) call
-        dag_decorator_pattern = re.compile(r'([^\S\r\n]*)@dag\(((?:[^()]*\([^()]*\))*[^()]*)\)',
-                                           flags=re.MULTILINE | re.DOTALL)
 
-        script = self.script
-        # FIXME: we need some trick for airflow to recognize the dag
-        #     Add a commented line with import airflow dag, otherwise airflow will not scan the script
-        script = '# Dummy line to trigger airflow scan\n' \
-                 '# from airflow.decorator import dag\n' + \
-                 script
+        with TemporaryDirectory(dir=self.workspace.tmp_dir) as tmp_dir:
+            # Copy to temp dir
+            shutil.copytree(self.script['local_path'], tmp_dir, dirs_exist_ok=True)
 
-        # Parse the dag id from @dag(...) call
-        dag_decorator_match_grps = dag_decorator_pattern.findall(script)
-        if len(dag_decorator_match_grps) != 1:
-            raise ValueError(
-                f'@dag(...) decorator is not found or multiple @dag(...) decorators are '
-                f'found in dag definition: \n{script}'
-            )
+            # Adjust the workflow name in dag script (entry file)
+            # Use workspace__name__version as dag id
+            dag_script_path = Path(tmp_dir) / self.script['entrypoint']
+            script = dag_script_path.read_text()
+            # FIXME: we need some trick for airflow to recognize the dag
+            #     Add a commented line with import airflow dag, otherwise airflow will not scan the script
+            script = '# Dummy line to trigger airflow scan\n' \
+                     '# from airflow.decorator import dag\n' + \
+                     script
 
-        from ..decorators import dag as dag_func
+            # Parse the dag id from @dag(...) call
+            dag_nodes, deco_nodes = locate_dag_function(ast.parse(script), self.name)
+            if len(dag_nodes) != 1:
+                raise ValueError(
+                    f'@dag(...) decorator is not found or multiple @dag(...) decorators are '
+                    f'found in dag definition: \n{script}'
+                )
+            dag_node, deco_node = dag_nodes[0], deco_nodes[0]
 
-        dag_decorator_indent, dag_decorator_args = dag_decorator_match_grps[0]
-        dag_args, dag_kwargs = parse_func_params(dag_decorator_args)
-        # get dag_id
-        bound = inspect.signature(dag_func).bind(*dag_args, **dag_kwargs)
-        # replace dag_id with workspace__name__version
-        bound.arguments['dag_id'] = f'"{self.backend_id}"'
-        # replace @dag(...) call with @dag(dag_id="workspace__name__version", ...)
-        dag_args, dag_kwargs = bound.args, bound.kwargs
-        dag_decorator_args = indent(',\n'.join(
-            dag_args + tuple(f'{arg_name}={arg_value}' for arg_name, arg_value in dag_kwargs.items())
-        ), dag_decorator_indent + ' ' * 4)
-        script = dag_decorator_pattern.sub(f'@dag(\n{dag_decorator_args}\n)', script)
+            from ..decorators import dag as dag_func
 
-        # Remove the published file if exists
-        with open(publish_file_path, 'w') as f:
-            f.write(script)
+            # get dag_id
+            # TODO: use full syntax tree parser to get and modify the dag_id https://github.com/Instagram/LibCST
+            dag_args, dag_kwargs = deco_node.args, {kwarg.arg: kwarg.value for kwarg in deco_node.keywords}
+            bound = inspect.signature(dag_func).bind(*dag_args, **dag_kwargs)
+            dag_id = ast.literal_eval(bound.arguments.get('dag_id', 'None'))
+            deco_node.col_offset -= 1
+            deco_code = get_source_segment(script, deco_node, padded=True)
+            deco_node.col_offset += 1
+            if dag_id is None:
+                # Add dag_id="workspace--name--version" to @dag(...) call
+                new_deco_code = re.sub(r'@dag\s*\(', f'@dag("{self.backend_id}", ', deco_code, 1)
+            else:
+                # Replace dag_id with workspace__name__version
+                new_deco_code = deco_code.replace(dag_id, self.backend_id, 1)
+            # replace @dag(...) call with @dag(dag_id="workspace__name__version", ...)
+            dag_code_snippet = get_source_segment(script, dag_node, padded=True)
+            new_dag_code_snippet = dag_code_snippet.replace(deco_code, new_deco_code, 1)
+            script = script.replace(dag_code_snippet, new_dag_code_snippet, 1)
+
+            with open(dag_script_path, 'w') as f:
+                f.write(script)
+
+            # Copy the script content to the published zip file
+            publish_path = (
+                    Path.home() / 'airflow' / 'dags' / self.workspace.name / self.name / self.version_tag
+            ).with_suffix('.zip')
+            # Remove the old published file
+            if publish_path.exists():
+                publish_path.unlink()
+            shutil.make_archive(publish_path.with_suffix(''), 'zip', tmp_dir)
 
         # Airflow re-serialize the dag file
-        subprocess.call([sys.executable, '-m', 'airflow', 'dags', 'reserialize', '-S', str(publish_file_path)])
+        subprocess.check_call([
+            sys.executable, '-m', 'airflow', 'dags', 'reserialize', '-S',
+            f'{publish_path}:{self.script["entrypoint"]}'
+        ])
+        # FIXME: Sleep for 3 seconds to wait for airflow to re-serialize the dag file
+        time.sleep(3)
         # Airflow unpause the dag
-        subprocess.call([sys.executable, '-m', 'airflow', 'dags', 'unpause', self.backend_id])
+        subprocess.check_call([sys.executable, '-m', 'airflow', 'dags', 'unpause', self.backend_id])
         self.logger.info(f'Published workflow: {self}')
 
         return self
@@ -236,17 +244,11 @@ class PythonOperator(Stage, _PythonOperator):
 
     @property
     def script(self):
-        if self._script is None:
-            fileloc = inspect.getfile(self.python_callable)
-            with open(fileloc, 'r') as f:
-                script = f.read()
-
-            # Remove the __main__ guard
-            script = re.sub(
-                r'if\s+__name__\s+==\s+(?:"__main__"|\'__main__\'):(\n\s{4}.*)+', '', script
-            )
-            self._script = script.strip()
-        return self._script
+        if self._script_dir is None:
+            fileloc = inspect.getsourcefile(self.python_callable)
+            self._script_dir = self._script_dir_local = Path(fileloc).parent.as_posix()
+            self._entrypoint = os.path.basename(fileloc)
+        return super().script
 
 
 class Trigger(_Trigger):

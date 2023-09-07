@@ -15,13 +15,15 @@ from dataci.config import DB_FILE
 def create_one_stage(stage_dict):
     stage_dict = stage_dict.copy()
     stage_dict['params'] = json.dumps(stage_dict['params'])
+    stage_dict['script_path'] = stage_dict['script']['path']
+    stage_dict['entrypoint'] = stage_dict['script']['entrypoint']
 
     with sqlite3.connect(DB_FILE) as conn:
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO stage (workspace, name, version, params, script_path, timestamp)
-            VALUES (:workspace, :name, :version, :params, :script_path, :timestamp)
+            INSERT INTO stage (workspace, name, version, params, script_path, entrypoint, timestamp)
+            VALUES (:workspace, :name, :version, :params, :script_path, :entrypoint, :timestamp)
             ;
             """,
             stage_dict
@@ -93,7 +95,7 @@ def get_one_stage_by_version(workspace, name, version='latest'):
             cur.execute(
                 dedent("""
                 WITH base AS (
-                    SELECT workspace, name, version, params, script_path, timestamp
+                    SELECT workspace, name, version, params, script_path, entrypoint, timestamp
                     FROM   stage
                     WHERE  workspace=:workspace
                     AND    name=:name
@@ -116,6 +118,7 @@ def get_one_stage_by_version(workspace, name, version='latest'):
                      , tag
                      , params
                      , script_path
+                     , entrypoint
                      , timestamp
                 FROM   base
                 LEFT JOIN tag
@@ -133,7 +136,7 @@ def get_one_stage_by_version(workspace, name, version='latest'):
             cur.execute(
                 dedent("""
                 WITH base AS (
-                    SELECT workspace, name, version, params, script_path, timestamp
+                    SELECT workspace, name, version, params, script_path, entrypoint, timestamp
                     FROM   stage
                     WHERE  workspace=:workspace
                     AND    name=:name
@@ -152,6 +155,7 @@ def get_one_stage_by_version(workspace, name, version='latest'):
                      , tag
                      , params
                      , script_path
+                     , entrypoint
                      , timestamp
                 FROM   base
                 LEFT JOIN tag
@@ -174,8 +178,11 @@ def get_one_stage_by_version(workspace, name, version='latest'):
         'version': po[2],
         'version_tag': f'v{po[3]}' if po[3] else None,
         'params': json.loads(po[4]),
-        'script_path': po[5],
-        'timestamp': po[6],
+        'script': {
+            'path': po[5],
+            'entrypoint': po[6],
+        },
+        'timestamp': po[7],
     } if po else None
 
 
@@ -186,7 +193,7 @@ def get_one_stage_by_tag(workspace, name, version_tag='latest'):
             cur.execute(
                 dedent("""
                 WITH base AS (
-                    SELECT workspace, name, version, params, script_path, timestamp
+                    SELECT workspace, name, version, params, script_path, entrypoint, timestamp
                     FROM   stage
                     WHERE  workspace=:workspace
                     AND    name=:name
@@ -209,6 +216,7 @@ def get_one_stage_by_tag(workspace, name, version_tag='latest'):
                         , tag
                         , params
                         , script_path
+                        , entrypoint
                         , timestamp
                 FROM   base
                 JOIN   tag
@@ -227,7 +235,7 @@ def get_one_stage_by_tag(workspace, name, version_tag='latest'):
             cur.execute(
                 dedent("""
                 WITH base AS (
-                    SELECT workspace, name, version, params, script_path, timestamp
+                    SELECT workspace, name, version, params, script_path, entrypoint, timestamp
                     FROM   stage
                     WHERE  workspace=:workspace
                     AND    name=:name
@@ -245,6 +253,7 @@ def get_one_stage_by_tag(workspace, name, version_tag='latest'):
                         , tag
                         , params
                         , script_path
+                        , entrypoint
                         , timestamp
                 FROM   base
                 JOIN   tag
@@ -268,8 +277,11 @@ def get_one_stage_by_tag(workspace, name, version_tag='latest'):
         'version': po[2],
         'version_tag': f'v{po[3]}',
         'params': json.loads(po[4]),
-        'script_path': po[5],
-        'timestamp': po[6],
+        'script': {
+            'path': po[5],
+            'entrypoint': po[6],
+        },
+        'timestamp': po[7],
     } if po else None
 
 

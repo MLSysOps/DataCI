@@ -32,14 +32,16 @@ with db_connection:
     db_connection.executescript("""
     CREATE TABLE workflow
     (
-        workspace TEXT,
-        name      TEXT,
-        version   TEXT,
-        timestamp INTEGER,
-        params    TEXT,
-        flag      TEXT,
-        schedule  TEXT,
-        dag       TEXT,
+        workspace   TEXT,
+        name        TEXT,
+        version     TEXT,
+        timestamp   INTEGER,
+        params      TEXT,
+        flag        TEXT,
+        schedule    TEXT,
+        dag         TEXT,
+        script_path TEXT,
+        entrypoint  TEXT,
         PRIMARY KEY (workspace, name, version),
         UNIQUE (workspace, name, version)
     );
@@ -64,6 +66,7 @@ with db_connection:
         version     TEXT,
         params      TEXT,
         script_path TEXT,
+        entrypoint  TEXT,
         timestamp   INTEGER,
         PRIMARY KEY (workspace, name, version),
         UNIQUE (workspace, name, version)
@@ -91,6 +94,7 @@ with db_connection:
         stage_name         TEXT,
         stage_version      TEXT,
         dag_node_id        INTEGER,
+        dag_node_path      TEXT,
         PRIMARY KEY (workflow_workspace, workflow_name, workflow_version, stage_workspace, stage_name, stage_version),
         UNIQUE (workflow_workspace, workflow_name, workflow_version, dag_node_id),
         FOREIGN KEY (workflow_workspace, workflow_name, workflow_version)

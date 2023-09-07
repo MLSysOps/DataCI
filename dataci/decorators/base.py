@@ -55,7 +55,7 @@ class DecoratedOperatorStageMixin:
         self._stage.from_dict(config)
         return self
 
-    def reload(self, config):
+    def reload(self, config=None):
         self._stage.reload(config)
         return self
 

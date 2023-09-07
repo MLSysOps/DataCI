@@ -1,7 +1,7 @@
 # Data CI
 
-DataCI is a comprehensive platform for track your data-centric AI pipeline in dynamic streaming data settings. It 
-provides rich APIs for seamless streaming dataset management, data-centric pipeline development, versioning 
+DataCI is a comprehensive platform for track your data-centric AI pipeline in dynamic streaming data settings. It
+provides rich APIs for seamless streaming dataset management, data-centric pipeline development, versioning
 and evaluation on streaming scenarios.
 
 DataCI is featured for
@@ -26,7 +26,7 @@ Manual install DataCI package from source code:
 ```shell
 pip install -e .
 ```
-:warning: For pipeline orchestration backend framework (i.e., [Apache-Airflow](https://airflow.apache.org/)), you may 
+:warning: For pipeline orchestration backend framework (i.e., [Apache-Airflow](https://airflow.apache.org/)), you may
 need to install manually since the version to meet your deployment can be different.
 Here is a snapshot for [quick installation](https://airflow.apache.org/docs/apache-airflow/stable/installation/installing-from-pypi.html):
 ```shell
@@ -162,10 +162,10 @@ and [DMLR@ICML'23](https://dmlr.ai/assets/accepted-papers/42/CameraReady/DataCI_
 
 ```bibtex
 @article{zhang2023dataci,
-    title = {DataCI: A Platform for Data-Centric AI on Streaming Data},
-    author = {Zhang, Huaizheng and Huang, Yizheng and Li, Yuanming},
-    journal = {arXiv preprint arXiv:2306.15538},
-    year = {2023}
+   title = {DataCI: A Platform for Data-Centric AI on Streaming Data},
+   author = {Zhang, Huaizheng and Huang, Yizheng and Li, Yuanming},
+   journal = {arXiv preprint arXiv:2306.15538},
+   year = {2023}
 }
 ```
 
