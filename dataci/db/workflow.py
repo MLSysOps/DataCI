@@ -41,14 +41,16 @@ def create_one_workflow(config):
                                           , stage_workspace
                                           , stage_name
                                           , stage_version
-                                          , dag_node_id)
+                                          , dag_node_id
+                                          , dag_node_path)
             VALUES ( :workflow_workspace
                    , :workflow_name
                    , :workflow_version
                    , :stage_workspace
                    , :stage_name
                    , :stage_version
-                   , :dag_node_id);
+                   , :dag_node_id
+                   , :dag_node_path);
             """,
             [
                 {
@@ -59,6 +61,7 @@ def create_one_workflow(config):
                     'stage_name': node['name'],
                     'stage_version': node['version'] or '',
                     'dag_node_id': node_id,
+                    'dag_node_path': node['path'],
                 }
                 for node_id, node in workflow_dag_node_dict.items()
             ],
@@ -241,7 +244,7 @@ def get_one_workflow_by_version(workspace, name, version):
         version = workflow_dict['version']
         cur.execute(
             f"""
-            SELECT stage_workspace, stage_name, stage_version, dag_node_id
+            SELECT stage_workspace, stage_name, stage_version, dag_node_id, dag_node_path
             FROM   workflow_dag_node
             WHERE  workflow_workspace=:workspace
             AND    workflow_name=:name
@@ -259,6 +262,7 @@ def get_one_workflow_by_version(workspace, name, version):
                 'workspace': node[0],
                 'name': node[1],
                 'version': node[2] if node[2] != '' else None,
+                'path': node[4],
             } for node in cur.fetchall()
         }
         return workflow_dict
@@ -289,7 +293,7 @@ def get_one_workflow_by_tag(workspace, name, tag):
                 SELECT workspace
                      , name
                      , base.version
-                     , tag
+                     , tag.tag
                      , base.timestamp
                      , params
                      , flag

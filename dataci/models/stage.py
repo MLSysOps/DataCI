@@ -53,17 +53,19 @@ class Stage(BaseModel):
         self.logger = logging.getLogger(__name__)
         self._backend = 'airflow'
         self.params = dict()
-        self._script_dir: 'Optional[Union[PathLike, TemporaryDirectory]]' = None
-        self._entrypoint: 'Optional[Union[Path, PathLike]]' = None
+        # Original local dir of the script, it will be None if stage load from database
+        self._script_dir_local: 'Optional[PathLike]' = None
+        self._script_dir: 'Optional[PathLike]' = None
+        self._entrypoint: 'Optional[PathLike]' = None
 
     @property
     def script(self):
         if self._script_dir is None:
             return None
         return {
-            'path':
-                self._script_dir.name if isinstance(self._script_dir, TemporaryDirectory) else str(self._script_dir),
+            'path': self._script_dir,
             'entrypoint': self._entrypoint,
+            'local_path': self._script_dir_local,
         }
 
     @abc.abstractmethod
@@ -162,7 +164,7 @@ class Stage(BaseModel):
         # Save the stage script to the workspace stage directory
         save_dir = self.workspace.stage_dir / str(config['name']) / str(version)
         if save_dir.exists():
-            save_dir.rmdir()
+            shutil.rmtree(save_dir)
         shutil.copytree(config['script']['path'], save_dir)
 
         # Update the script path in the config

@@ -94,6 +94,7 @@ with db_connection:
         stage_name         TEXT,
         stage_version      TEXT,
         dag_node_id        INTEGER,
+        dag_node_path      TEXT,
         PRIMARY KEY (workflow_workspace, workflow_name, workflow_version, stage_workspace, stage_name, stage_version),
         UNIQUE (workflow_workspace, workflow_name, workflow_version, dag_node_id),
         FOREIGN KEY (workflow_workspace, workflow_name, workflow_version)

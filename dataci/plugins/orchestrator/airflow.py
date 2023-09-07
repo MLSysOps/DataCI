@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 from collections import defaultdict
+from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
@@ -23,13 +24,12 @@ from airflow.models import DAG as _DAG
 from airflow.operators.python import PythonOperator as _PythonOperator
 
 from dataci.models import Workflow, Stage, Dataset
-from dataci.plugins.orchestrator.script import locate_main_block, get_source_segment, \
+from dataci.plugins.orchestrator.script import get_source_segment, \
     locate_dag_function
 from dataci.server.trigger import Trigger as _Trigger, EVENT_QUEUE, QUEUE_END
-from dataci.utils import hash_file
 
 if TYPE_CHECKING:
-    from typing import Any, List
+    from typing import Any
 
 
 class DAG(Workflow, _DAG):
@@ -38,7 +38,6 @@ class DAG(Workflow, _DAG):
     over the DAGs.
     """
     BACKEND = 'airflow'
-    _script_tempdir_registry: 'List[TemporaryDirectory]' = list()
 
     def __init__(self, dag_id, *args, **kwargs):
         # If dag id is overridden by workspace--name--version, extract the name
@@ -46,8 +45,6 @@ class DAG(Workflow, _DAG):
             name = dag_id.split('--')[1]
         else:
             name = dag_id
-        # Preserve the script tempdir to prevent it from auto cleanup
-        self.__script_tempdir = None
         super().__init__(name, *args, dag_id=dag_id, **kwargs)
 
     @property
@@ -76,7 +73,7 @@ class DAG(Workflow, _DAG):
                     dataset_names.add(v['name'] if isinstance(v, dict) else v)
         # Remove Ellipsis
         dataset_names.discard(...)
-        return map(Dataset.get, dataset_names)
+        return filter(None, map(partial(Dataset.get, not_found_ok=True), dataset_names))
 
     @property
     def output_datasets(self):
@@ -85,46 +82,22 @@ class DAG(Workflow, _DAG):
 
     @property
     def script(self):
-        # TODO: pack the multiple scripts into a zip file
         if self._script_dir is None:
-            self._script_dir = TemporaryDirectory(dir=self.workspace.tmp_dir)
-            target_dir = Path(self._script_dir.name)
-            entrypoint = Path(self.fileloc)
-            root_dir = entrypoint.parent
-            self._entrypoint = entrypoint.relative_to(root_dir).as_posix()
-
-            # Copy everything within the root dir
-            shutil.copytree(root_dir, target_dir, dirs_exist_ok=True)
-            # Scan dir
-            file_checksums, filemap = dict(), defaultdict(list)
-            for abs_file_name in target_dir.glob('**/*'):
-                if abs_file_name.is_dir():
-                    continue
-                rel_file_name = abs_file_name.relative_to(target_dir).as_posix()
-                file_checksums[rel_file_name] = hash_file(abs_file_name)
-                filemap[rel_file_name].append('workflow')
-
-            # Copy the script content of each stage to the workflow script dir
-            for stage in self.stages:
-                stage_root_dir = Path(stage.script['path'])
-                for abs_file_name in stage_root_dir.glob('**/*'):
-                    if abs_file_name.is_dir():
-                        continue
-                    rel_file_name = abs_file_name.relative_to(stage_root_dir).as_posix()
-                    file_checksum = hash_file(abs_file_name)
-                    if file_checksums.get(rel_file_name, file_checksum) != file_checksum:
-                        raise FileExistsError(
-                            f'Stage {stage.identifier} script file {rel_file_name} has different content '
-                            f'with other stages or workflow.\n'
-                            f'Found conflict source file from: {filemap[rel_file_name]}\n'
-                        )
-                    # Copy to workflow script dir with relative path
-                    if rel_file_name not in file_checksums:
-                        shutil.copy2(abs_file_name, target_dir)
-                        file_checksums[rel_file_name] = file_checksum
-                        filemap[rel_file_name].append(stage.identifier)
+            base_dir = Path(self.fileloc)
+            self._script_dir = self._script_dir_local = base_dir.parent.as_posix()
+            self._entrypoint = os.path.basename(self.fileloc)
 
         return super().script
+
+    @property
+    def stage_script_paths(self):
+        """Get all stage script relative paths."""
+        if len(self._stage_script_paths) == 0:
+            for stage in self.stages:
+                script_rel_dir = Path(stage.script['local_path']).relative_to(self.script['local_path']).as_posix()
+                self._stage_script_paths[stage.full_name] = script_rel_dir
+
+        return self._stage_script_paths
 
     def publish(self):
         """Publish the DAG to the backend."""
@@ -133,12 +106,12 @@ class DAG(Workflow, _DAG):
         publish_dir = Path.home() / 'airflow' / 'dags' / self.workspace.name / self.name / self.version_tag
         # Clear dir if exists
         if publish_dir.exists():
-            publish_dir.rmdir()
-        shutil.copytree(self.script, publish_dir)
+            shutil.rmtree(publish_dir)
+        shutil.copytree(self.script['path'], publish_dir)
 
         # Adjust the workflow name in dag script (entry file)
         # Use workspace__name__version as dag id
-        dag_script_path = publish_dir / self.entry_file
+        dag_script_path = publish_dir / self.script['entrypoint']
         script = dag_script_path.read_text()
         # FIXME: we need some trick for airflow to recognize the dag
         #     Add a commented line with import airflow dag, otherwise airflow will not scan the script
@@ -206,7 +179,6 @@ class PythonOperator(Stage, _PythonOperator):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._fileloc = inspect.getsourcefile(self.python_callable)
         self.__init_args = (*args, *kwargs.items())
 
     def execute_callable(self) -> 'Any':
@@ -262,11 +234,9 @@ class PythonOperator(Stage, _PythonOperator):
     @property
     def script(self):
         if self._script_dir is None:
-            self._script_dir = TemporaryDirectory(dir=self.workspace.tmp_dir)
-            self._entrypoint = os.path.basename(self._fileloc)
-            # Copy to tempdir with relative path
-            target_dir = os.path.join(self._script_dir.name, os.path.dirname(self._entrypoint))
-            shutil.copy2(self._fileloc, target_dir)
+            fileloc = inspect.getsourcefile(self.python_callable)
+            self._script_dir = self._script_dir_local = Path(fileloc).parent.as_posix()
+            self._entrypoint = os.path.basename(fileloc)
         return super().script
 
 

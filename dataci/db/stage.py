@@ -155,6 +155,7 @@ def get_one_stage_by_version(workspace, name, version='latest'):
                      , tag
                      , params
                      , script_path
+                     , entrypoint
                      , timestamp
                 FROM   base
                 LEFT JOIN tag
@@ -181,7 +182,7 @@ def get_one_stage_by_version(workspace, name, version='latest'):
             'path': po[5],
             'entrypoint': po[6],
         },
-        'timestamp': po[6],
+        'timestamp': po[7],
     } if po else None
 
 

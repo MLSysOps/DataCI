@@ -53,6 +53,8 @@ class Workflow(BaseModel, ABC):
         self.trigger: 'Sequence[Event]' = trigger or list()
         self._script_dir = None
         self._entrypoint = None
+        self._script_dir_local = None
+        self._stage_script_paths = dict()
         self._init_params = (args, kwargs)
 
     @property
@@ -81,10 +83,15 @@ class Workflow(BaseModel, ABC):
         if self._script_dir is None:
             return None
         return {
-            'path':
-                self._script_dir.name if isinstance(self._script_dir, TemporaryDirectory) else str(self._script_dir),
+            'path': self._script_dir,
             'entrypoint': self._entrypoint,
+            'local_path': self._script_dir_local,
         }
+
+    @property
+    @abc.abstractmethod
+    def stage_script_paths(self):
+        return self._stage_script_paths
 
     def dict(self, id_only=False):
         if id_only:
@@ -109,7 +116,10 @@ class Workflow(BaseModel, ABC):
             'name': self.name,
             'version': self.version,
             'dag': {
-                'node': {v: k.dict(id_only=True) for k, v in stage_mapping.items()},
+                'node': {
+                    v: {**k.dict(id_only=True), 'path': self.stage_script_paths[k.full_name]}
+                    for k, v in stage_mapping.items()
+                },
                 'edge': dag_edge_list,
             },
             'script': self.script,
@@ -181,12 +191,15 @@ class Workflow(BaseModel, ABC):
             self._script_dir = config['script']['path']
             self._entrypoint = config['script']['entrypoint']
         if 'dag' in config:
+            self._stage_script_paths.clear()
             # Reload stages by stage config fetched from DB
             stage_mapping = dict()
             for stage_config in config['dag']['node'].values():
                 stage = Stage.get(f"{stage_config['workspace']}.{stage_config['name']}@{stage_config['version']}")
                 if stage is not None:
                     stage_mapping[stage.full_name] = stage
+                # Update the stage script base path
+                self._stage_script_paths[stage.full_name] = stage_config['path']
             for stage in self.stages:
                 if stage.full_name in stage_mapping:
                     stage.reload(stage_mapping[stage.full_name].dict())
@@ -214,13 +227,46 @@ class Workflow(BaseModel, ABC):
         # Update create date
         config['timestamp'] = int(datetime.now().timestamp())
 
-        # Copy the workflow temp folder to the workspace workflow directory
-        save_dir = self.workspace.workflow_dir / str(config['name'])
-        save_file_dir = save_dir / config['version']
-        if save_file_dir.exists():
-            save_file_dir.rmdir()
-        shutil.copytree(config['script']['path'], save_file_dir)
-        config['script']['path'] = save_file_dir.as_posix()
+        # Copy the workflow code to the workspace workflow directory
+        save_dir = self.workspace.workflow_dir / str(config['name']) / config['version']
+        if save_dir.exists():
+            shutil.rmtree(save_dir)
+        # Copy the workflow script dir
+        from_dir = Path(config['script']['path'])
+        shutil.copytree(from_dir, save_dir)
+
+        # Scan workflow script dir
+        file_checksums, filemap = dict(), defaultdict(list)
+        for abs_file_name in from_dir.glob('**/*'):
+            if abs_file_name.is_dir():
+                continue
+            rel_file_name = abs_file_name.relative_to(from_dir).as_posix()
+            file_checksums[rel_file_name] = hash_file(abs_file_name)
+            # Record for debugging info
+            filemap[rel_file_name].append('workflow')
+
+        # Copy the script content of each stage to the save dir
+        for stage in self.stages:
+            dag_stage_rel_dir = Path(self.stage_script_paths[stage.full_name])
+            stage_root_dir = Path(stage.script['path'])
+            for abs_file_name in Path(stage_root_dir).glob('**/*'):
+                if abs_file_name.is_dir():
+                    continue
+                rel_file_name = dag_stage_rel_dir / abs_file_name.relative_to(stage_root_dir).as_posix()
+                file_checksum = hash_file(abs_file_name)
+                if file_checksums.get(rel_file_name, file_checksum) != file_checksum:
+                    raise FileExistsError(
+                        f'Stage {stage.identifier} script file {rel_file_name} has different content '
+                        f'with other stages or workflow.\n'
+                        f'Found conflict source file from: {filemap[rel_file_name]}\n'
+                    )
+                # Copy to workflow script dir with relative path
+                if rel_file_name not in file_checksums:
+                    shutil.copy2(abs_file_name, save_dir / dag_stage_rel_dir)
+                    file_checksums[rel_file_name] = file_checksum
+                    filemap[rel_file_name].append(stage.identifier)
+
+        config['script']['path'] = save_dir.as_posix()
 
         # Save the workflow
         create_one_workflow(config)
@@ -269,6 +315,8 @@ class Workflow(BaseModel, ABC):
             if version.lower() == 'none':
                 version = None
             config = get_one_workflow_by_version(workspace, name, version)
+        if config is None:
+            return
 
         return cls.from_dict(config)
 
