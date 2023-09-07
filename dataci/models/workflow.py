@@ -195,14 +195,15 @@ class Workflow(BaseModel, ABC):
             # Reload stages by stage config fetched from DB
             stage_mapping = dict()
             for stage_config in config['dag']['node'].values():
-                stage = Stage.get(f"{stage_config['workspace']}.{stage_config['name']}@{stage_config['version']}")
-                if stage is not None:
-                    stage_mapping[stage.full_name] = stage
+                stage_full_name = f"{stage_config['workspace']}.{stage_config['name']}"
+                config = Stage.get_config(f"{stage_full_name}@{stage_config['version']}")
+                if config is not None:
+                    stage_mapping[stage_full_name] = config
                 # Update the stage script base path
-                self._stage_script_paths[stage.full_name] = stage_config['path']
+                self._stage_script_paths[stage_full_name] = stage_config['path']
             for stage in self.stages:
                 if stage.full_name in stage_mapping:
-                    stage.reload(stage_mapping[stage.full_name].dict())
+                    stage.reload(stage_mapping[stage.full_name])
         return self
 
     def save(self):
@@ -241,7 +242,7 @@ class Workflow(BaseModel, ABC):
             if abs_file_name.is_dir():
                 continue
             rel_file_name = abs_file_name.relative_to(from_dir).as_posix()
-            file_checksums[rel_file_name] = hash_file(abs_file_name)
+            file_checksums[str(rel_file_name)] = hash_file(abs_file_name)
             # Record for debugging info
             filemap[rel_file_name].append('workflow')
 
@@ -252,7 +253,7 @@ class Workflow(BaseModel, ABC):
             for abs_file_name in Path(stage_root_dir).glob('**/*'):
                 if abs_file_name.is_dir():
                     continue
-                rel_file_name = dag_stage_rel_dir / abs_file_name.relative_to(stage_root_dir).as_posix()
+                rel_file_name = str(dag_stage_rel_dir / abs_file_name.relative_to(stage_root_dir).as_posix())
                 file_checksum = hash_file(abs_file_name)
                 if file_checksums.get(rel_file_name, file_checksum) != file_checksum:
                     raise FileExistsError(
@@ -262,7 +263,7 @@ class Workflow(BaseModel, ABC):
                     )
                 # Copy to workflow script dir with relative path
                 if rel_file_name not in file_checksums:
-                    shutil.copy2(abs_file_name, save_dir / dag_stage_rel_dir)
+                    shutil.copy2(abs_file_name, save_dir / rel_file_name)
                     file_checksums[rel_file_name] = file_checksum
                     filemap[rel_file_name].append(stage.identifier)
 

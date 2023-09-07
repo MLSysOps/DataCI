@@ -12,7 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
-from collections import defaultdict
+import time
 from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -102,61 +102,72 @@ class DAG(Workflow, _DAG):
     def publish(self):
         """Publish the DAG to the backend."""
         super().publish()
-        # Copy the script content to the published file
-        publish_dir = Path.home() / 'airflow' / 'dags' / self.workspace.name / self.name / self.version_tag
-        # Clear dir if exists
-        if publish_dir.exists():
-            shutil.rmtree(publish_dir)
-        shutil.copytree(self.script['path'], publish_dir)
 
-        # Adjust the workflow name in dag script (entry file)
-        # Use workspace__name__version as dag id
-        dag_script_path = publish_dir / self.script['entrypoint']
-        script = dag_script_path.read_text()
-        # FIXME: we need some trick for airflow to recognize the dag
-        #     Add a commented line with import airflow dag, otherwise airflow will not scan the script
-        script = '# Dummy line to trigger airflow scan\n' \
-                 '# from airflow.decorator import dag\n' + \
-                 script
+        with TemporaryDirectory(dir=self.workspace.tmp_dir) as tmp_dir:
+            # Copy to temp dir
+            shutil.copytree(self.script['local_path'], tmp_dir, dirs_exist_ok=True)
 
-        # Parse the dag id from @dag(...) call
-        dag_nodes, deco_nodes = locate_dag_function(ast.parse(script), self.name)
-        if len(dag_nodes) != 1:
-            raise ValueError(
-                f'@dag(...) decorator is not found or multiple @dag(...) decorators are '
-                f'found in dag definition: \n{script}'
-            )
-        dag_node, deco_node = dag_nodes[0], deco_nodes[0]
+            # Adjust the workflow name in dag script (entry file)
+            # Use workspace__name__version as dag id
+            dag_script_path = Path(tmp_dir) / self.script['entrypoint']
+            script = dag_script_path.read_text()
+            # FIXME: we need some trick for airflow to recognize the dag
+            #     Add a commented line with import airflow dag, otherwise airflow will not scan the script
+            script = '# Dummy line to trigger airflow scan\n' \
+                     '# from airflow.decorator import dag\n' + \
+                     script
 
-        from ..decorators import dag as dag_func
+            # Parse the dag id from @dag(...) call
+            dag_nodes, deco_nodes = locate_dag_function(ast.parse(script), self.name)
+            if len(dag_nodes) != 1:
+                raise ValueError(
+                    f'@dag(...) decorator is not found or multiple @dag(...) decorators are '
+                    f'found in dag definition: \n{script}'
+                )
+            dag_node, deco_node = dag_nodes[0], deco_nodes[0]
 
-        # get dag_id
-        # TODO: use full syntax tree parser to get and modify the dag_id https://github.com/Instagram/LibCST
-        dag_args, dag_kwargs = deco_node.args, {kwarg.arg: kwarg.value for kwarg in deco_node.keywords}
-        bound = inspect.signature(dag_func).bind(*dag_args, **dag_kwargs)
-        dag_id = ast.literal_eval(bound.arguments.get('dag_id', 'None'))
-        deco_node.col_offset -= 1
-        deco_code = get_source_segment(script, deco_node, padded=True)
-        deco_node.col_offset += 1
-        if dag_id is None:
-            # Add dag_id="workspace--name--version" to @dag(...) call
-            new_deco_code = re.sub(r'@dag\s*\(', f'@dag("{self.backend_id}", ', deco_code, 1)
-        else:
-            # Replace dag_id with workspace__name__version
-            new_deco_code = deco_code.replace(dag_id, self.backend_id, 1)
-        # replace @dag(...) call with @dag(dag_id="workspace__name__version", ...)
-        dag_code_snippet = get_source_segment(script, dag_node, padded=True)
-        new_dag_code_snippet = dag_code_snippet.replace(deco_code, new_deco_code, 1)
-        script = script.replace(dag_code_snippet, new_dag_code_snippet, 1)
+            from ..decorators import dag as dag_func
 
-        # Remove the published file if exists
-        with open(dag_script_path, 'w') as f:
-            f.write(script)
+            # get dag_id
+            # TODO: use full syntax tree parser to get and modify the dag_id https://github.com/Instagram/LibCST
+            dag_args, dag_kwargs = deco_node.args, {kwarg.arg: kwarg.value for kwarg in deco_node.keywords}
+            bound = inspect.signature(dag_func).bind(*dag_args, **dag_kwargs)
+            dag_id = ast.literal_eval(bound.arguments.get('dag_id', 'None'))
+            deco_node.col_offset -= 1
+            deco_code = get_source_segment(script, deco_node, padded=True)
+            deco_node.col_offset += 1
+            if dag_id is None:
+                # Add dag_id="workspace--name--version" to @dag(...) call
+                new_deco_code = re.sub(r'@dag\s*\(', f'@dag("{self.backend_id}", ', deco_code, 1)
+            else:
+                # Replace dag_id with workspace__name__version
+                new_deco_code = deco_code.replace(dag_id, self.backend_id, 1)
+            # replace @dag(...) call with @dag(dag_id="workspace__name__version", ...)
+            dag_code_snippet = get_source_segment(script, dag_node, padded=True)
+            new_dag_code_snippet = dag_code_snippet.replace(deco_code, new_deco_code, 1)
+            script = script.replace(dag_code_snippet, new_dag_code_snippet, 1)
+
+            with open(dag_script_path, 'w') as f:
+                f.write(script)
+
+            # Copy the script content to the published zip file
+            publish_path = (
+                    Path.home() / 'airflow' / 'dags' / self.workspace.name / self.name / self.version_tag
+            ).with_suffix('.zip')
+            # Remove the old published file
+            if publish_path.exists():
+                publish_path.unlink()
+            shutil.make_archive(publish_path.with_suffix(''), 'zip', tmp_dir)
 
         # Airflow re-serialize the dag file
-        subprocess.call([sys.executable, '-m', 'airflow', 'dags', 'reserialize', '-S', str(publish_dir)])
+        subprocess.check_call([
+            sys.executable, '-m', 'airflow', 'dags', 'reserialize', '-S',
+            f'{publish_path}:{self.script["entrypoint"]}'
+        ])
+        # Sleep for 3 seconds to wait for airflow to re-serialize the dag file
+        time.sleep(3)
         # Airflow unpause the dag
-        subprocess.call([sys.executable, '-m', 'airflow', 'dags', 'unpause', self.backend_id])
+        subprocess.check_call([sys.executable, '-m', 'airflow', 'dags', 'unpause', self.backend_id])
         self.logger.info(f'Published workflow: {self}')
 
         return self

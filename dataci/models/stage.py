@@ -189,19 +189,24 @@ class Stage(BaseModel):
         return self.reload(config)
 
     @classmethod
-    def get(cls, name, version=None):
-        """Get the stage from the workspace."""
+    def get_config(cls, name, version=None):
+        """Get the stage config from the workspace."""
         workspace, name, version_or_tag = cls.parse_data_model_get_identifier(name, version)
         if version_or_tag == 'latest' or version_or_tag.startswith('v'):
             config = get_one_stage_by_tag(workspace, name, version_or_tag)
         else:
             config = get_one_stage_by_version(workspace, name, version_or_tag)
 
+        return config
+
+    @classmethod
+    def get(cls, name, version=None):
+        """Get the stage from the workspace."""
+        config = cls.get_config(name, version)
         if config is None:
             return
 
-        stage = cls.from_dict(config)
-        return stage
+        return cls.from_dict(config)
 
     @classmethod
     def find(cls, stage_identifier, tree_view=False, all=False):
