@@ -164,7 +164,7 @@ class DAG(Workflow, _DAG):
             sys.executable, '-m', 'airflow', 'dags', 'reserialize', '-S',
             f'{publish_path}:{self.script["entrypoint"]}'
         ])
-        # Sleep for 3 seconds to wait for airflow to re-serialize the dag file
+        # FIXME: Sleep for 3 seconds to wait for airflow to re-serialize the dag file
         time.sleep(3)
         # Airflow unpause the dag
         subprocess.check_call([sys.executable, '-m', 'airflow', 'dags', 'unpause', self.backend_id])
