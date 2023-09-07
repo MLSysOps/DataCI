@@ -39,8 +39,8 @@ from dataci.models import Dataset
 
 DATA_URL_BASE = 'https://zenodo.org/record/8288433/files'
 
-yelp_review_train = Dataset('yelp_review_train', dataset_files=f'{DATA_URL_BASE}/yelp_review_train_2020-10.csv').publish()
-yelp_review_val = Dataset('yelp_review_val', dataset_files=f'{DATA_URL_BASE}/yelp_review_val_2020-10.csv').publish()
+yelp_review_train = Dataset('yelp_review_train', dataset_files=f'{DATA_URL_BASE}/yelp_review_train_2020-10.csv').publish('2020-10')
+yelp_review_val = Dataset('yelp_review_val', dataset_files=f'{DATA_URL_BASE}/yelp_review_val_2020-10.csv').publish('2020-10')
 ```
 
 # 2. Build a Sentiment Analysis Pipeline
@@ -75,7 +75,7 @@ the [Active Learning as a Service (ALaaS)](https://github.com/MLSysOps/Active-Le
 our data-centric function zoo:
 
 ```python
-from function_zoo.data_selection.alaas import data_selection
+from dataci.function_zoo.data_selection.alaas import data_selection
 ```
 You can always check the source code directory of the function by access its `script` attribute:
 ```python
@@ -102,7 +102,7 @@ To simplify the process, DataCI have provided a built-in text classification tra
 importing from our data-centric function zoo:
 
 ```python
-from function_zoo.benchmark import train_text_classification
+from dataci.function_zoo.benchmark import train_text_classification
 ```
 
 ## Define the sentiment analysis pipeline
@@ -171,8 +171,8 @@ from dataci.models import Dataset
 
 DATA_URL_BASE = 'https://zenodo.org/record/8288433/files'
 
-train_dataset = Dataset('yelp_review_train', dataset_files=f'{DATA_URL_BASE}/yelp_review_train_2020-11.csv').publish()
-val_dataset = Dataset('yelp_review_val', dataset_files=f'{DATA_URL_BASE}/yelp_review_val_2020-11.csv').publish()
+train_dataset = Dataset('yelp_review_train', dataset_files=f'{DATA_URL_BASE}/yelp_review_train_2020-11.csv').publish('2020-11')
+val_dataset = Dataset('yelp_review_val', dataset_files=f'{DATA_URL_BASE}/yelp_review_val_2020-11.csv').publish('2020-11')
 ````
 
 Run the pipeline with the new dataset:

@@ -5,8 +5,8 @@ from datetime import datetime
 import augly.text as textaugs
 
 from dataci.plugins.decorators import stage, dag, Dataset
-from function_zoo.data_selection.alaas import data_selection
-from function_zoo.benchmark import train_text_classification
+from dataci.function_zoo.data_selection.alaas import data_selection
+from dataci.function_zoo.benchmark import train_text_classification
 
 logger = logging.getLogger(__name__)
 
