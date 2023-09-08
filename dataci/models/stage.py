@@ -12,7 +12,6 @@ import shutil
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 from dataci.db.stage import (

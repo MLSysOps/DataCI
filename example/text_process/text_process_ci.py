@@ -7,10 +7,10 @@ Date: Aug 22, 2023
 """
 import augly.text as textaugs
 
-from dataci.plugins.decorators import stage as task
+from dataci.plugins.decorators import stage
 
 
-@task
+@stage
 def text_augmentation(df):
     aug_function = textaugs.ReplaceSimilarUnicodeChars()
     df['text'] = aug_function(df['text'].tolist())

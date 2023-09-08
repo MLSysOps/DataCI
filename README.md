@@ -24,7 +24,7 @@ This project is still under development. Please feel free to open an issue if yo
 
 Manual install DataCI package from source code:
 ```shell
-pip install -e .
+pip install .
 ```
 :warning: For pipeline orchestration backend framework (i.e., [Apache-Airflow](https://airflow.apache.org/)), you may
 need to install manually since the version to meet your deployment can be different.
@@ -53,16 +53,16 @@ dataci start
 ## Quick Start :truck:
 
 With few lines of modification, you can easily track every version of the input, output data and code for your existing
-data pipeline.
+data pipeline. You can also see the below example script [here :scroll:](./example/text_process/text_process_ci.py).
 
 1. Write a data augmentation stage:
 
     ```python
     import augly.text as textaugs
-    from dataci.plugins.decorators import stage as task
+    from dataci.plugins.decorators import stage
     
     
-    @task
+    @stage
     def text_augmentation(df):
         aug_function = textaugs.ReplaceSimilarUnicodeChars()
         df['text'] = aug_function(df['text'].tolist())
@@ -145,8 +145,6 @@ data pipeline.
    triggered and evaluate on the new version of streaming data.
    Go to [pipeline runs dashboard](http://localhost:8080/taskinstance/list/?_flt_3_dag_id=default--text_process_ci--v1)
    to check the pipeline run result.
-
-You may see the above example script [here](./example/text_process_ci.py).
 
 ## Examples :books:
 
