@@ -248,7 +248,10 @@ class Workflow(BaseModel, ABC):
 
         # Copy the script content of each stage to the save dir
         for stage in self.stages:
-            dag_stage_rel_dir = Path(self.stage_script_paths[stage.full_name])
+            if (dag_stage_rel_dir := self.stage_script_paths[stage.full_name]) is None:
+                # Skip the stage if the stage script is external
+                continue
+            dag_stage_rel_dir = Path(dag_stage_rel_dir)
             stage_root_dir = Path(stage.script['path'])
             for abs_file_name in Path(stage_root_dir).glob('**/*'):
                 if abs_file_name.is_dir():

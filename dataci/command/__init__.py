@@ -5,6 +5,8 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Feb 20, 2023
 """
+import shutil
+from pathlib import Path
 
 import click
 
@@ -34,6 +36,28 @@ def start():
     from dataci.server.server import main
 
     main()
+
+
+@cli.command()
+def reset():
+    """Reset DataCI meta database."""
+    # By import this module, the database will be reset.
+    from dataci.db import init  # noqa
+
+    # Remove all workspace
+    from dataci.config import CACHE_ROOT
+
+    workflow_names = list()
+    for p in CACHE_ROOT.iterdir():
+        if p.is_dir():
+            workflow_names.append(p.name)
+            shutil.rmtree(p)
+
+    # Remove all workflow published dag to airflow
+    for workflow_name in workflow_names:
+        dag_path = Path.home() / 'airflow' / 'dags' / workflow_name
+        if dag_path.exists():
+            shutil.rmtree(dag_path)
 
 
 @cli.command()

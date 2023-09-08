@@ -94,7 +94,13 @@ class DAG(Workflow, _DAG):
         """Get all stage script relative paths."""
         if len(self._stage_script_paths) == 0:
             for stage in self.stages:
-                script_rel_dir = Path(stage.script['local_path']).relative_to(self.script['local_path']).as_posix()
+                stage_local_path = Path(stage.script['local_path'])
+                dag_local_path = Path(self.script['local_path'])
+                if stage_local_path in dag_local_path.parents or stage_local_path == dag_local_path:
+                    script_rel_dir = str(stage_local_path.relative_to(self.script['local_path']).as_posix())
+                else:
+                    # stage is from an external script
+                    script_rel_dir = None
                 self._stage_script_paths[stage.full_name] = script_rel_dir
 
         return self._stage_script_paths
@@ -161,11 +167,8 @@ class DAG(Workflow, _DAG):
 
         # Airflow re-serialize the dag file
         subprocess.check_call([
-            sys.executable, '-m', 'airflow', 'dags', 'reserialize', '-S',
-            f'{publish_path}:{self.script["entrypoint"]}'
+            sys.executable, '-m', 'airflow', 'dags', 'reserialize', '-S', f'{publish_path}'
         ])
-        # FIXME: Sleep for 3 seconds to wait for airflow to re-serialize the dag file
-        time.sleep(3)
         # Airflow unpause the dag
         subprocess.check_call([sys.executable, '-m', 'airflow', 'dags', 'unpause', self.backend_id])
         self.logger.info(f'Published workflow: {self}')

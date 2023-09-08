@@ -1,7 +1,9 @@
-.dvc
+.idea
 .dataci
 data
+*.csv
 **/__pycache__
 
 # Build files
+build/
 *.egg-info
