@@ -22,6 +22,11 @@ This project is still under development. Please feel free to open an issue if yo
 
 ## Installation :construction:
 
+Easy install DataCI from [PyPI](https://pypi.org/project/ml-data-ci/)
+```shell
+pip install ml-data-ci
+```
+
 Manual install DataCI package from source code:
 ```shell
 pip install .
