@@ -62,7 +62,7 @@ def generate_workflow_dag(workflow_dag: dict):
         'style': 'rounded',
         'color': 'blue',
         'fontname': 'Helvetica,Arial,sans-serif',
-        'ixedsize': 'true',
+        'fixedsize': 'true',
         'fontsize': '12',
         'height': '1'
     })
