@@ -9,13 +9,11 @@ import abc
 import itertools
 import json
 import logging
-import os
 import shutil
 from abc import ABC
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 import networkx as nx
@@ -30,12 +28,11 @@ from dataci.db.workflow import (
 from .base import BaseModel
 from .event import Event
 from .stage import Stage
-from .workspace import Workspace
 # from dataci.run import Run
 from ..utils import hash_binary, cwd, hash_file
 
 if TYPE_CHECKING:
-    from typing import Optional, Iterable, Sequence
+    from typing import Optional, Iterable, Sequence, Dict
     from dataci.models import Dataset
 
 logger = logging.getLogger(__name__)
@@ -59,7 +56,7 @@ class Workflow(BaseModel, ABC):
 
     @property
     @abc.abstractmethod
-    def stages(self) -> 'Iterable[Stage]':
+    def stages(self) -> 'Dict[str, Stage]':
         raise NotImplementedError
 
     @property
@@ -171,7 +168,7 @@ class Workflow(BaseModel, ABC):
         fingerprint_dict = {
             'workspace': config['workspace'],
             'name': config['name'],
-            'stages': [stage.fingerprint for stage in self.stages],
+            'stages': [stage.fingerprint for stage in self.stages.values()],
             'script_dir': hash_file(config['script']['path']),
             'entrypoint': config['script']['entrypoint'],
         }
@@ -201,7 +198,7 @@ class Workflow(BaseModel, ABC):
                     stage_mapping[stage_full_name] = config
                 # Update the stage script base path
                 self._stage_script_paths[stage_full_name] = stage_config['path']
-            for stage in self.stages:
+            for stage in self.stages.values():
                 if stage.full_name in stage_mapping:
                     stage.reload(stage_mapping[stage.full_name])
         return self
@@ -219,7 +216,7 @@ class Workflow(BaseModel, ABC):
         if self.NAME_PATTERN.match(f'{self.workspace.name}.{self.name}') is None:
             raise ValueError(f'Workflow name {self.workspace}.{self.name} is not valid.')
         # Save the used stages (only if the stage is not saved)
-        for stage in self.stages:
+        for stage in self.stages.values():
             stage.save()
 
         # Get config after call save on all stages, since the stage version might be updated
@@ -247,7 +244,7 @@ class Workflow(BaseModel, ABC):
             filemap[rel_file_name].append('workflow')
 
         # Copy the script content of each stage to the save dir
-        for stage in self.stages:
+        for stage in self.stages.values():
             if (dag_stage_rel_dir := self.stage_script_paths[stage.full_name]) is None:
                 # Skip the stage if the stage script is external
                 continue
@@ -297,7 +294,7 @@ class Workflow(BaseModel, ABC):
             return self
 
         # Publish the used stages
-        for stage in self.stages:
+        for stage in self.stages.values():
             stage.publish()
 
         config = self.dict()

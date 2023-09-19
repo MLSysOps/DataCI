@@ -49,7 +49,10 @@ class DAG(Workflow, _DAG):
 
     @property
     def stages(self):
-        return self.tasks
+        d = dict()
+        for t in self.tasks:
+            d[t.task_id] = t
+        return d
 
     @property
     def dag(self):
@@ -66,7 +69,7 @@ class DAG(Workflow, _DAG):
     @property
     def input_datasets(self):
         dataset_names = set()
-        for stage in self.stages:
+        for stage in self.stages.values():
             if isinstance(stage, Stage):
                 # Only add input table names
                 for v in stage.input_table.values():
@@ -93,7 +96,7 @@ class DAG(Workflow, _DAG):
     def stage_script_paths(self):
         """Get all stage script relative paths."""
         if len(self._stage_script_paths) == 0:
-            for stage in self.stages:
+            for stage in self.stages.values():
                 stage_local_path = Path(stage.script['local_path'])
                 dag_local_path = Path(self.script['local_path'])
                 if stage_local_path in dag_local_path.parents or stage_local_path == dag_local_path:

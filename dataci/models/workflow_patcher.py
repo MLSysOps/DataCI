@@ -56,19 +56,23 @@ output 0 = input 1
 output 1 = input 0 + input 1 * input 2
 
 Therefore, the patch plan wil be:
-If in-package other funcs' outer caller = 0:
-    replace the whole package
-Else:
+If inner function outer caller > 0:
     replace the replace func only
+Else:
+    replace the whole package
 
-If entrypoint outer caller = 1 or (entrypoint inter caller = 1 and inner function outer caller = 1):
+If entrypoint outer caller > 0 or (entrypoint inter caller > 0 and inner function outer caller > 0):
     take care of func / import name
 Else:
     no need to take care of func / import name
 """
+import ast
+from pathlib import Path
+
 import networkx as nx
 import pygraphviz
 
+from dataci.plugins.orchestrator.script import locate_stage_function
 from dataci.utils import cwd
 
 
@@ -86,22 +90,41 @@ def fixup_entry_func_import_name():
 
 if __name__ == '__main__':
     from pyan import create_callgraph
+    import logging
 
-    with cwd('../../exp/text_classification'):
-    # with cwd('../../example/continuous_text_classification_dev/'):
+    # Disable logger for pyan
+    logging.getLogger('pyan').setLevel('CRITICAL')
+
+    from exp.text_classification.text_classification_dag import text_classification_dag
+
+    # Get entry function package path
+    stage = text_classification_dag.stages['text_augmentation']
+    package_relpath = Path(text_classification_dag.stage_script_paths[stage.full_name])
+    package_abspath = Path(text_classification_dag.script['path']) / package_relpath
+
+    # Get entry function name
+    entryfile_path = package_abspath / stage.script['entrypoint']
+    tree = ast.parse(entryfile_path.read_text())
+    func_node = locate_stage_function(tree, stage.name)[0][0]
+    entrypoint_relpath = package_relpath / stage.script['entrypoint'].split('.')[0] / func_node.name
+
+    package = '.'.join(package_relpath.parts).strip('/') if str(package_relpath) != '.' else '.'
+    entrypoint = '.'.join(entrypoint_relpath.with_suffix('').parts).strip('/')
+
+    with cwd(text_classification_dag.script['path']):
         call_graph_dot_str = create_callgraph(
-            '**/*.py', format='dot', colored=False, draw_defines=True, draw_uses=True, annotated=True
+            '**/*.py', format='dot', colored=False, draw_defines=False, draw_uses=True, grouped=False,
         )
         define_graph_dot_str = create_callgraph(
-            '**/*.py', format='dot', colored=False, draw_defines=True, draw_uses=False, annotated=True
+            '**/*.py', format='dot', colored=False, draw_defines=True, draw_uses=False, grouped=False,
         )
 
     call_graph: nx.MultiDiGraph = nx.nx_agraph.from_agraph(pygraphviz.AGraph(call_graph_dot_str))
     define_graph: nx.MultiDiGraph = nx.nx_agraph.from_agraph(pygraphviz.AGraph(define_graph_dot_str))
+    # Add a top-level node, to connect every other nodes with 0 in-degree
+    call_graph.add_edges_from([('__', n) for n, d in call_graph.in_degree])
+    define_graph.add_edges_from([('__', n) for n, d in define_graph.in_degree])
 
-    # Define an entry function
-    entrypoint = 'step00_data_augmentation.text_augmentation'
-    package = 'step00_data_augmentation'
     # entrypoint = 'step2_build_sentiment_analysis_pipeline.text_augmentation'
     # package = 'step2_build_sentiment_analysis_pipeline'
 
@@ -140,9 +163,9 @@ if __name__ == '__main__':
     if len(inner_func_nodes) > 0:
         # Add edges from any inner func node to any other inner func node
         any_inner_func_node = inner_func_nodes.pop()
-        search_graph.add_edges_from(map(lambda x: (x, any_inner_func_node), inner_func_nodes))
+        search_graph.add_edges_from(map(lambda x: (any_inner_func_node, x), inner_func_nodes))
         inner_func_nodes.add(any_inner_func_node)
-        inner_func_callers = set(nx.dfs_preorder_nodes(search_graph, any_inner_func_node))
+        inner_func_callers = set(nx.dfs_preorder_nodes(search_graph, any_inner_func_node)) - inner_func_nodes
     else:
         inner_func_callers = set()
     inner_func_inner_callers = inner_func_callers.intersection(inner_func_nodes)
@@ -165,4 +188,10 @@ if __name__ == '__main__':
     print('entrypoint outer caller nodes:')
     print(entrypoint_outer_caller)
 
+    if len(inner_func_outer_callers):
+        replace_entry_func()
+    else:
+        replace_package()
 
+    if len(entrypoint_outer_caller) or (len(entrypoint_inner_caller) and len(inner_func_outer_callers)):
+        fixup_entry_func_import_name()
