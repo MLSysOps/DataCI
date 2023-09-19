@@ -72,7 +72,7 @@ from pathlib import Path
 import networkx as nx
 import pygraphviz
 
-from dataci.plugins.orchestrator.script import locate_stage_function
+from dataci.plugins.orchestrator.script import locate_stage_function, locate_dag_function
 from dataci.utils import cwd
 
 
@@ -97,19 +97,39 @@ if __name__ == '__main__':
 
     from exp.text_classification.text_classification_dag import text_classification_dag
 
-    # Get entry function package path
-    stage = text_classification_dag.stages['text_augmentation']
-    package_relpath = Path(text_classification_dag.stage_script_paths[stage.full_name])
-    package_abspath = Path(text_classification_dag.script['path']) / package_relpath
+    # Get all package and entrypoint info for all stages
+    stage_pkg_info = dict()
+    for stage_name, stage in text_classification_dag.stages.items():
+        # Get stage package path
+        package_relpath = Path(text_classification_dag.stage_script_paths[stage.full_name])
+        package_abspath = Path(text_classification_dag.script['path']) / package_relpath
 
-    # Get entry function name
-    entryfile_path = package_abspath / stage.script['entrypoint']
-    tree = ast.parse(entryfile_path.read_text())
-    func_node = locate_stage_function(tree, stage.name)[0][0]
-    entrypoint_relpath = package_relpath / stage.script['entrypoint'].split('.')[0] / func_node.name
+        # Get stage entry function name
+        entryfile_path = package_abspath / stage.script['entrypoint']
+        tree = ast.parse(entryfile_path.read_text())
+        func_node = locate_stage_function(tree, stage.name)[0][0]
+        entrypoint_relpath = package_relpath / stage.script['entrypoint'].split('.')[0] / func_node.name
 
-    package = '.'.join(package_relpath.parts).strip('/') if str(package_relpath) != '.' else '.'
-    entrypoint = '.'.join(entrypoint_relpath.with_suffix('').parts).strip('/')
+        package = '.'.join(package_relpath.parts).strip('/') if str(package_relpath) != '.' else '.'
+        entrypoint = '.'.join(entrypoint_relpath.with_suffix('').parts).strip('/')
+
+        stage_pkg_info[stage.full_name] = {
+            'package': package,
+            'entrypoint': entrypoint,
+        }
+    # Get dag entrypoint info
+    dag_entryfile_base = Path(text_classification_dag.script['path'])
+    dag_entrypoint_path = dag_entryfile_base / text_classification_dag.script['entrypoint']
+    tree = ast.parse(dag_entrypoint_path.read_text())
+    dag_nodes = locate_dag_function(tree, text_classification_dag.name)[0]
+    assert len(dag_nodes) == 1, 'DAG should only have one entrypoint'
+    dag_entrypoint_relpath = text_classification_dag.script['entrypoint'].split('.')[0] / dag_nodes[0].name
+    dag_entrypoint = '.'.join(dag_entrypoint_relpath.with_suffix('').parts).strip('/')
+
+    # Function to be patched
+    replace_func_info = stage_pkg_info.pop('default.text_augmentation')
+    package = replace_func_info['package']
+    entrypoint = replace_func_info['entrypoint']
 
     with cwd(text_classification_dag.script['path']):
         call_graph_dot_str = create_callgraph(
@@ -125,22 +145,9 @@ if __name__ == '__main__':
     call_graph.add_edges_from([('__', n) for n, d in call_graph.in_degree])
     define_graph.add_edges_from([('__', n) for n, d in define_graph.in_degree])
 
-    # entrypoint = 'step2_build_sentiment_analysis_pipeline.text_augmentation'
-    # package = 'step2_build_sentiment_analysis_pipeline'
-
-    # Other stage entry functions
-    other_stage_entrypoint = [
-        'step01_data_selection.select_data',
-        'step02_train.main',
-        'step03_predict.main',
-        # 'step2_build_sentiment_analysis_pipeline.sentiment_analysis',
-    ]
-    # dag_entrypoint = 'step2_build_sentiment_analysis_pipeline.sentiment_analysis'
-    dag_entrypoint = 'text_classification_dag'
-
     entrypoint_id = entrypoint.replace('.', '__')
     package_id = package.replace('.', '__')
-    other_stage_entrypoint_ids = list(map(lambda x: x.replace('.', '__'), other_stage_entrypoint))
+    other_stage_entrypoint_ids = list(map(lambda x: x['entrypoint'].replace('.', '__'), stage_pkg_info.values()))
     dag_entrypoint_id = dag_entrypoint.replace('.', '__')
 
     # Build graph for outer function scanning
