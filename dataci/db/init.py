@@ -41,6 +41,7 @@ with db_connection:
         schedule    TEXT,
         dag         TEXT,
         script_path TEXT,
+        entryfile   TEXT,
         entrypoint  TEXT,
         PRIMARY KEY (workspace, name, version),
         UNIQUE (workspace, name, version)

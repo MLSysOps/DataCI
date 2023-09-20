@@ -12,7 +12,6 @@ import re
 import shutil
 import subprocess
 import sys
-import time
 from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -86,9 +85,18 @@ class DAG(Workflow, _DAG):
     @property
     def script(self):
         if self._script_dir is None:
-            base_dir = Path(self.fileloc)
-            self._script_dir = self._script_dir_local = base_dir.parent.as_posix()
-            self._entrypoint = os.path.basename(self.fileloc)
+            fileloc = Path(self.fileloc)
+            self._script_dir = self._script_dir_local = fileloc.parent.as_posix()
+            entryfile = fileloc.relative_to(self._script_dir)
+            self._entryfile = entryfile.as_posix()
+            # Scan the entry file to get the entrypoint (module name w.r.t. the stage base dir)
+            # 1. build a abstract syntax tree
+            # 2. locate the function definition
+            # 3. convert the function name to a module name
+            tree = ast.parse(Path(fileloc).read_text())
+            dag_node = locate_dag_function(tree, self.name)[0]
+            assert len(dag_node) == 1, f'Found multiple dag definition {self.name} in {self._entryfile}'
+            self._entrypoint = '.'.join((*entryfile.with_suffix('').parts, dag_node[0].name)).strip('/')
 
         return super().script
 

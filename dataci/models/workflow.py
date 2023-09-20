@@ -49,6 +49,7 @@ class Workflow(BaseModel, ABC):
         self.logger = logging.getLogger(__name__)
         self.trigger: 'Sequence[Event]' = trigger or list()
         self._script_dir = None
+        self._entryfile = None
         self._entrypoint = None
         self._script_dir_local = None
         self._stage_script_paths = dict()
@@ -81,8 +82,9 @@ class Workflow(BaseModel, ABC):
             return None
         return {
             'path': self._script_dir,
-            'entrypoint': self._entrypoint,
             'local_path': self._script_dir_local,
+            'entryfile': self._entryfile,
+            'entrypoint': self._entrypoint,
         }
 
     @property
@@ -186,6 +188,7 @@ class Workflow(BaseModel, ABC):
         self.trigger = [Event.from_str(evt) for evt in config['trigger']]
         if 'script' in config:
             self._script_dir = config['script']['path']
+            self._entryfile = config['script']['entryfile']
             self._entrypoint = config['script']['entrypoint']
         if 'dag' in config:
             self._stage_script_paths.clear()

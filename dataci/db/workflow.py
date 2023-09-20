@@ -27,8 +27,8 @@ def create_one_workflow(config):
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO workflow (workspace, name, version, timestamp, schedule, dag, script_path, entrypoint)
-            VALUES (:workspace, :name, :version, :timestamp, :trigger, :dag, :script_path, :entrypoint)
+            INSERT INTO workflow (workspace, name, version, timestamp, schedule, dag, script_path, entryfile, entrypoint)
+            VALUES (:workspace, :name, :version, :timestamp, :trigger, :dag, :script_path, :entryfile, :entrypoint)
             """,
             workflow_dict,
         )
@@ -166,6 +166,7 @@ def get_one_workflow_by_version(workspace, name, version):
                      , schedule
                      , dag
                      , script_path
+                     , entryfile
                      , entrypoint
                 FROM   base
                 JOIN   latest
@@ -207,6 +208,7 @@ def get_one_workflow_by_version(workspace, name, version):
                      , schedule
                      , dag
                      , script_path
+                     , entryfile
                      , entrypoint
                 FROM   base
                 LEFT JOIN tag
@@ -237,7 +239,8 @@ def get_one_workflow_by_version(workspace, name, version):
             },
             'script': {
                 'path': workflow[9],
-                'entrypoint': workflow[10],
+                'entryfile': workflow[10],
+                'entrypoint': workflow[11],
             },
         }
         # Overwrite the query version for dag node
@@ -300,6 +303,7 @@ def get_one_workflow_by_tag(workspace, name, tag):
                      , schedule
                      , dag
                      , script_path
+                     , entryfile
                      , entrypoint
                 FROM   tag
                 JOIN   latest
@@ -340,6 +344,7 @@ def get_one_workflow_by_tag(workspace, name, tag):
                      , schedule
                      , dag
                      , script_path
+                     , entryfile
                      , entrypoint
                 FROM   base
                 JOIN   tag
@@ -367,7 +372,8 @@ def get_one_workflow_by_tag(workspace, name, tag):
             },
             'script': {
                 'path': config[9],
-                'entrypoint': config[10],
+                'entryfile': config[10],
+                'entrypoint': config[11],
             },
         }
         # Overwrite the query version for dag node

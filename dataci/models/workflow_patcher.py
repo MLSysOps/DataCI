@@ -102,29 +102,17 @@ if __name__ == '__main__':
     for stage_name, stage in text_classification_dag.stages.items():
         # Get stage package path
         package_relpath = Path(text_classification_dag.stage_script_paths[stage.full_name])
-        package_abspath = Path(text_classification_dag.script['path']) / package_relpath
 
-        # Get stage entry function name
-        entryfile_path = package_abspath / stage.script['entrypoint']
-        tree = ast.parse(entryfile_path.read_text())
-        func_node = locate_stage_function(tree, stage.name)[0][0]
-        entrypoint_relpath = package_relpath / stage.script['entrypoint'].split('.')[0] / func_node.name
-
-        package = '.'.join(package_relpath.parts).strip('/') if str(package_relpath) != '.' else '.'
-        entrypoint = '.'.join(entrypoint_relpath.with_suffix('').parts).strip('/')
+        package = '.'.join(package_relpath.parts).strip('/')
+        entrypoint = package + '.' + stage.script['entrypoint'] if package else stage.script['entrypoint']
 
         stage_pkg_info[stage.full_name] = {
-            'package': package,
+            'package': package or '.',
             'entrypoint': entrypoint,
         }
+    print(stage_pkg_info)
     # Get dag entrypoint info
-    dag_entryfile_base = Path(text_classification_dag.script['path'])
-    dag_entrypoint_path = dag_entryfile_base / text_classification_dag.script['entrypoint']
-    tree = ast.parse(dag_entrypoint_path.read_text())
-    dag_nodes = locate_dag_function(tree, text_classification_dag.name)[0]
-    assert len(dag_nodes) == 1, 'DAG should only have one entrypoint'
-    dag_entrypoint_relpath = text_classification_dag.script['entrypoint'].split('.')[0] / dag_nodes[0].name
-    dag_entrypoint = '.'.join(dag_entrypoint_relpath.with_suffix('').parts).strip('/')
+    dag_entrypoint = text_classification_dag.script['entrypoint']
 
     # Function to be patched
     replace_func_info = stage_pkg_info.pop('default.text_augmentation')
@@ -141,9 +129,10 @@ if __name__ == '__main__':
 
     call_graph: nx.MultiDiGraph = nx.nx_agraph.from_agraph(pygraphviz.AGraph(call_graph_dot_str))
     define_graph: nx.MultiDiGraph = nx.nx_agraph.from_agraph(pygraphviz.AGraph(define_graph_dot_str))
-    # Add a top-level node, to connect every other nodes with 0 in-degree
-    call_graph.add_edges_from([('__', n) for n, d in call_graph.in_degree])
-    define_graph.add_edges_from([('__', n) for n, d in define_graph.in_degree])
+    # Add a virtual top-level node (--), to connect every other nodes with 0 in-degree
+    top_node_id = '__'
+    call_graph.add_edges_from([(top_node_id, n) for n, d in call_graph.in_degree])
+    define_graph.add_edges_from([(top_node_id, n) for n, d in define_graph.in_degree])
 
     entrypoint_id = entrypoint.replace('.', '__')
     package_id = package.replace('.', '__')
@@ -157,7 +146,7 @@ if __name__ == '__main__':
     search_graph = call_graph.copy()
     search_graph.remove_edge(dag_entrypoint_id, entrypoint_id)
     search_graph.add_edges_from(map(lambda x: (dag_entrypoint_id, x), other_stage_entrypoint_ids))
-    outer_func_sharing_nodes = list(nx.dfs_preorder_nodes(search_graph, dag_entrypoint_id))
+    outer_func_sharing_nodes = set(nx.dfs_preorder_nodes(search_graph, dag_entrypoint_id))
 
     # Get list of functions within the func package
     inner_func_nodes = set(nx.dfs_preorder_nodes(define_graph, package_id)) - {entrypoint_id}
