@@ -55,7 +55,8 @@ class Stage(BaseModel):
         # Original local dir of the script, it will be None if stage load from database
         self._script_dir_local: 'Optional[PathLike]' = None
         self._script_dir: 'Optional[PathLike]' = None
-        self._entrypoint: 'Optional[PathLike]' = None
+        self._entryfile: 'Optional[PathLike]' = None
+        self._entrypoint: 'Optional[str]' = None
 
     @property
     def script(self):
@@ -63,8 +64,9 @@ class Stage(BaseModel):
             return None
         return {
             'path': self._script_dir,
-            'entrypoint': self._entrypoint,
             'local_path': self._script_dir_local,
+            'entryfile': self._entryfile,
+            'entrypoint': self._entrypoint,
         }
 
     @abc.abstractmethod
@@ -132,6 +134,7 @@ class Stage(BaseModel):
         # Manual set the script to the stage object, as the script is not available in the exec context
         if 'script' in config:
             self._script_dir = config['script']['path']
+            self._entryfile = config['script']['entryfile']
             self._entrypoint = config['script']['entrypoint']
         return self
 
