@@ -63,10 +63,11 @@ class Stage(BaseModel):
         if self._script_dir is None:
             return None
         return {
-            'path': self._script_dir,
-            'local_path': self._script_dir_local,
-            'entryfile': self._entryfile,
+            'path': str(self._script_dir),
+            'local_path': str(self._script_dir_local),
+            'entryfile': str(self._entryfile),
             'entrypoint': self._entrypoint,
+            'filelist': [self._entryfile],
         }
 
     @abc.abstractmethod

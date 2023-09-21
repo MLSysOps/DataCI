@@ -66,26 +66,35 @@ If entrypoint outer caller > 0 or (entrypoint inter caller > 0 and inner functio
 Else:
     no need to take care of func / import name
 """
-import ast
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import networkx as nx
 import pygraphviz
 
-from dataci.plugins.orchestrator.script import locate_stage_function, locate_dag_function
 from dataci.utils import cwd
 
+if TYPE_CHECKING:
+    import os
 
-def replace_package():
-    pass
+
+def replace_package(source: 'os.PathLike', target: 'os.PathLike'):
+    print('replace package')
 
 
 def replace_entry_func():
-    pass
+    print('replace entry func')
 
 
 def fixup_entry_func_import_name():
-    pass
+    print('fixup entry func import name')
+
+
+def path_to_module_name(path: Path):
+    if path.is_dir():
+        return '.'.join(path.parts).strip('/') or '.'
+
+    return '.'.join(path.with_suffix('').parts).strip('/')
 
 
 if __name__ == '__main__':
@@ -96,6 +105,10 @@ if __name__ == '__main__':
     logging.getLogger('pyan').setLevel('CRITICAL')
 
     from exp.text_classification.text_classification_dag import text_classification_dag
+    from exp.text_classification.step00_data_augmentation import text_augmentation
+
+    replace_func_name = 'default.text_augmentation'
+    new_func = text_augmentation
 
     # Get all package and entrypoint info for all stages
     stage_pkg_info = dict()
@@ -103,26 +116,28 @@ if __name__ == '__main__':
         # Get stage package path
         package_relpath = Path(text_classification_dag.stage_script_paths[stage.full_name])
 
-        package = '.'.join(package_relpath.parts).strip('/')
-        entrypoint = package + '.' + stage.script['entrypoint'] if package else stage.script['entrypoint']
+        package = path_to_module_name(package_relpath)
+        entrypoint = package + '.' + stage.script['entrypoint'] if package != '.' else stage.script['entrypoint']
 
         stage_pkg_info[stage.full_name] = {
             'package': package or '.',
             'entrypoint': entrypoint,
+            'include': [path_to_module_name(package_relpath / file) for file in stage.script['filelist']]
         }
-    print(stage_pkg_info)
     # Get dag entrypoint info
     dag_entrypoint = text_classification_dag.script['entrypoint']
 
     # Function to be patched
-    replace_func_info = stage_pkg_info.pop('default.text_augmentation')
+    replace_func_info = stage_pkg_info.pop(replace_func_name)
     package = replace_func_info['package']
     entrypoint = replace_func_info['entrypoint']
+    include = replace_func_info['include']
 
     with cwd(text_classification_dag.script['path']):
         call_graph_dot_str = create_callgraph(
-            '**/*.py', format='dot', colored=False, draw_defines=False, draw_uses=True, grouped=False,
-        )
+            '**/*.py', format='dot', colored=False, draw_defines=True, draw_uses=True, grouped=False,
+            annotated=True,
+        )  # Use node annotation to differentiate function and package
         define_graph_dot_str = create_callgraph(
             '**/*.py', format='dot', colored=False, draw_defines=True, draw_uses=False, grouped=False,
         )
@@ -131,11 +146,16 @@ if __name__ == '__main__':
     define_graph: nx.MultiDiGraph = nx.nx_agraph.from_agraph(pygraphviz.AGraph(define_graph_dot_str))
     # Add a virtual top-level node (--), to connect every other nodes with 0 in-degree
     top_node_id = '__'
+    call_graph.add_node(top_node_id, label='')
     call_graph.add_edges_from([(top_node_id, n) for n, d in call_graph.in_degree])
     define_graph.add_edges_from([(top_node_id, n) for n, d in define_graph.in_degree])
 
+    # Get package node
+    package_nodes = {k for k, v in call_graph.nodes(data=True) if '.py' not in v['label']}
+
     entrypoint_id = entrypoint.replace('.', '__')
     package_id = package.replace('.', '__')
+    include_ids = list(map(lambda x: x.replace('.', '__'), include))
     other_stage_entrypoint_ids = list(map(lambda x: x['entrypoint'].replace('.', '__'), stage_pkg_info.values()))
     dag_entrypoint_id = dag_entrypoint.replace('.', '__')
 
@@ -146,12 +166,17 @@ if __name__ == '__main__':
     search_graph = call_graph.copy()
     search_graph.remove_edge(dag_entrypoint_id, entrypoint_id)
     search_graph.add_edges_from(map(lambda x: (dag_entrypoint_id, x), other_stage_entrypoint_ids))
-    outer_func_sharing_nodes = set(nx.dfs_preorder_nodes(search_graph, dag_entrypoint_id))
+    outer_func_sharing_nodes = set(nx.dfs_preorder_nodes(search_graph, dag_entrypoint_id)) - package_nodes
+    outer_func_nodes = outer_func_sharing_nodes
 
     # Get list of functions within the func package
-    inner_func_nodes = set(nx.dfs_preorder_nodes(define_graph, package_id)) - {entrypoint_id}
+    search_graph = define_graph.copy()
+    any_node = include_ids[0]
+    search_graph.add_edges_from(map(lambda x: (any_node, x), include_ids))
+    inner_func_nodes = set(nx.dfs_preorder_nodes(search_graph, any_node))
+    inner_func_nodes = set(nx.dfs_preorder_nodes(define_graph, package_id)) & inner_func_nodes - {entrypoint_id} - package_nodes
     # Remove inner functions that appear in the outer function nodes
-    inner_func_nodes = set(filter(lambda x: x not in outer_func_sharing_nodes, inner_func_nodes))
+
     # Build a call graph to search the outer caller
     # 1. Reverse the graph (for easier DFS search)
     # 2. Random select a node, connect it to others in the inner function nodes
@@ -161,11 +186,11 @@ if __name__ == '__main__':
         any_inner_func_node = inner_func_nodes.pop()
         search_graph.add_edges_from(map(lambda x: (any_inner_func_node, x), inner_func_nodes))
         inner_func_nodes.add(any_inner_func_node)
-        inner_func_callers = set(nx.dfs_preorder_nodes(search_graph, any_inner_func_node)) - inner_func_nodes
+        inner_func_callers = set(nx.dfs_preorder_nodes(search_graph, any_inner_func_node))
     else:
         inner_func_callers = set()
-    inner_func_inner_callers = inner_func_callers.intersection(inner_func_nodes)
-    inner_func_outer_callers = inner_func_callers - inner_func_nodes
+    inner_func_inner_callers = inner_func_callers & inner_func_nodes
+    inner_func_outer_callers = inner_func_callers & outer_func_nodes
 
     print('inner function nodes:')
     print(inner_func_nodes)
@@ -176,8 +201,8 @@ if __name__ == '__main__':
 
     # Check entrypoint outer caller number
     entrypoint_callers = set(nx.dfs_preorder_nodes(call_graph.reverse(), entrypoint_id)) - {entrypoint_id}
-    entrypoint_inner_caller = entrypoint_callers.intersection(inner_func_nodes)
-    entrypoint_outer_caller = entrypoint_callers - entrypoint_inner_caller
+    entrypoint_inner_caller = entrypoint_callers & inner_func_nodes
+    entrypoint_outer_caller = entrypoint_callers & outer_func_nodes
 
     print('entrypoint inner caller nodes:')
     print(entrypoint_inner_caller)
@@ -187,7 +212,7 @@ if __name__ == '__main__':
     if len(inner_func_outer_callers):
         replace_entry_func()
     else:
-        replace_package()
+        replace_package(package, new_func.script['path'])
 
     if len(entrypoint_outer_caller) or (len(entrypoint_inner_caller) and len(inner_func_outer_callers)):
         fixup_entry_func_import_name()

@@ -259,10 +259,9 @@ class PythonOperator(Stage, _PythonOperator):
     @property
     def script(self):
         if self._script_dir is None:
-            fileloc = Path(inspect.getsourcefile(self.python_callable))
-            self._script_dir = self._script_dir_local = fileloc.parent.as_posix()
-            entryfile = fileloc.relative_to(self._script_dir)
-            self._entryfile = entryfile.as_posix()
+            fileloc = Path(inspect.getsourcefile(self.python_callable)).resolve()
+            self._script_dir = self._script_dir_local = fileloc.parent
+            self._entryfile = fileloc.relative_to(self._script_dir)
             # Scan the entry file to get the entrypoint (module name w.r.t. the stage base dir)
             # 1. build a abstract syntax tree
             # 2. locate the function definition
@@ -270,7 +269,7 @@ class PythonOperator(Stage, _PythonOperator):
             tree = ast.parse(Path(fileloc).read_text())
             func_node = locate_stage_function(tree, self.name)[0]
             assert len(func_node) == 1, f'Found multiple function definition for stage {self.name} in {self._entryfile}'
-            self._entrypoint = '.'.join((*entryfile.with_suffix('').parts, func_node[0].name)).strip('/')
+            self._entrypoint = '.'.join((*self._entryfile.with_suffix('').parts, func_node[0].name)).strip('/')
         return super().script
 
 
