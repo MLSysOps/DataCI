@@ -50,7 +50,8 @@ class DAG(Workflow, _DAG):
     def stages(self):
         d = dict()
         for t in self.tasks:
-            d[t.task_id] = t
+            stage_name = t.full_name if isinstance(t, Stage) else t.task_id
+            d[stage_name] = t
         return d
 
     @property

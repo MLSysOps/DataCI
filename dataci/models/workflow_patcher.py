@@ -9,8 +9,7 @@ Analysis the workflow code dependency and generate the patch plan.
 
 For each stage in the workflow, it can have the following concepts:
 1. Entrypoint: the entry point of the stage, the func to be called first during the stage execution.
-2. Inner function: functions in the same stage code package. In the case of multi-stage shared code,
-    it excludes callee tree of the other stages and the dag.
+2. Inner function: functions in the same stage code package. In the case of multi-stage shared code.
 3. outer function: the func that is out-of the code package of the stage.
     In the case of multiple stages sharing one code package, the outer functions are any functions in
     the function callee tree of any other stages and dag.
@@ -66,20 +65,52 @@ If entrypoint outer caller > 0 or (entrypoint inter caller > 0 and inner functio
 Else:
     no need to take care of func / import name
 """
+import fnmatch
+import os
+from collections import defaultdict
+from itertools import chain
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Set
 
 import networkx as nx
 import pygraphviz
 
+from dataci.models import Stage
 from dataci.utils import cwd
 
 if TYPE_CHECKING:
-    import os
+    from typing import Any, Union
 
 
-def replace_package(source: 'os.PathLike', target: 'os.PathLike'):
-    print('replace package')
+def replace_package(basedir, source: 'Stage', target: 'Stage', excludes: 'Union[str, List[str]]' = '**/__pycache__'):
+    basedir = Path(basedir)
+    new_mountdir = Path(target.name)
+    excludes = [excludes] if isinstance(excludes, str) else excludes
+    # Add /* to the end of the excludes if it is a dir pattern (name does not have extension)
+    excludes = chain.from_iterable(map(lambda x: [x, x + '/*'] if Path(x).suffix == '' else [x], excludes))
+
+    print(f'replace package {source} -> {target}')
+    rm_files = set(map(lambda x: str(basedir / x), source.script['filelist']))
+    # Filter out exclude files and remove files
+    all_files = scantree(basedir)
+    for exclude in excludes:
+        all_files = filter(lambda f: not fnmatch.fnmatch(f, exclude), all_files)
+
+    # Delete empty dir in the remain files
+    dirs = defaultdict(list)
+    for f in set(all_files) - rm_files:
+        f_path = Path(f)
+        if f_path.is_file():
+            dirs[str(f_path.parent)].append(f)
+        else:
+            dirs[f] = list()
+    empty_dirs = [k for k, v in dirs.items() if len(v) == 0]
+    print('Remove list:')
+    rm_files.update(empty_dirs)
+    print(rm_files)
+
+    print('Add list:')
+    print(list(map(lambda x: new_mountdir / x, target.script['filelist'])))
 
 
 def replace_entry_func():
@@ -97,6 +128,48 @@ def path_to_module_name(path: Path):
     return '.'.join(path.with_suffix('').parts).strip('/')
 
 
+def scantree(path):
+    """Recursively yield DirEntry objects for given directory."""
+    for entry in os.scandir(path):
+        yield entry.path
+        if entry.is_dir(follow_symlinks=False):
+            yield from scantree(entry.path)
+
+
+def get_all_predecessors(
+        g: 'Union[nx.MultiDiGraph, nx.DiGraph]',
+        source: 'Union[Set, List]',
+        entry: 'Any' = None
+):
+    return get_all_successors(g.reverse(), source, entry)
+
+
+def get_all_successors(
+        g: 'Union[nx.MultiDiGraph, nx.Graph]',
+        source: 'Union[Set, List]',
+        entry: 'Any' = None
+):
+    # If source is a single node, convert it to a list
+    source = [source] if not isinstance(source, (List, Set)) else list(source)
+    # source is empty, return empty
+    if len(source) == 0:
+        return set()
+    # Get the entry node, if not specified, use the first node in source
+    entry = entry or source[0]
+
+    # Checking if entry is in source, and every source is in the graph
+    violate_nodes = list(filter(lambda x: x not in g.nodes, source + [entry]))
+    assert len(violate_nodes) == 0, f'source nodes {violate_nodes} is not found in the graph {g}'
+
+    # 1. connect entry node to all entry in the inner function nodes
+    # 2. search all tree nodes starting from entry node
+    search_graph = g.copy()
+    search_graph.add_edges_from(map(lambda x: (entry, x), source))
+    return set(nx.dfs_preorder_nodes(search_graph, entry))
+
+
+FILE_MARKER = '<files>'
+
 if __name__ == '__main__':
     from pyan import create_callgraph
     import logging
@@ -105,27 +178,31 @@ if __name__ == '__main__':
     logging.getLogger('pyan').setLevel('CRITICAL')
 
     from exp.text_classification.text_classification_dag import text_classification_dag
+    from example.text_process.text_process_ci import text_process_ci_pipeline
     from exp.text_classification.step00_data_augmentation import text_augmentation
 
     replace_func_name = 'default.text_augmentation'
     new_func = text_augmentation
+    dag = text_classification_dag
 
+    basedir = Path(dag.script['path'])
     # Get all package and entrypoint info for all stages
     stage_pkg_info = dict()
-    for stage_name, stage in text_classification_dag.stages.items():
+    for stage in dag.stages.values():
         # Get stage package path
-        package_relpath = Path(text_classification_dag.stage_script_paths[stage.full_name])
+        package_relpath = Path(dag.stage_script_paths[stage.full_name])
 
         package = path_to_module_name(package_relpath)
         entrypoint = package + '.' + stage.script['entrypoint'] if package != '.' else stage.script['entrypoint']
 
         stage_pkg_info[stage.full_name] = {
+            'path': basedir / package_relpath,
             'package': package or '.',
             'entrypoint': entrypoint,
             'include': [path_to_module_name(package_relpath / file) for file in stage.script['filelist']]
         }
     # Get dag entrypoint info
-    dag_entrypoint = text_classification_dag.script['entrypoint']
+    dag_entrypoint = dag.script['entrypoint']
 
     # Function to be patched
     replace_func_info = stage_pkg_info.pop(replace_func_name)
@@ -133,7 +210,7 @@ if __name__ == '__main__':
     entrypoint = replace_func_info['entrypoint']
     include = replace_func_info['include']
 
-    with cwd(text_classification_dag.script['path']):
+    with cwd(basedir):
         call_graph_dot_str = create_callgraph(
             '**/*.py', format='dot', colored=False, draw_defines=True, draw_uses=True, grouped=False,
             annotated=True,
@@ -160,35 +237,21 @@ if __name__ == '__main__':
     dag_entrypoint_id = dag_entrypoint.replace('.', '__')
 
     # Build graph for outer function scanning
-    # 1. We manually remove the edge dag_entry_func -> entry_func
-    # 2. We manually add the edge dag_entry_func -> other_stage_entry_func
-    # 3. We search every tree nodes starting from dag_entry_func
+    # We manually remove the edge dag_entry_func -> entry_func
     search_graph = call_graph.copy()
     search_graph.remove_edge(dag_entrypoint_id, entrypoint_id)
-    search_graph.add_edges_from(map(lambda x: (dag_entrypoint_id, x), other_stage_entrypoint_ids))
-    outer_func_sharing_nodes = set(nx.dfs_preorder_nodes(search_graph, dag_entrypoint_id)) - package_nodes
+    outer_func_sharing_nodes = get_all_successors(search_graph, other_stage_entrypoint_ids + [dag_entrypoint_id],
+                                                  dag_entrypoint_id) - package_nodes
     outer_func_nodes = outer_func_sharing_nodes
 
     # Get list of functions within the func package
-    search_graph = define_graph.copy()
-    any_node = include_ids[0]
-    search_graph.add_edges_from(map(lambda x: (any_node, x), include_ids))
-    inner_func_nodes = set(nx.dfs_preorder_nodes(search_graph, any_node))
-    inner_func_nodes = set(nx.dfs_preorder_nodes(define_graph, package_id)) & inner_func_nodes - {entrypoint_id} - package_nodes
-    # Remove inner functions that appear in the outer function nodes
+    inner_func_nodes = get_all_successors(define_graph, include_ids)
+    inner_func_nodes = (
+            get_all_successors(define_graph, package_id) & inner_func_nodes
+            - {entrypoint_id} - package_nodes
+    )
 
-    # Build a call graph to search the outer caller
-    # 1. Reverse the graph (for easier DFS search)
-    # 2. Random select a node, connect it to others in the inner function nodes
-    search_graph = call_graph.reverse()
-    if len(inner_func_nodes) > 0:
-        # Add edges from any inner func node to any other inner func node
-        any_inner_func_node = inner_func_nodes.pop()
-        search_graph.add_edges_from(map(lambda x: (any_inner_func_node, x), inner_func_nodes))
-        inner_func_nodes.add(any_inner_func_node)
-        inner_func_callers = set(nx.dfs_preorder_nodes(search_graph, any_inner_func_node))
-    else:
-        inner_func_callers = set()
+    inner_func_callers = get_all_predecessors(call_graph, inner_func_nodes)
     inner_func_inner_callers = inner_func_callers & inner_func_nodes
     inner_func_outer_callers = inner_func_callers & outer_func_nodes
 
@@ -200,7 +263,7 @@ if __name__ == '__main__':
     print(inner_func_outer_callers)
 
     # Check entrypoint outer caller number
-    entrypoint_callers = set(nx.dfs_preorder_nodes(call_graph.reverse(), entrypoint_id)) - {entrypoint_id}
+    entrypoint_callers = get_all_predecessors(call_graph, entrypoint_id) - {entrypoint_id}
     entrypoint_inner_caller = entrypoint_callers & inner_func_nodes
     entrypoint_outer_caller = entrypoint_callers & outer_func_nodes
 
@@ -212,7 +275,7 @@ if __name__ == '__main__':
     if len(inner_func_outer_callers):
         replace_entry_func()
     else:
-        replace_package(package, new_func.script['path'])
+        replace_package(replace_func_info['path'], dag.stages[replace_func_name], new_func)
 
     if len(entrypoint_outer_caller) or (len(entrypoint_inner_caller) and len(inner_func_outer_callers)):
         fixup_entry_func_import_name()

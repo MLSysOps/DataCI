@@ -27,7 +27,7 @@ from ..utils import hash_binary, hash_file, cwd
 
 if TYPE_CHECKING:
     from os import PathLike
-    from typing import Optional, Union
+    from typing import Optional
 
 
 class Stage(BaseModel):
