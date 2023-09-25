@@ -24,7 +24,7 @@ from dataci.db.stage import (
 )
 from .base import BaseModel
 from .script import Script
-from ..utils import hash_binary, hash_file, cwd
+from ..utils import hash_binary, cwd
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -125,9 +125,7 @@ class Stage(BaseModel):
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
         # Manual set the script to the stage object, as the script is not available in the exec context
         if 'script' in config:
-            self._script_dir = config['script']['path']
-            self._entryfile = config['script']['entryfile']
-            self._entrypoint = config['script']['entrypoint']
+            self._script = Script.from_dict(config['script'])
         return self
 
     @property
@@ -137,7 +135,7 @@ class Stage(BaseModel):
             'workspace': config['workspace'],
             'name': config['name'],
             'params': config['params'],
-            'script_dir': hash_file(config['script']['dir']),
+            'script': config['script']['hash'],
         }
         return hash_binary(json.dumps(fingerprint_dict, sort_keys=True).encode('utf-8'))
 
@@ -157,8 +155,12 @@ class Stage(BaseModel):
         # Save the stage script to the workspace stage directory
         save_dir = self.workspace.stage_dir / str(config['name']) / str(version)
         if save_dir.exists():
-            shutil.rmtree(save_dir)
-        shutil.copytree(config['script']['dir'], save_dir)
+            # clear content
+            [shutil.rmtree(f) if f.is_dir() else f.unlink() for f in save_dir.iterdir()]
+        else:
+            save_dir.mkdir(parents=True)
+        for f in self.script.filelist:
+            shutil.copy(self.script.dir / f, save_dir / f)
 
         # Update the script path in the config
         config['script']['dir'] = str(save_dir)

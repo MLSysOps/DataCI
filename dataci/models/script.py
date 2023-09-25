@@ -10,24 +10,29 @@ import tokenize
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from dataci.utils import hash_file
+
 if TYPE_CHECKING:
     from os import PathLike
+    from typing import Optional
 
 
 class Script(object):
     def __init__(
             self,
             dir: 'PathLike',
-            local_dir: 'PathLike',
             entry_path: 'PathLike',
             entry_node: 'ast.FunctionDef',
+            local_dir: 'Optional[PathLike]' = None,
             **kwargs,
     ) -> None:
         # Original local dir of the script, it will be None if script load from database
         self.dir = Path(dir)
-        self.local_dir = Path(local_dir)
         self.entry_path = Path(entry_path)
+        self.filelist = [self.entry_path]
+        self.local_dir = Path(local_dir) if local_dir else None
         self._entry_node = entry_node
+        self._hash = None
 
     @property
     def entry_node(self):
@@ -59,26 +64,35 @@ class Script(object):
             (self.dir / self.entry_path).read_text(), self.entry_node, padded=False
         )
 
+    @property
+    def hash(self):
+        if self._hash is None:
+            self._hash = hash_file([self.local_dir / f for f in self.filelist])
+        return self._hash
+
     def dict(self):
         return {
             'dir': self.dir.as_posix(),
-            'local_dir': self.local_dir.as_posix(),
+            'local_dir': self.local_dir.as_posix() if self.local_dir else None,
             'entry': f'{self.entry_path.as_posix()} {self.entry_func_location}',
-            'filelist': [self.entry_path.as_posix()],
+            'filelist': [f.as_posix() for f in self.filelist],
+            'hash': self.hash,
         }
 
     @classmethod
     def from_dict(cls, config: dict):
-        entry_path, loc = config.pop('entry').split(' ')
+        entry_path, loc = config['entry'].split(' ')
         # Parse entry node from location
         lineno, col_offset = loc.split(':')
-        for node in ast.walk(ast.parse(Path(config['dir']) / entry_path)):
-            if node.lineno == lineno and node.col_offset == col_offset:
+        lineno, col_offset = int(lineno), int(col_offset)
+        for node in ast.walk(ast.parse((Path(config['dir']) / entry_path).read_text())):
+            if getattr(node, 'lineno', None) == lineno and getattr(node, 'col_offset', None) == col_offset:
                 entry_node = node
                 break
 
-        return cls(**config, entry_path=entry_path, entry_node=entry_node)
-
+        self = cls(**config, entry_path=entry_path, entry_node=entry_node)
+        self._hash = config['hash']
+        return self
 
 
 def get_source_segment(script: 'str', node: 'ast.AST', *, padded: 'bool' = False):

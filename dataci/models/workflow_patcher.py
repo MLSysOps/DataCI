@@ -128,14 +128,6 @@ def path_to_module_name(path: Path):
     return '.'.join(path.with_suffix('').parts).strip('/')
 
 
-def scantree(path):
-    """Recursively yield DirEntry objects for given directory."""
-    for entry in os.scandir(path):
-        yield entry.path
-        if entry.is_dir(follow_symlinks=False):
-            yield from scantree(entry.path)
-
-
 def get_all_predecessors(
         g: 'Union[nx.MultiDiGraph, nx.DiGraph]',
         source: 'Union[Set, List]',
