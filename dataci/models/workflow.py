@@ -48,10 +48,7 @@ class Workflow(BaseModel, ABC):
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.logger = logging.getLogger(__name__)
         self.trigger: 'Sequence[Event]' = trigger or list()
-        self._script_dir = None
-        self._entryfile = None
-        self._entrypoint = None
-        self._script_dir_local = None
+        self._script = None
         self._stage_script_paths = dict()
         self._init_params = (args, kwargs)
 
@@ -77,15 +74,9 @@ class Workflow(BaseModel, ABC):
         raise NotImplementedError
 
     @property
+    @abc.abstractmethod
     def script(self):
-        if self._script_dir is None:
-            return None
-        return {
-            'path': str(self._script_dir),
-            'local_path': str(self._script_dir_local),
-            'entryfile': str(self._entryfile),
-            'entrypoint': self._entrypoint,
-        }
+        raise NotImplementedError
 
     @property
     @abc.abstractmethod

@@ -23,6 +23,7 @@ from dataci.db.stage import (
     get_many_stages, create_one_stage_tag
 )
 from .base import BaseModel
+from .script import Script
 from ..utils import hash_binary, hash_file, cwd
 
 if TYPE_CHECKING:
@@ -52,23 +53,13 @@ class Stage(BaseModel):
         self.logger = logging.getLogger(__name__)
         self._backend = 'airflow'
         self.params = dict()
-        # Original local dir of the script, it will be None if stage load from database
-        self._script_dir_local: 'Optional[PathLike]' = None
-        self._script_dir: 'Optional[PathLike]' = None
-        self._entryfile: 'Optional[PathLike]' = None
-        self._entrypoint: 'Optional[str]' = None
+        self._script = None
 
     @property
-    def script(self):
-        if self._script_dir is None:
-            return None
-        return {
-            'path': str(self._script_dir),
-            'local_path': str(self._script_dir_local),
-            'entryfile': str(self._entryfile),
-            'entrypoint': self._entrypoint,
-            'filelist': [self._entryfile],
-        }
+    @abc.abstractmethod
+    def script(self) -> Script:
+        """The script of the stage."""
+        raise NotImplementedError
 
     @abc.abstractmethod
     def test(self, *args, **kwargs):
@@ -93,7 +84,7 @@ class Stage(BaseModel):
             'version': self.version,
             'version_tag': self.version_tag,
             'params': self.params,
-            'script': self.script,
+            'script': self.script.dict(),
             'timestamp': int(self.create_date.timestamp()) if self.create_date else None,
         }
 
@@ -103,11 +94,11 @@ class Stage(BaseModel):
 
         # TODO: make the build process more secure with sandbox / allowed safe methods
         local_dict = dict()
-        with cwd(config['script']['path']):
-            entry_file = Path(config['script']['entrypoint'])
-            entry_module = '.'.join(entry_file.parts[:-1] + (entry_file.stem,))
+        script_module = Script.from_dict(config['script'])
+        with cwd(script_module.dir):
+            entry_module, func_name = script_module.entrypoint.rsplit('.', 1)
             exec(
-                f'import os, sys; sys.path.insert(0, os.getcwd()); from {entry_module} import *',
+                f'import os, sys; sys.path.insert(0, os.getcwd()); from {entry_module} import {func_name}',
                 local_dict, local_dict
             )
         for v in local_dict.copy().values():
@@ -146,8 +137,7 @@ class Stage(BaseModel):
             'workspace': config['workspace'],
             'name': config['name'],
             'params': config['params'],
-            'script_dir': hash_file(config['script']['path']),
-            'entrypoint': config['script']['entrypoint'],
+            'script_dir': hash_file(config['script']['dir']),
         }
         return hash_binary(json.dumps(fingerprint_dict, sort_keys=True).encode('utf-8'))
 
@@ -168,10 +158,10 @@ class Stage(BaseModel):
         save_dir = self.workspace.stage_dir / str(config['name']) / str(version)
         if save_dir.exists():
             shutil.rmtree(save_dir)
-        shutil.copytree(config['script']['path'], save_dir)
+        shutil.copytree(config['script']['dir'], save_dir)
 
         # Update the script path in the config
-        config['script']['path'] = str(save_dir)
+        config['script']['dir'] = str(save_dir)
         create_one_stage(config)
         return self.reload(config)
 

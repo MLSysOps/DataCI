@@ -193,7 +193,7 @@ if __name__ == '__main__':
         package_relpath = Path(dag.stage_script_paths[stage.full_name])
 
         package = path_to_module_name(package_relpath)
-        entrypoint = package + '.' + stage.script['entrypoint'] if package != '.' else stage.script['entrypoint']
+        entrypoint = package + '.' + stage.script.entrypoint if package != '.' else stage.script.entrypoint
 
         stage_pkg_info[stage.full_name] = {
             'path': basedir / package_relpath,

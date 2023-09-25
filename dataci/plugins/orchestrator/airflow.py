@@ -23,7 +23,8 @@ from airflow.models import DAG as _DAG
 from airflow.operators.python import PythonOperator as _PythonOperator
 
 from dataci.models import Workflow, Stage, Dataset
-from dataci.plugins.orchestrator.script import get_source_segment, \
+from dataci.models.script import Script
+from dataci.plugins.orchestrator.script import \
     locate_dag_function, locate_stage_function
 from dataci.server.trigger import Trigger as _Trigger, EVENT_QUEUE, QUEUE_END
 
@@ -84,22 +85,18 @@ class DAG(Workflow, _DAG):
         raise NotImplementedError
 
     @property
-    def script(self):
-        if self._script_dir is None:
+    def script(self) -> Script:
+        if self._script is None:
             fileloc = Path(self.fileloc)
-            self._script_dir = self._script_dir_local = fileloc.parent.as_posix()
-            entryfile = fileloc.relative_to(self._script_dir)
-            self._entryfile = entryfile.as_posix()
+            entryfile = fileloc.relative_to(fileloc.parent)
             # Scan the entry file to get the entrypoint (module name w.r.t. the stage base dir)
             # 1. build a abstract syntax tree
             # 2. locate the function definition
-            # 3. convert the function name to a module name
             tree = ast.parse(Path(fileloc).read_text())
             dag_node = locate_dag_function(tree, self.name)[0]
             assert len(dag_node) == 1, f'Found multiple dag definition {self.name} in {self._entryfile}'
-            self._entrypoint = '.'.join((*entryfile.with_suffix('').parts, dag_node[0].name)).strip('/')
-
-        return super().script
+            self._script = Script(fileloc.parent, fileloc.parent, entryfile, dag_node[0])
+        return self._script
 
     @property
     def stage_script_paths(self):
@@ -258,20 +255,18 @@ class PythonOperator(Stage, _PythonOperator):
             self.op_args, self.op_kwargs = args, kwargs
 
     @property
-    def script(self):
-        if self._script_dir is None:
+    def script(self) -> Script:
+        if self._script is None:
             fileloc = Path(inspect.getsourcefile(self.python_callable)).resolve()
-            self._script_dir = self._script_dir_local = fileloc.parent
-            self._entryfile = fileloc.relative_to(self._script_dir)
+            entryfile = fileloc.relative_to(fileloc.parent)
             # Scan the entry file to get the entrypoint (module name w.r.t. the stage base dir)
             # 1. build a abstract syntax tree
             # 2. locate the function definition
-            # 3. convert the function name to a module name
             tree = ast.parse(Path(fileloc).read_text())
             func_node = locate_stage_function(tree, self.name)[0]
             assert len(func_node) == 1, f'Found multiple function definition for stage {self.name} in {self._entryfile}'
-            self._entrypoint = '.'.join((*self._entryfile.with_suffix('').parts, func_node[0].name)).strip('/')
-        return super().script
+            self._script = Script(fileloc.parent, fileloc.parent, entryfile, func_node[0])
+        return self._script
 
 
 class Trigger(_Trigger):
