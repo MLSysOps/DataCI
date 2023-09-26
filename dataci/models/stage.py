@@ -27,7 +27,6 @@ from .script import Script
 from ..utils import hash_binary, cwd
 
 if TYPE_CHECKING:
-    from os import PathLike
     from typing import Optional
 
 

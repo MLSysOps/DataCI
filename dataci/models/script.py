@@ -6,6 +6,9 @@ Email: yuanmingleee@gmail.com
 Date: Sep 25, 2023
 """
 import ast
+import fnmatch
+import itertools
+import re
 import tokenize
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -14,7 +17,7 @@ from dataci.utils import hash_file
 
 if TYPE_CHECKING:
     from os import PathLike
-    from typing import Optional
+    from typing import Optional, Literal
 
 
 class Script(object):
@@ -27,6 +30,7 @@ class Script(object):
             filelist: 'list' = None,
             includes: 'list' = None,
             excludes: 'list' = None,
+            match_syntax: 'Literal["glob", "regex"]' = 'glob',
             **kwargs,
     ) -> None:
         """Script for a Python module.
@@ -47,14 +51,64 @@ class Script(object):
         # Original local dir of the script, it will be None if script load from database
         self.dir = Path(dir)
         self.entry_path = Path(entry_path)
-        self.filelist = filelist or self._scan_file_list(self.dir, includes, excludes)
+        self.filelist = filelist or self._scan_file_list(
+            self.dir, includes=includes, excludes=excludes, match_syntax=match_syntax
+        )
         self.local_dir = Path(local_dir) if local_dir else None
         self._entry_node = entry_node
         self._hash = None
 
     @classmethod
-    def _scan_file_list(cls, directory, includes = None, excludes = None):
-        pass
+    def _scan_file_list(
+            cls, directory: 'Path', includes: 'Optional[list]' = None, excludes: 'Optional[list]' = None,
+            match_syntax: 'Literal["regex", "glob"]' = 'regex'
+    ):
+        """Scan the file list from the directory.
+
+        Args:
+            directory (PathLike): The directory to scan.
+            includes (Optional[list]): The list of files to be included in the script. Defaults to None, all files in
+                the script directory will be included. Only one of includes or excludes can be specified.
+            excludes (Optional[list]): The list of files to be excluded in the script. Defaults to None, no files will
+                be excluded. Only one of excludes or excludes can be specified.
+
+        Returns:
+            The list of files to be included in the script.
+        """
+        if includes and excludes:
+            raise ValueError('Only one of includes or excludes can be specified.')
+        filelist = directory.glob('**/*')
+
+        if match_syntax == 'glob':
+            if includes:
+                for include in includes:
+                    if Path(include).suffix == '' and not str(include).endswith('/*'):
+                        # include is a dir
+                        filelist = fnmatch.filter(filelist, include + '/*')
+                    filelist = fnmatch.filter(filelist, include)
+
+            if excludes:
+                for exclude in excludes:
+                    if Path(exclude).suffix == '' and not str(exclude).endswith('/*'):
+                        # exclude is a dir
+                        filelist = filter(lambda f: not fnmatch.fnmatch(f, exclude + '/*'), filelist)
+                    filelist = filter(lambda f: not fnmatch.fnmatch(f, exclude), filelist)
+        elif match_syntax == 'regex':
+            # 1. Relative to directory
+            # 2. Regex only accept string, and to unify path separator, convert to posix path string
+            filelist = list(map(lambda f: f.relative_to(directory).as_posix(), filelist))
+            if includes:
+                for include in includes:
+                    pat = re.compile(include)
+                    filelist = list(filter(pat.findall, filelist))
+            if excludes:
+                for exclude in excludes:
+                    pat = re.compile(exclude)
+                    filelist = list(filter(lambda f: not pat.findall(f), filelist))
+            # Convert back to Path, absolute to "directory"
+            filelist = map(directory.__truediv__, filelist)
+
+        return list(filelist)
 
     @property
     def entry_node(self):

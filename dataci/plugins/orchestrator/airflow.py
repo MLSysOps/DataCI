@@ -88,6 +88,13 @@ class DAG(Workflow, _DAG):
         if self._script is None:
             fileloc = Path(self.fileloc)
             entryfile = fileloc.relative_to(fileloc.parent)
+            ignorefile = fileloc.parent / '.airflowignore'
+            if ignorefile.exists():
+                # Read the ignore file
+                excludes = ignorefile.read_text().splitlines()
+            else:
+                # Default ignore __pycache__
+                excludes = [r'(^|\/)__pycache__']
             # Scan the entry file to get the entrypoint (module name w.r.t. the stage base dir)
             # 1. build a abstract syntax tree
             # 2. locate the function definition
@@ -96,6 +103,7 @@ class DAG(Workflow, _DAG):
             assert len(dag_node) == 1, f'Found multiple dag definition {self.name} in {self._entryfile}'
             self._script = Script(
                 dir=fileloc.parent, entry_path=entryfile, entry_node=dag_node[0], local_dir=fileloc.parent,
+                excludes=excludes, match_syntax='regex',
             )
         return self._script
 
