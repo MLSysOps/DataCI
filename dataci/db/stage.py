@@ -17,7 +17,7 @@ def create_one_stage(stage_dict):
     stage_dict['params'] = json.dumps(stage_dict['params'])
     stage_dict['script_dir'] = stage_dict['script']['dir']
     stage_dict['script_entry'] = stage_dict['script']['entry']
-    stage_dict['script_filelist'] = json.dumps(stage_dict['script']['filelist'])
+    stage_dict['script_filelist'] = json.dumps(stage_dict['script']['filelist'], sort_keys=True)
     stage_dict['script_hash'] = stage_dict['script']['hash']
 
     with sqlite3.connect(DB_FILE) as conn:

@@ -17,8 +17,12 @@ def create_one_workflow(config):
     """Create one workflow."""
     workflow_dict = deepcopy(config)
     workflow_dict['trigger'] = json.dumps(workflow_dict['trigger'], sort_keys=True)
-    workflow_dict['script_path'] = workflow_dict['script']['path']
-    workflow_dict['entrypoint'] = workflow_dict['script']['entrypoint']
+    script_dict = workflow_dict.pop('script')
+    workflow_dict['script_dir'] = script_dict['dir']
+    workflow_dict['script_entry'] = script_dict['entry']
+    workflow_dict['script_filelist'] = json.dumps(script_dict['filelist'], sort_keys=True)
+    workflow_dict['script_hash'] = script_dict['hash']
+
     dag = workflow_dict.pop('dag')
     workflow_dict['dag'] = json.dumps(dag['edge'], sort_keys=True)
     workflow_dag_node_dict = dag['node']
@@ -27,8 +31,14 @@ def create_one_workflow(config):
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO workflow (workspace, name, version, timestamp, schedule, dag, script_path, entryfile, entrypoint)
-            VALUES (:workspace, :name, :version, :timestamp, :trigger, :dag, :script_path, :entryfile, :entrypoint)
+            INSERT INTO workflow (
+                workspace, name, version, timestamp, schedule, dag
+              , script_dir, script_entry, script_filelist, script_hash
+            )
+            VALUES (
+                :workspace, :name, :version, :timestamp, :trigger, :dag, 
+                :script_path, :entrypoint, :entryfile, :script_hash    
+            )
             """,
             workflow_dict,
         )
@@ -165,9 +175,10 @@ def get_one_workflow_by_version(workspace, name, version):
                      , flag
                      , schedule
                      , dag
-                     , script_path
-                     , entryfile
-                     , entrypoint
+                     , script_dir
+                     , script_entry
+                     , script_filelist
+                     , script_hash
                 FROM   base
                 JOIN   latest
                 ON     base.timestamp = latest.timestamp
@@ -207,9 +218,10 @@ def get_one_workflow_by_version(workspace, name, version):
                      , flag
                      , schedule
                      , dag
-                     , script_path
-                     , entryfile
-                     , entrypoint
+                     , script_dir
+                     , script_entry
+                     , script_filelist
+                     , script_hash
                 FROM   base
                 LEFT JOIN tag
                 ON     base.version = tag.version
@@ -238,9 +250,10 @@ def get_one_workflow_by_version(workspace, name, version):
                 'edge': json.loads(workflow[8]),
             },
             'script': {
-                'path': workflow[9],
-                'entryfile': workflow[10],
-                'entrypoint': workflow[11],
+                'dir': workflow[9],
+                'entry': workflow[10],
+                'filelist': json.loads(workflow[11]),
+                'hash': workflow[12],
             },
         }
         # Overwrite the query version for dag node
@@ -302,9 +315,10 @@ def get_one_workflow_by_tag(workspace, name, tag):
                      , flag
                      , schedule
                      , dag
-                     , script_path
-                     , entryfile
-                     , entrypoint
+                     , script_dir
+                     , script_entry
+                     , script_filelist
+                     , script_hash
                 FROM   tag
                 JOIN   latest
                 ON     tag.tag = latest.tag
@@ -343,9 +357,10 @@ def get_one_workflow_by_tag(workspace, name, tag):
                      , flag
                      , schedule
                      , dag
-                     , script_path
-                     , entryfile
-                     , entrypoint
+                     , script_dir
+                     , script_entry
+                     , script_filelist
+                     , script_hash
                 FROM   base
                 JOIN   tag
                 ON     base.version = tag.version
@@ -371,9 +386,10 @@ def get_one_workflow_by_tag(workspace, name, tag):
                 'edge': json.loads(config[8]),
             },
             'script': {
-                'path': config[9],
-                'entryfile': config[10],
-                'entrypoint': config[11],
+                'dir': config[9],
+                'entry': config[10],
+                'filelist': json.loads(config[11]),
+                'hash': config[12],
             },
         }
         # Overwrite the query version for dag node

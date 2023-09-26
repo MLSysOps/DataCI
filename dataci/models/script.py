@@ -24,15 +24,37 @@ class Script(object):
             entry_path: 'PathLike',
             entry_node: 'ast.FunctionDef',
             local_dir: 'Optional[PathLike]' = None,
+            filelist: 'list' = None,
+            includes: 'list' = None,
+            excludes: 'list' = None,
             **kwargs,
     ) -> None:
+        """Script for a Python module.
+
+        Args:
+            dir (PathLike): The directory of the script.
+            entry_path (PathLike): The path of the entry function.
+            entry_node (ast.FunctionDef): The entry function node.
+            local_dir (Optional[PathLike]): The local directory of the script.
+            filelist (list): The list of files to be included in the script. Defaults to None, a file list will be
+                generated from the script directory.
+            includes (list): The list of files to be included in the script. Only used if the filelist is None.
+                Defaults to None, all files in the script directory will be included. Only one of includes or excludes
+                can be specified.
+            excludes (list): The list of files to be excluded in the script. Only used if the filelist is None.
+                Defaults to None, no files will be excluded. Only one of excludes or excludes can be specified.
+        """
         # Original local dir of the script, it will be None if script load from database
         self.dir = Path(dir)
         self.entry_path = Path(entry_path)
-        self.filelist = [self.entry_path]
+        self.filelist = filelist or self._scan_file_list(self.dir, includes, excludes)
         self.local_dir = Path(local_dir) if local_dir else None
         self._entry_node = entry_node
         self._hash = None
+
+    @classmethod
+    def _scan_file_list(cls, directory, includes = None, excludes = None):
+        pass
 
     @property
     def entry_node(self):

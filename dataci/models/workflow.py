@@ -27,6 +27,7 @@ from dataci.db.workflow import (
 )
 from .base import BaseModel
 from .event import Event
+from .script import Script
 from .stage import Stage
 # from dataci.run import Run
 from ..utils import hash_binary, cwd, hash_file
@@ -75,7 +76,7 @@ class Workflow(BaseModel, ABC):
 
     @property
     @abc.abstractmethod
-    def script(self):
+    def script(self) -> Script:
         raise NotImplementedError
 
     @property
@@ -112,7 +113,7 @@ class Workflow(BaseModel, ABC):
                 },
                 'edge': dag_edge_list,
             },
-            'script': self.script,
+            'script': self.script.dict(),
             'timestamp': int(self.create_date.timestamp()) if self.create_date else None,
             'trigger': [str(evt) for evt in self.trigger],
             'input_datasets': [dataset.dict(id_only=True) for dataset in self.input_datasets],
@@ -162,8 +163,7 @@ class Workflow(BaseModel, ABC):
             'workspace': config['workspace'],
             'name': config['name'],
             'stages': [stage.fingerprint for stage in self.stages.values()],
-            'script_dir': hash_file(config['script']['path']),
-            'entrypoint': config['script']['entrypoint'],
+            'script': config['script']['hash'],
         }
         return hash_binary(json.dumps(fingerprint_dict, sort_keys=True).encode('utf-8'))
 

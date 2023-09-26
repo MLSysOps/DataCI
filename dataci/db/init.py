@@ -40,9 +40,10 @@ with db_connection:
         flag        TEXT,
         schedule    TEXT,
         dag         TEXT,
-        script_path TEXT,
-        entryfile   TEXT,
-        entrypoint  TEXT,
+        script_dir       TEXT,
+        script_entry     TEXT,
+        script_filelist  TEXT,
+        script_hash      TEXT,
         PRIMARY KEY (workspace, name, version),
         UNIQUE (workspace, name, version)
     );
