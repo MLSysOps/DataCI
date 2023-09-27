@@ -37,7 +37,7 @@ def create_one_workflow(config):
             )
             VALUES (
                 :workspace, :name, :version, :timestamp, :trigger, :dag, 
-                :script_path, :entrypoint, :entryfile, :script_hash    
+                :script_dir, :script_entry, :script_filelist, :script_hash    
             )
             """,
             workflow_dict,

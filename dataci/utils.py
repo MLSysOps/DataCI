@@ -6,7 +6,6 @@ Email: yuanmingleee@gmail.com
 Date: Mar 15, 2023
 """
 import hashlib
-import itertools
 import os
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
@@ -56,7 +55,7 @@ def hash_file(filepaths: 'Union[str, os.PathLike, List[Union[os.PathLike, str]]]
         https://stackoverflow.com/a/24937710
     """
     sha_hash = hashlib.md5()
-    if isinstance(filepaths, str):
+    if isinstance(filepaths, (str, os.PathLike)):
         filepaths = [filepaths]
     # Find common prefix
     root = os.path.commonpath(filepaths)

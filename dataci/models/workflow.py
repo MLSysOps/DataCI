@@ -49,7 +49,7 @@ class Workflow(BaseModel, ABC):
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.logger = logging.getLogger(__name__)
         self.trigger: 'Sequence[Event]' = trigger or list()
-        self._script = None
+        self._script: 'Optional[Script]' = None
         self._stage_script_paths = dict()
         self._init_params = (args, kwargs)
 
@@ -178,9 +178,7 @@ class Workflow(BaseModel, ABC):
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
         self.trigger = [Event.from_str(evt) for evt in config['trigger']]
         if 'script' in config:
-            self._script_dir = config['script']['path']
-            self._entryfile = config['script']['entryfile']
-            self._entrypoint = config['script']['entrypoint']
+            self._script = Script.from_dict(config['script'])
         if 'dag' in config:
             self._stage_script_paths.clear()
             # Reload stages by stage config fetched from DB
@@ -224,8 +222,10 @@ class Workflow(BaseModel, ABC):
         if save_dir.exists():
             shutil.rmtree(save_dir)
         # Copy the workflow script dir
-        from_dir = Path(config['script']['path'])
-        shutil.copytree(from_dir, save_dir)
+        from_dir = Path(config['script']['dir'])
+        for file in config['script']['filelist']:
+            (save_dir / file).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(from_dir / file, save_dir / file)
 
         # Scan workflow script dir
         file_checksums, filemap = dict(), defaultdict(list)
@@ -243,11 +243,11 @@ class Workflow(BaseModel, ABC):
                 # Skip the stage if the stage script is external
                 continue
             dag_stage_rel_dir = Path(dag_stage_rel_dir)
-            stage_root_dir = Path(stage.script['path'])
+            stage_root_dir = Path(stage.script.dir)
             for abs_file_name in Path(stage_root_dir).glob('**/*'):
                 if abs_file_name.is_dir():
                     continue
-                rel_file_name = str(dag_stage_rel_dir / abs_file_name.relative_to(stage_root_dir).as_posix())
+                rel_file_name = (dag_stage_rel_dir / abs_file_name.relative_to(stage_root_dir)).as_posix()
                 file_checksum = hash_file(abs_file_name)
                 if file_checksums.get(rel_file_name, file_checksum) != file_checksum:
                     raise FileExistsError(
