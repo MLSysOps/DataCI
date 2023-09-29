@@ -76,45 +76,41 @@ import networkx as nx
 import pygraphviz
 
 from dataci.models import Stage
+from dataci.models.script import get_source_segment
 from dataci.utils import cwd
 
 if TYPE_CHECKING:
     from typing import Any, Union
 
 
-def replace_package(basedir, source: 'Stage', target: 'Stage', excludes: 'Union[str, List[str]]' = '**/__pycache__'):
+def replace_package(basedir, source: 'Stage', target: 'Stage'):
     basedir = Path(basedir)
-    new_mountdir = Path(target.name)
-    excludes = [excludes] if isinstance(excludes, str) else excludes
-    # Add /* to the end of the excludes if it is a dir pattern (name does not have extension)
-    excludes = chain.from_iterable(map(lambda x: [x, x + '/*'] if Path(x).suffix == '' else [x], excludes))
+    new_mountdir = basedir / target.name
 
     print(f'replace package {source} -> {target}')
-    rm_files = set(map(lambda x: str(basedir / x), source.script['filelist']))
-    # Filter out exclude files and remove files
-    all_files = scantree(basedir)
-    for exclude in excludes:
-        all_files = filter(lambda f: not fnmatch.fnmatch(f, exclude), all_files)
-
-    # Delete empty dir in the remain files
-    dirs = defaultdict(list)
-    for f in set(all_files) - rm_files:
-        f_path = Path(f)
-        if f_path.is_file():
-            dirs[str(f_path.parent)].append(f)
-        else:
-            dirs[f] = list()
-    empty_dirs = [k for k, v in dirs.items() if len(v) == 0]
+    rm_files = list(map(lambda x: str(basedir / x), source.script.filelist))
     print('Remove list:')
-    rm_files.update(empty_dirs)
     print(rm_files)
 
     print('Add list:')
-    print(list(map(lambda x: new_mountdir / x, target.script['filelist'])))
+    print(list(map(lambda x: str(new_mountdir / x), target.script.filelist)))
 
 
-def replace_entry_func():
-    print('replace entry func')
+def replace_entry_func(basedir, source: 'Stage', target: 'Stage'):
+    basedir = Path(basedir)
+    new_mountdir = basedir / target.name
+
+    print(f'replace entry func {source} -> {target}')
+    modify_file = source.script.entry_path
+    entryfile_script = get_source_segment(
+        (basedir / modify_file).read_text(),
+        source.script.entry_node,
+        padded=True
+    )
+    print('Modify file:')
+    print(modify_file)
+    print('Modify script:')
+    print(entryfile_script)
 
 
 def fixup_entry_func_import_name():
@@ -177,7 +173,7 @@ if __name__ == '__main__':
     new_func = text_augmentation
     dag = text_classification_dag
 
-    basedir = Path(dag.script['path'])
+    basedir = Path(dag.script.dir)
     # Get all package and entrypoint info for all stages
     stage_pkg_info = dict()
     for stage in dag.stages.values():
@@ -191,10 +187,10 @@ if __name__ == '__main__':
             'path': basedir / package_relpath,
             'package': package or '.',
             'entrypoint': entrypoint,
-            'include': [path_to_module_name(package_relpath / file) for file in stage.script['filelist']]
+            'include': [path_to_module_name(package_relpath / file) for file in stage.script.filelist]
         }
     # Get dag entrypoint info
-    dag_entrypoint = dag.script['entrypoint']
+    dag_entrypoint = dag.script.entrypoint
 
     # Function to be patched
     replace_func_info = stage_pkg_info.pop(replace_func_name)
@@ -265,7 +261,7 @@ if __name__ == '__main__':
     print(entrypoint_outer_caller)
 
     if len(inner_func_outer_callers):
-        replace_entry_func()
+        replace_entry_func(replace_func_info['path'], dag.stages[replace_func_name], new_func)
     else:
         replace_package(replace_func_info['path'], dag.stages[replace_func_name], new_func)
 

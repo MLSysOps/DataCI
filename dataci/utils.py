@@ -8,6 +8,7 @@ Date: Mar 15, 2023
 import hashlib
 import os
 from contextlib import contextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -33,14 +34,6 @@ def symlink_force(target, link_name, target_is_directory=False):
     os.symlink(target, link_name, target_is_directory)
 
 
-def scantree(path):
-    """Recursively yield DirEntry objects for given directory."""
-    for entry in os.scandir(path):
-        yield entry.path
-        if entry.is_dir(follow_symlinks=False):
-            yield from scantree(entry.path)
-
-
 def hash_file(filepaths: 'Union[str, os.PathLike, List[Union[os.PathLike, str]]]'):
     """
     Compute the hash of a single file or a directory tree, including all files and subdirectories.
@@ -62,16 +55,16 @@ def hash_file(filepaths: 'Union[str, os.PathLike, List[Union[os.PathLike, str]]]
     # Tree scan of all file paths / directories
     paths = list()
     for path in filepaths:
-        # If path is a directory, scan it
-        if os.path.isdir(path):
-            paths.extend(scantree(path))
-        else:
-            paths.append(path)
+        paths.append(path)
+        paths.extend(Path(path).glob('**/*'))
 
     # Sort the file paths for consistent hash
     for path in sorted(paths):
+        if not path.is_file():
+            # Skip directories
+            continue
         # hash relative name
-        sha_hash.update(os.path.relpath(path, root).encode())
+        sha_hash.update(path.relative_to(root).encode())
         with open(path, 'rb') as f:
             while True:
                 # Read file in as little chunks
