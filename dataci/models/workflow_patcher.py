@@ -65,10 +65,8 @@ If entrypoint outer caller > 0 or (entrypoint inter caller > 0 and inner functio
 Else:
     no need to take care of func / import name
 """
-import fnmatch
-import os
-from collections import defaultdict
-from itertools import chain
+import ast
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Set
 
@@ -80,7 +78,7 @@ from dataci.models.script import get_source_segment
 from dataci.utils import cwd
 
 if TYPE_CHECKING:
-    from typing import Any, Union
+    from typing import Any, Tuple, Union
 
 
 def replace_package(basedir, source: 'Stage', target: 'Stage'):
@@ -95,6 +93,8 @@ def replace_package(basedir, source: 'Stage', target: 'Stage'):
     print('Add list:')
     print(list(map(lambda x: str(new_mountdir / x), target.script.filelist)))
 
+    return target.name + '.' + target.script.entrypoint
+
 
 def replace_entry_func(basedir, source: 'Stage', target: 'Stage'):
     basedir = Path(basedir)
@@ -102,19 +102,141 @@ def replace_entry_func(basedir, source: 'Stage', target: 'Stage'):
 
     print(f'replace entry func {source} -> {target}')
     modify_file = source.script.entry_path
+    modify_file_script = (basedir / modify_file).read_text()
     entryfile_script = get_source_segment(
-        (basedir / modify_file).read_text(),
+        modify_file_script,
         source.script.entry_node,
         padded=True
     )
     print('Modify file:')
     print(modify_file)
     print('Modify script:')
-    print(entryfile_script)
+    print(modify_file_script.replace(entryfile_script, ''))
+
+    print('Add list:')
+    print(list(map(lambda x: str(new_mountdir / x), target.script.filelist)))
+
+    return target.name + '.' + target.script.entrypoint
 
 
-def fixup_entry_func_import_name():
+def fixup_entry_func_import_name(
+        paths: List[Path],
+        source_stage_entrypoint: str,
+        target_stage_entrypoint: str,
+        source_stage_package: str,
+        replace_package: bool = False,
+        entryfile_replace_point: str = None,
+):
     print('fixup entry func import name')
+    print('Caller list:')
+    for path in paths:
+        print(path)
+        script = path.read_text()
+        # Parse the ast of the script, and find the import statement
+        tree = ast.parse(script)
+        import_points = list()
+
+        # Locate all module level stage function definition
+        for node in ast.iter_child_nodes(tree):
+            # Get var name of the dataci.plugins.decorators.stage function
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                module_name = '.' * getattr(node, 'level', 0) + getattr(node, 'module', '')
+                for alias in node.names:
+                    global_name = module_name + '.' + alias.name if module_name else alias.name
+                    alias_name = alias.asname or alias.name
+                    # Found module name or parent module name
+                    if source_stage_entrypoint.startswith(global_name):
+                        var_name = alias_name + source_stage_entrypoint.split(global_name)[-1]
+                        import_points.append((node, global_name, var_name))
+
+        pat = re.compile(
+            re.escape((source_stage_package + '.').lstrip('.')) +
+            r'(.*)\.([^.]+)'
+        )
+        if match := pat.match(source_stage_entrypoint):
+            stage_pkg_name, func_name = match.groups()
+
+        # Replace the var name in the import statement
+        for node, global_import_name, var_name in import_points:
+            remove_lines = [get_source_segment(script, node, padded=True)]
+            add_lines = list()
+            padding = remove_lines[0].encode()[:node.col_offset].decode()
+            if '.' not in var_name:
+                # stage is imported as a module name:
+                # -import stage_root.stg_pkg.func as var_name
+                # +import new_stage_root.new_stage_pkg.new_func as var_name
+                add_lines.append(f'{padding}import {target_stage_entrypoint} as {var_name}')
+            else:
+                # stage is imported / ref as a package name
+                if not replace_package:
+                    # Case 1: replace the old function module name with the new function module name
+                    if global_import_name.endswith(func_name):
+                        # i. import statement include the function name,
+                        #   replace the import statement, since the function is not valid
+                        # ```diff
+                        # -import stage_root.stg_pkg.func
+                        # +import stage_root.stg_pkg
+                        # +import stage_root.new_stage_pkg.new_func
+                        # +stage_root.stg_pkg.func = new_stage_root.new_stage_pkg.new_func
+                        # ```
+                        add_lines.append(f'{padding}import ' + f'{source_stage_package}.{stage_pkg_name}'.lstrip('.'))
+                    else:
+                        # ii. Otherwise,
+                        # ```diff
+                        # import stage_root.stg_pkg as alias
+                        # +import stage_root.new_stage_pkg.new_func
+                        # +alias.func = dag_pkg.new_stage_pkg.func
+                        # ```
+                        add_lines.extend(remove_lines)
+                    add_lines.extend([
+                        f'{padding}import {target_stage_entrypoint}',
+                        f'{padding}{var_name} = {target_stage_entrypoint}'
+                    ])
+                else:
+                    # Case 2: if stage package is replaced, need to mock the stage package
+
+                    # +import dag_pkg
+                    # +import dag_pkg.new_stage_pkg.new_func
+                    # +dag_pkg.stg_pkg = types.ModuleType('dag_pkg.stg_pkg')
+                    # +dag_pkg.stg_pkg.func = new_func
+                    #
+                    # import dag_pkg.stg_pkg as alias
+                    # +import dag_pkg
+                    # +alias = types.ModuleType('dag_pkg.stg_pkg')
+                    # +alias.func = new_func`
+                    if f'{stage_pkg_name}.{func_name}'.startswith(global_import_name.lstrip(source_stage_package)):
+                        # i. import statement include the stage package name
+                        # ```diff
+                        # -import stage_root.stg_pkg_part1
+                        # +import stage_root
+                        # +stage_root.stage_pkg_part1 = types.ModuleType('stage_root.stage_pkg_part1')
+                        # ```
+                        add_lines.append(f'{padding}import ' + f'{source_stage_package}'.lstrip('.'))
+            print('Remove lines:')
+            print('\n'.join(remove_lines))
+            print('Add lines:')
+            print('\n'.join(add_lines))
+        else:
+            # Within the stage entry file, import new stage entry function as the old function name
+            remove_line = None
+            for line in script.splitlines():
+                if entryfile_replace_point is not None and (entryfile_replace_point in line):
+                    remove_line = line
+                    break
+            else:
+                # Not found a remove_line, raise error
+                raise ValueError(
+                    f'`entryfile_replace_point={entryfile_replace_point}` are expected in file {path} '
+                    f'for replacing function only patch, but not found.'
+                )
+            padding = remove_line.split('#', 1)[0]
+            add_lines = [
+                f'{padding}import {target_stage_entrypoint} as {func_name}'
+            ]
+            print('Remove line:')
+            print(remove_line)
+            print('Add lines:')
+            print('\n'.join(add_lines))
 
 
 def path_to_module_name(path: Path):
@@ -155,8 +277,6 @@ def get_all_successors(
     search_graph.add_edges_from(map(lambda x: (entry, x), source))
     return set(nx.dfs_preorder_nodes(search_graph, entry))
 
-
-FILE_MARKER = '<files>'
 
 if __name__ == '__main__':
     from pyan import create_callgraph
@@ -261,9 +381,19 @@ if __name__ == '__main__':
     print(entrypoint_outer_caller)
 
     if len(inner_func_outer_callers):
-        replace_entry_func(replace_func_info['path'], dag.stages[replace_func_name], new_func)
+        new_entrypoint = replace_entry_func(replace_func_info['path'], dag.stages[replace_func_name], new_func)
     else:
-        replace_package(replace_func_info['path'], dag.stages[replace_func_name], new_func)
+        new_entrypoint = replace_package(replace_func_info['path'], dag.stages[replace_func_name], new_func)
 
     if len(entrypoint_outer_caller) or (len(entrypoint_inner_caller) and len(inner_func_outer_callers)):
-        fixup_entry_func_import_name()
+        paths = list()
+        for caller in entrypoint_callers & package_nodes - {top_node_id}:
+            label = call_graph.nodes[caller]['label']
+            paths.append((basedir / label.replace('.', '/')).with_suffix('.py'))
+        fixup_entry_func_import_name(
+            paths=paths,
+            source_stage_entrypoint=entrypoint,
+            target_stage_entrypoint=new_entrypoint,
+            source_stage_package=package,
+            replace_package=bool(len(inner_func_outer_callers))
+        )
