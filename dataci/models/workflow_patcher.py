@@ -194,31 +194,47 @@ def fixup_entry_func_import_name(
                     ])
                 else:
                     # Case 2: if stage package is replaced, need to mock the stage package
-
-                    # +import dag_pkg
-                    # +import dag_pkg.new_stage_pkg.new_func
-                    # +dag_pkg.stg_pkg = types.ModuleType('dag_pkg.stg_pkg')
-                    # +dag_pkg.stg_pkg.func = new_func
-                    #
                     # import dag_pkg.stg_pkg as alias
                     # +import dag_pkg
                     # +alias = types.ModuleType('dag_pkg.stg_pkg')
                     # +alias.func = new_func`
-                    if f'{stage_pkg_name}.{func_name}'.startswith(global_import_name.lstrip(source_stage_package)):
+                    stage_pkg_mods = global_import_name.lstrip(source_stage_package + '.')
+                    if f'{stage_pkg_name}.{func_name}'.startswith(stage_pkg_mods):
                         # i. import statement include the stage package name
                         # ```diff
-                        # -import stage_root.stg_pkg_part1
+                        # -import stage_root.stage_pkg_parts as alias
                         # +import stage_root
-                        # +stage_root.stage_pkg_part1 = types.ModuleType('stage_root.stage_pkg_part1')
+                        # +stage_root.stage_pkg_mod1 = types.ModuleType('stage_root.stage_pkg_mod1')
+                        # +alias = stage_root.stage_pkg_mod1
+                        # +import new_stage_root.new_stage_pkg.new_func
+                        # +alias.func = new_stage_root.new_stage_pkg.new_func
                         # ```
-                        add_lines.append(f'{padding}import ' + f'{source_stage_package}'.lstrip('.'))
+                        if source_stage_package:
+                            add_lines.append(f'{padding}import {source_stage_package}')
+                            add_lines.append(f'{padding}import types')
+                            import_name = source_stage_package
+                            for mod in stage_pkg_mods.split('.'):
+                                import_name = f'{import_name}.{mod}'
+                                add_lines.append(f'{padding}{import_name} = types.ModuleType({import_name!r})')
+                            if alias := var_name.rstrip('.' + func_name) != import_name:
+                                add_lines.append(f'{padding}{alias} = {import_name}')
+                    else:
+                        # ii. Otherwise,
+                        # ```diff
+                        # import stage_root as alias
+                        # +import stage_root.new_stage_pkg.new_func
+                        # +alias.func = new_stage_root.new_stage_pkg.new_func
+                        add_lines.extend(remove_lines)
+
+                    add_lines.append(f'{padding}import {target_stage_entrypoint}')
+                    add_lines.append(f'{padding}{var_name} = {target_stage_entrypoint}')
+
             print('Remove lines:')
             print('\n'.join(remove_lines))
             print('Add lines:')
             print('\n'.join(add_lines))
         else:
             # Within the stage entry file, import new stage entry function as the old function name
-            remove_line = None
             for line in script.splitlines():
                 if entryfile_replace_point is not None and (entryfile_replace_point in line):
                     remove_line = line
