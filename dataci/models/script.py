@@ -9,6 +9,7 @@ import ast
 import fnmatch
 import itertools
 import re
+import shutil
 import tokenize
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -16,17 +17,17 @@ from typing import TYPE_CHECKING
 from dataci.utils import hash_file
 
 if TYPE_CHECKING:
-    from os import PathLike
-    from typing import Optional, Literal
+    import os
+    from typing import Optional, Literal, Union
 
 
 class Script(object):
     def __init__(
             self,
-            dir: 'PathLike',
-            entry_path: 'PathLike',
+            dir: 'os.PathLike',
+            entry_path: 'os.PathLike',
             entry_node: 'ast.FunctionDef',
-            local_dir: 'Optional[PathLike]' = None,
+            local_dir: 'Optional[os.PathLike]' = None,
             filelist: 'list' = None,
             includes: 'list' = None,
             excludes: 'list' = None,
@@ -51,9 +52,12 @@ class Script(object):
         # Original local dir of the script, it will be None if script load from database
         self.dir = Path(dir)
         self.entry_path = Path(entry_path)
-        self.filelist = filelist or self._scan_file_list(
-            self.dir, includes=includes, excludes=excludes, match_syntax=match_syntax
-        )
+        if filelist:
+            self.filelist = list(map(lambda f: Path(f).relative_to(self.dir) if f.is_absolute() else f, filelist))
+        else:
+            self.filelist = self._scan_file_list(
+                self.dir, includes=includes, excludes=excludes, match_syntax=match_syntax
+            )
         self.local_dir = Path(local_dir) if local_dir else None
         self._entry_node = entry_node
         self._hash = None
@@ -105,8 +109,8 @@ class Script(object):
                 for exclude in excludes:
                     pat = re.compile(exclude)
                     filelist = list(filter(lambda f: not pat.findall(f), filelist))
-            # Convert back to Path, absolute to "directory"
-            filelist = map(directory.__truediv__, filelist)
+        # Convert back to Path, and only keep the files
+        filelist = filter(lambda f: (directory / f).is_file(), map(Path, filelist))
 
         return list(filelist)
 
@@ -169,6 +173,27 @@ class Script(object):
         self = cls(**config, entry_path=entry_path, entry_node=entry_node)
         self._hash = config['hash']
         return self
+
+    def copy(
+            self, dst: 'Union[str, os.PathLike]', copy_function=shutil.copy2, dirs_exist_ok=False) -> str:
+        """Recursive copy the script to the dst directory and return the destination directory.
+        This function will only copy the files in the :code:`filelist` of the script.
+
+        Args:
+            dst (str or os.PathLike): The destination directory.
+            copy_function (Callable): The function to copy the file. Defaults to shutil.copy2.
+            dirs_exist_ok (bool): Whether to raise an exception if dst is not a directory or already exists.
+                Defaults to False.
+
+        Returns:
+            str: The destination directory.
+        """
+        dst_path = Path(dst)
+        dst_path.mkdir(parents=True, exist_ok=dirs_exist_ok)
+        for file in self.filelist:
+            copy_function(self.dir / file, dst_path / file)
+
+        return dst
 
 
 def get_source_segment(script: 'str', node: 'ast.AST', *, padded: 'bool' = False):
