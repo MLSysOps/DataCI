@@ -128,6 +128,16 @@ def fixup_entry_func_import_name(
         entryfile_replace_point: str = None,
 ):
     print('fixup entry func import name')
+    pat = re.compile(
+        re.escape((source_stage_package + '.').lstrip('.')) +
+        r'(.*)\.([^.]+)'
+    )
+    if match := pat.match(source_stage_entrypoint):
+        stage_pkg_name, func_name = match.groups()
+    else:
+        raise ValueError('Cannot parse stage package name and function name from '
+                         f'source_stage_entrypoint={source_stage_entrypoint}')
+
     print('Caller list:')
     for path in paths:
         print(path)
@@ -148,13 +158,6 @@ def fixup_entry_func_import_name(
                     if source_stage_entrypoint.startswith(global_name):
                         var_name = alias_name + source_stage_entrypoint.split(global_name)[-1]
                         import_points.append((node, global_name, var_name))
-
-        pat = re.compile(
-            re.escape((source_stage_package + '.').lstrip('.')) +
-            r'(.*)\.([^.]+)'
-        )
-        if match := pat.match(source_stage_entrypoint):
-            stage_pkg_name, func_name = match.groups()
 
         # Replace the var name in the import statement
         for node, global_import_name, var_name in import_points:
@@ -194,38 +197,48 @@ def fixup_entry_func_import_name(
                     ])
                 else:
                     # Case 2: if stage package is replaced, need to mock the stage package
-                    # import dag_pkg.stg_pkg as alias
-                    # +import dag_pkg
-                    # +alias = types.ModuleType('dag_pkg.stg_pkg')
-                    # +alias.func = new_func`
                     stage_pkg_mods = global_import_name.lstrip(source_stage_package + '.')
-                    if f'{stage_pkg_name}.{func_name}'.startswith(stage_pkg_mods):
+                    if f'{stage_pkg_name}.{func_name}'.lstrip('.').startswith(stage_pkg_mods):
                         # i. import statement include the stage package name
+                        # Alias import is used
                         # ```diff
-                        # -import stage_root.stage_pkg_parts as alias
-                        # +import stage_root
-                        # +stage_root.stage_pkg_mod1 = types.ModuleType('stage_root.stage_pkg_mod1')
-                        # +alias = stage_root.stage_pkg_mod1
-                        # +import new_stage_root.new_stage_pkg.new_func
-                        # +alias.func = new_stage_root.new_stage_pkg.new_func
+                        # -import stage_root.stg_mod1 as alias
+                        # +alias = types.ModuleType('stage_root.stg_mod1')
+                        # +alias.stg_mod2 = types.ModuleType('stage_root.stg_mod1.stg_mod2')
                         # ```
-                        if source_stage_package:
-                            add_lines.append(f'{padding}import {source_stage_package}')
-                            add_lines.append(f'{padding}import types')
-                            import_name = source_stage_package
-                            for mod in stage_pkg_mods.split('.'):
-                                import_name = f'{import_name}.{mod}'
-                                add_lines.append(f'{padding}{import_name} = types.ModuleType({import_name!r})')
-                            if alias := var_name.rstrip('.' + func_name) != import_name:
-                                add_lines.append(f'{padding}{alias} = {import_name}')
-                    else:
-                        # ii. Otherwise,
+                        # Or direct import is used
                         # ```diff
-                        # import stage_root as alias
-                        # +import stage_root.new_stage_pkg.new_func
-                        # +alias.func = new_stage_root.new_stage_pkg.new_func
+                        # -import stage_root.stg_mod1.stg_mod2
+                        # +import stage_root
+                        # +stage_root.stg_mod1 = types.ModuleType('stage_root.stg_mod1')
+                        # +stage_root.stg_mod1.stg_mod2 = types.ModuleType('stage_root.stg_mod1.stg_mod2')
+                        # ```
+                        import_name = ''
+                        add_stage_root_import, add_types_import = False, True
+                        for mod in var_name.split('.')[:-1]:
+                            import_name = import_name + '.' + mod if import_name else mod # prevent leading '.'
+                            if source_stage_package.startswith(import_name):
+                                # found: import stage_root_mod1, import stage_root_mod1.stage_root_mod2, etc
+                                add_stage_root_import = True
+                                continue
+                            elif add_stage_root_import:
+                                # Not found stage_root import any further, add stage_root import:
+                                # +import stage_root_mod1.stage_root_mod2
+                                add_lines.append(f'{padding}import {import_name}')
+                                add_stage_root_import = False
+                            if add_types_import:
+                                add_lines.append(f'{padding}import types')
+                                add_types_import = False
+                            add_lines.append(f'{padding}{import_name} = types.ModuleType({mod!r})')
+                    else:
+                        # ii. Otherwise, do nothing for import fixing
                         add_lines.extend(remove_lines)
 
+                    # Add the new function import and fix import
+                    # ```diff
+                    # +import new_stage_root.new_stage_pkg.new_func
+                    # +alias.func = new_stage_root.new_stage_pkg.new_func
+                    # ```
                     add_lines.append(f'{padding}import {target_stage_entrypoint}')
                     add_lines.append(f'{padding}{var_name} = {target_stage_entrypoint}')
 
