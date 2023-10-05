@@ -99,7 +99,7 @@ def replace_package(basedir: 'Path', source: 'Stage', target: 'Stage'):
         print(f"Add file '{add_file}'")
     target.script.copy(new_mountdir, dirs_exist_ok=True)
 
-    return new_mountdir / target.script.entry_path
+    return new_mountdir
 
 
 def replace_entry_func(basedir: Path, source: 'Stage', target: 'Stage'):
@@ -128,7 +128,7 @@ def replace_entry_func(basedir: Path, source: 'Stage', target: 'Stage'):
         print(f"Add file '{add_file}'")
     target.script.copy(new_mountdir, dirs_exist_ok=True)
 
-    return new_mountdir / target.script.entry_path
+    return new_mountdir
 
 
 def fixup_entry_func_import_name(
@@ -149,9 +149,8 @@ def fixup_entry_func_import_name(
         raise ValueError('Cannot parse stage package name and function name from '
                          f'source_stage_entrypoint={source_stage_entrypoint}')
 
-    print('Caller list:')
     for path in paths:
-        print(path)
+        print(f"Modify file '{path}'")
         script = path.read_text()
         # Parse the ast of the script, and find the import statement
         tree = ast.parse(script)
@@ -252,11 +251,6 @@ def fixup_entry_func_import_name(
                     # ```
                     add_lines.append(f'{padding}import {target_stage_entrypoint}')
                     add_lines.append(f'{padding}{var_name} = {target_stage_entrypoint}')
-
-            print('Remove lines:')
-            print('\n'.join(remove_lines))
-            print('Add lines:')
-            print('\n'.join(add_lines))
         else:
             # Within the stage entry file, import new stage entry function as the old function name
             for line in script.splitlines():
@@ -266,8 +260,8 @@ def fixup_entry_func_import_name(
             else:
                 # Not found a remove_line, raise error
                 raise ValueError(
-                    f'`entryfile_replace_point={ENTRY_FUNC_REPLACE_TEXT}` are expected in file {path} '
-                    f'for replacing function only patch, but not found.'
+                    f"entryfile replace point '{ENTRY_FUNC_REPLACE_TEXT}' are expected in file {path} "
+                    f"for replacing function only patch, but not found."
                 )
             padding = remove_line.split('#', 1)[0]
             add_lines = [
@@ -421,19 +415,22 @@ if __name__ == '__main__':
     print(entrypoint_outer_caller)
 
     with TemporaryDirectory(dir=dag.workspace.tmp_dir) as tmp_dir:
+        tmp_dir = Path(tmp_dir)
         # Copy the dag package to a temp dir
         dag.script.copy(tmp_dir, dirs_exist_ok=True)
-        stage_base_dir = Path(tmp_dir) / replace_func_info['path'].relative_to(basedir)
+        stage_base_dir = tmp_dir / replace_func_info['path'].relative_to(basedir)
         if len(inner_func_outer_callers):
-            new_entrypoint = replace_entry_func(stage_base_dir, dag.stages[replace_func_name], new_func)
+            new_stage_dir = replace_entry_func(stage_base_dir, dag.stages[replace_func_name], new_func)
         else:
-            new_entrypoint = replace_package(stage_base_dir, dag.stages[replace_func_name], new_func)
+            new_stage_dir = replace_package(stage_base_dir, dag.stages[replace_func_name], new_func)
+        new_entrypoint = path_to_module_name(new_stage_dir.relative_to(tmp_dir)) + '.' + new_func.script.entrypoint
+
 
         if len(entrypoint_outer_caller) or (len(entrypoint_inner_caller) and len(inner_func_outer_callers)):
             paths = list()
             for caller in entrypoint_callers & package_nodes - {top_node_id}:
                 label = call_graph.nodes[caller]['label']
-                paths.append((basedir / label.replace('.', '/')).with_suffix('.py'))
+                paths.append((tmp_dir / label.replace('.', '/')).with_suffix('.py'))
             fixup_entry_func_import_name(
                 paths=paths,
                 source_stage_entrypoint=entrypoint,

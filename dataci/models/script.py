@@ -6,12 +6,14 @@ Email: yuanmingleee@gmail.com
 Date: Sep 25, 2023
 """
 import ast
+import bisect
 import fnmatch
 import itertools
 import re
 import shutil
 import tokenize
 from pathlib import Path
+from textwrap import dedent, indent
 from typing import TYPE_CHECKING
 
 from dataci.utils import hash_file
@@ -244,3 +246,49 @@ def get_source_segment(script: 'str', node: 'ast.AST', *, padded: 'bool' = False
     node.end_lineno, node.end_col_offset = node_end_lineno, node_end_col_offset
 
     return '\n'.join(lines)
+
+
+
+def replace_source_segment(script, node, replace_segment):
+    """Replace the source code segment of the *source* that generated *node* with *new_segment*.
+
+    If some location information (`lineno`, `end_lineno`, `col_offset`,
+    or `end_col_offset`) is missing, return None.
+    """
+    node_lineno, node_end_lineno = node.lineno - 1, node.end_lineno - 1
+    node_col_offset, node_end_col_offset = node.col_offset, node.end_col_offset
+
+    # Find char offset of each line ending, we search all line separators for different OS
+    line_char_offsets = list()
+    for match in re.finditer(r'\r\n|\r|\n', script):
+        line_char_offsets.append(match.end())
+
+    # Get code segment, and trim the leading and trailing whitespace
+    # Those whitespace may lead to not found the code segment if multiple nodes are in the same line
+    code_segment = get_source_segment(script, node, padded=True).strip()
+    bisect_lo = 0
+    for match in re.finditer(re.escape(code_segment), script):
+        start, end = match.span()
+        # Get line number
+        # since the line number is monotonically non-decreasing, we can speed up the search
+        # by set bisect_left's lo to the last found line number
+        line_no = bisect_lo = bisect.bisect_left(line_char_offsets, start, lo=bisect_lo)
+        col_offset = start - line_char_offsets[bisect_lo - 1] if bisect_lo > 0 else start
+
+        if node_lineno > line_no or (node_lineno == line_no and node_col_offset >= col_offset):
+            # Get end line number
+            end_line_no = bisect_lo = bisect.bisect_left(line_char_offsets, end, lo=bisect_lo)
+            end_col_offset = end - line_char_offsets[bisect_lo - 1] if bisect_lo > 0 else end
+
+            if node_end_lineno < end_line_no or (
+                    node_end_lineno == end_line_no and node_end_col_offset <= end_col_offset
+            ):
+                # Reindent the replacement segment
+                start_line_index = line_char_offsets[node_lineno - 1] if node_lineno > 0 else 0
+                padding = script[start_line_index:start_line_index + node_col_offset]
+                # Count number of leading whitespace
+                indent_prefix = ' ' * (len(padding.encode()) - len(padding.lstrip().encode()))
+                # Since the original code segment is stripped, we need to remove the padding before replace
+                replace_segment = indent(dedent(replace_segment), indent_prefix).strip()
+                # Replace code segment
+                return script[:start] + replace_segment + script[end:]
