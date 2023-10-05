@@ -7,6 +7,7 @@ Date: Sep 25, 2023
 """
 import ast
 import bisect
+import difflib
 import fnmatch
 import itertools
 import re
@@ -245,50 +246,98 @@ def get_source_segment(script: 'str', node: 'ast.AST', *, padded: 'bool' = False
     lines.append(ast.get_source_segment(script, node, padded=padded))
     node.end_lineno, node.end_col_offset = node_end_lineno, node_end_col_offset
 
-    return '\n'.join(lines)
+    return '\n'.join(lines).rstrip()
 
 
-
-def replace_source_segment(script, node, replace_segment):
-    """Replace the source code segment of the *source* that generated *node* with *new_segment*.
+def replace_source_segment(source, nodes, replace_segments):
+    """Replace the source code segment of the *source* that generated the list of *nodes* with corresponding
+     list of *new_segments*.
 
     If some location information (`lineno`, `end_lineno`, `col_offset`,
     or `end_col_offset`) is missing, return None.
     """
-    node_lineno, node_end_lineno = node.lineno - 1, node.end_lineno - 1
-    node_col_offset, node_end_col_offset = node.col_offset, node.end_col_offset
-
+    if isinstance(nodes, ast.AST):
+        nodes = [nodes]
+    if isinstance(replace_segments, str):
+        replace_segments = [replace_segments]
     # Find char offset of each line ending, we search all line separators for different OS
     line_char_offsets = list()
-    for match in re.finditer(r'\r\n|\r|\n', script):
+    for match in re.finditer(r'\r\n|\r|\n', source):
         line_char_offsets.append(match.end())
 
-    # Get code segment, and trim the leading and trailing whitespace
-    # Those whitespace may lead to not found the code segment if multiple nodes are in the same line
-    code_segment = get_source_segment(script, node, padded=True).strip()
+    # Replace the node in order
+    prev_start, prev_end = 0, 0
     bisect_lo = 0
-    for match in re.finditer(re.escape(code_segment), script):
-        start, end = match.span()
-        # Get line number
-        # since the line number is monotonically non-decreasing, we can speed up the search
-        # by set bisect_left's lo to the last found line number
-        line_no = bisect_lo = bisect.bisect_left(line_char_offsets, start, lo=bisect_lo)
-        col_offset = start - line_char_offsets[bisect_lo - 1] if bisect_lo > 0 else start
+    new_script = ''
+    for node, replace_segment in sorted(
+            zip(nodes, replace_segments), key=lambda x: f'{x[0].lineno}.{x[0].col_offset}'
+    ):
+        node_lineno, node_end_lineno = node.lineno - 1, node.end_lineno - 1
+        node_col_offset, node_end_col_offset = node.col_offset, node.end_col_offset
 
-        if node_lineno > line_no or (node_lineno == line_no and node_col_offset >= col_offset):
-            # Get end line number
-            end_line_no = bisect_lo = bisect.bisect_left(line_char_offsets, end, lo=bisect_lo)
-            end_col_offset = end - line_char_offsets[bisect_lo - 1] if bisect_lo > 0 else end
+        # Get code segment, and trim the leading and trailing whitespace
+        # Those whitespace may lead to not found the code segment if multiple nodes are in the same line
+        code_segment = get_source_segment(source, node, padded=True).strip()
+        for match in re.finditer(re.escape(code_segment), source):
+            start, end = match.span()
+            # Get line number
+            # since the line number is monotonically non-decreasing, we can speed up the search
+            # by set bisect_left's lo to the last found line number
+            line_no = bisect_lo = bisect.bisect_left(line_char_offsets, start, lo=bisect_lo)
+            col_offset = start - line_char_offsets[bisect_lo - 1] if bisect_lo > 0 else start
 
-            if node_end_lineno < end_line_no or (
-                    node_end_lineno == end_line_no and node_end_col_offset <= end_col_offset
-            ):
-                # Reindent the replacement segment
-                start_line_index = line_char_offsets[node_lineno - 1] if node_lineno > 0 else 0
-                padding = script[start_line_index:start_line_index + node_col_offset]
-                # Count number of leading whitespace
-                indent_prefix = ' ' * (len(padding.encode()) - len(padding.lstrip().encode()))
-                # Since the original code segment is stripped, we need to remove the padding before replace
-                replace_segment = indent(dedent(replace_segment), indent_prefix).strip()
-                # Replace code segment
-                return script[:start] + replace_segment + script[end:]
+            if f'{node_lineno}.{node_col_offset}' >= f'{line_no}.{col_offset}':
+                # Get end line number
+                end_line_no = bisect_lo = bisect.bisect_left(line_char_offsets, end, lo=bisect_lo)
+                end_col_offset = end - line_char_offsets[bisect_lo - 1] if bisect_lo > 0 else end
+
+                if f'{node_end_lineno}.{node_end_col_offset}' <= f'{end_line_no}.{end_col_offset}':
+                    # Reindent the replacement segment
+                    start_line_index = line_char_offsets[node_lineno - 1] if node_lineno > 0 else 0
+                    padding = source[start_line_index:start_line_index + node_col_offset]
+                    # Count number of leading whitespace
+                    indent_prefix = ' ' * (len(padding.encode()) - len(padding.lstrip().encode()))
+                    # Since the original code segment is stripped, we need to remove the padding before replace
+                    replace_segment = indent(dedent(replace_segment), indent_prefix).strip()
+                    # Replace code segment
+                    new_script += source[prev_end:start] + replace_segment
+                    prev_end = end + 1
+                    break
+    new_script += source[prev_end:]
+    return new_script
+
+
+def format_code_diff(old: str, new: str, n: int = 3):
+    old_script_lines = old.splitlines(keepends=True)
+    new_script_lines = new.splitlines(keepends=True)
+    diff = difflib.unified_diff(old_script_lines, new_script_lines, n=n)
+    print_diff_lines = list()
+    line_counter_digit = len(str(max(len(old_script_lines), len(new_script_lines))))
+    old_lineno, new_lineno = 0, 0
+    for text in diff:
+        if text[:3] == '@@ ':
+            # In the context of diff, recover the line_no
+            # @@ -old_file_lineno,old_file_linecount +new_file_lineno,new_file_linecount @@
+            print_diff_lines.append(text)
+            old_lineno, new_lineno = re.match(r'@@ -(\d+),\d+ \+(\d+),\d+ @@', text).groups()
+            old_lineno, new_lineno = int(old_lineno), int(new_lineno)
+        elif text[:3] in ('---', '+++'):
+            continue
+        else:
+            if text[0] == ' ':
+                # No change, count both old and new file line no
+                old_lineno += 1
+                new_lineno += 1
+                line_display = f"{old_lineno:{line_counter_digit}d} | {new_lineno:{line_counter_digit}d}"
+            elif text[0] == '-':
+                # Remove line, only count old file line no
+                old_lineno += 1
+                line_display = f"{old_lineno:{line_counter_digit}d} | {' ':{line_counter_digit}}"
+            elif text[0] == '+':
+                # Add line, only count new file line no
+                new_lineno += 1
+                line_display = f"{' ':{line_counter_digit}} | {new_lineno:{line_counter_digit}d}"
+            else:
+                line_display = f"{' ':{line_counter_digit}} | {' ':{line_counter_digit}}"
+            print_diff_lines.append(f'{line_display} | {text}')
+    return ''.join(print_diff_lines).rstrip()
