@@ -76,7 +76,12 @@ import networkx as nx
 import pygraphviz
 
 from dataci.models import Stage
-from dataci.models.script import get_source_segment, replace_source_segment, format_code_diff
+from dataci.models.script import (
+    get_source_segment, replace_source_segment,
+    format_code_diff,
+    dircmp,
+    pretty_print_dircmp
+)
 from dataci.utils import cwd
 
 if TYPE_CHECKING:
@@ -112,12 +117,7 @@ def replace_entry_func(basedir: Path, source: 'Stage', target: 'Stage', fix_impo
         source.script.entry_node,
         f'import {target_stage_entrypoint} as {source_func_name}' if fix_import_name else '',
     )
-    print(
-        f"Modify file '{modify_file}'\n"
-        "```\n" +
-        format_code_diff(modify_file_script, new_file_script) +
-        "```\n"
-    )
+    print(f"Modify file '{modify_file}'")
     modify_file.write_text(new_file_script)
 
     for add_file in map(lambda x: new_mountdir / x, target.script.filelist):
@@ -258,12 +258,7 @@ def fixup_entry_func_import_name(
         # Replace all import statements at one time
         if len(replace_nodes) > 0:
             new_script = replace_source_segment(script, replace_nodes, replace_segs)
-            print(
-                f"Modify file '{path}'\n"
-                "```\n" +
-                format_code_diff(script, new_script) +
-                "```\n"
-            )
+            print(f"Modify file '{path}'")
             path.write_text(new_script)
 
 
@@ -411,8 +406,10 @@ if __name__ == '__main__':
     with TemporaryDirectory(dir=dag.workspace.tmp_dir) as tmp_dir:
         tmp_dir = Path(tmp_dir)
         # Copy the dag package to a temp dir
-        dag.script.copy(tmp_dir, dirs_exist_ok=True)
-        stage_base_dir = tmp_dir / replace_func_info['path'].relative_to(basedir)
+        old_dir, new_dir = tmp_dir / 'a', tmp_dir / 'b'
+        dag.script.copy(old_dir, dirs_exist_ok=True)
+        dag.script.copy(new_dir, dirs_exist_ok=True)
+        stage_base_dir = new_dir / replace_func_info['path'].relative_to(basedir)
         flg_replace_pkg = len(inner_func_outer_callers) == 0
         flg_fix_import_name = len(entrypoint_outer_caller) \
                               or (len(entrypoint_inner_caller) and len(inner_func_outer_callers))
@@ -421,13 +418,13 @@ if __name__ == '__main__':
             new_stage_dir = replace_package(stage_base_dir, dag.stages[replace_func_name], new_func)
         else:
             new_stage_dir = replace_entry_func(stage_base_dir, dag.stages[replace_func_name], new_func)
-        new_entrypoint = path_to_module_name(new_stage_dir.relative_to(tmp_dir)) + '.' + new_func.script.entrypoint
+        new_entrypoint = path_to_module_name(new_stage_dir.relative_to(new_dir)) + '.' + new_func.script.entrypoint
 
-        if len(entrypoint_outer_caller) or (len(entrypoint_inner_caller) and len(inner_func_outer_callers)):
+        if flg_fix_import_name:
             paths = list()
             for caller in entrypoint_callers & package_nodes - {top_node_id}:
                 label = call_graph.nodes[caller]['label']
-                paths.append((tmp_dir / label.replace('.', '/')).with_suffix('.py'))
+                paths.append((new_dir / label.replace('.', '/')).with_suffix('.py'))
             fixup_entry_func_import_name(
                 paths=paths,
                 source_stage_entrypoint=entrypoint,
@@ -435,3 +432,8 @@ if __name__ == '__main__':
                 source_stage_package=package,
                 replace_package=bool(len(inner_func_outer_callers))
             )
+
+        # File compare
+        print('File compare:')
+        add_files, del_files, mod_files = dircmp(old_dir, new_dir)
+        pretty_print_dircmp(add_files, del_files, mod_files)

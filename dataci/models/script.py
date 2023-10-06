@@ -8,8 +8,9 @@ Date: Sep 25, 2023
 import ast
 import bisect
 import difflib
+import filecmp
 import fnmatch
-import itertools
+import os
 import re
 import shutil
 import tokenize
@@ -17,11 +18,12 @@ from pathlib import Path
 from textwrap import dedent, indent
 from typing import TYPE_CHECKING
 
+from rich.console import Console
+
 from dataci.utils import hash_file
 
 if TYPE_CHECKING:
-    import os
-    from typing import Optional, Literal, Union
+    from typing import Optional, Literal, Union, Tuple, List
 
 
 class Script(object):
@@ -307,6 +309,78 @@ def replace_source_segment(source, nodes, replace_segments):
     return new_script
 
 
+def dircmp(
+        old: 'Union[str, os.PathLike]', new: 'Union[str, os.PathLike]'
+) -> 'Tuple[List[str], List[str], List[str]]':
+    """Compare two directories recursively.
+
+    Args:
+        old (str or os.PathLike): The old directory.
+        new (str or os.PathLike): The new directory.
+    Returns:
+        A tuple of three lists:
+            add_files (list): The list of files added in the new directory.
+            del_files (list): The list of files deleted in the new directory.
+            mod_files (list): The list of files modified in the new directory.
+    """
+    dcmp = filecmp.dircmp(old, new)
+    old, new = Path(old), Path(new)
+    add_files, del_files, mod_files = list(), list(), list()
+    for file in dcmp.left_only:
+        file = old / file
+        if file.is_dir():
+            # recursive add all files
+            del_files.extend(filter(Path.is_file, file.glob('**/*')))
+        else:
+            del_files.append(file)
+    del_files = list(map(lambda f: f.relative_to(old).as_posix(), del_files))
+
+    for file in dcmp.right_only:
+        file = new / file
+        if file.is_dir():
+            # recursive add all files
+            add_files.extend(filter(Path.is_file, file.glob('**/*')))
+        else:
+            add_files.append(file)
+    add_files = list(map(lambda f: f.relative_to(new).as_posix(), add_files))
+
+    for file in dcmp.diff_files:
+        mod_files.append(file)
+
+    for subdir, sub_dcmp in dcmp.subdirs.items():
+        subdir_add_files, subdir_del_files, subdir_mod_files = dircmp(
+            old / subdir, new / subdir
+        )
+        subdir = Path(subdir)
+        map_to_relative = lambda f: (subdir / f).as_posix()
+        add_files.extend(map(map_to_relative, subdir_add_files))
+        del_files.extend(map(map_to_relative, subdir_del_files))
+        mod_files.extend(map(map_to_relative, subdir_mod_files))
+
+    return add_files, del_files, mod_files
+
+
+def pretty_print_dircmp(add_files, del_files, mod_files):
+    """Pretty print the directory comparison result.
+
+    Args:
+        add_files (list): The list of files added in the new directory.
+        del_files (list): The list of files deleted in the new directory.
+        mod_files (list): The list of files modified in the new directory.
+
+    Returns:
+        str: The pretty print result.
+    """
+    with Console() as console:
+        if add_files:
+            console.print(os.sep.join(f'added:    {f}' for f in add_files), style='green')
+        if del_files:
+            console.print(os.sep.join(f'deleted:  {f}' for f in del_files), style='red')
+        if mod_files:
+            console.print(os.sep.join(f'modified: {f}' for f in mod_files), style='yellow')
+
+# 1d572d
+# 792e2d
 def format_code_diff(old: str, new: str, n: int = 3):
     old_script_lines = old.splitlines(keepends=True)
     new_script_lines = new.splitlines(keepends=True)
