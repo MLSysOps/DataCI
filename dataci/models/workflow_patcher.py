@@ -437,3 +437,15 @@ if __name__ == '__main__':
         print('File compare:')
         add_files, del_files, mod_files = dircmp(old_dir, new_dir)
         pretty_print_dircmp(add_files, del_files, mod_files)
+        print('Code diff:')
+        for file in add_files:
+            print(file)
+            format_code_diff('', (new_dir / file).read_text())
+
+        for file in mod_files:
+            print(file)
+            print(format_code_diff((old_dir / file).read_text(), (new_dir / file).read_text()))
+
+        for file in del_files:
+            print(file)
+            print(format_code_diff((old_dir / file).read_text(), ''))
