@@ -7,7 +7,6 @@ Date: Sep 25, 2023
 """
 import ast
 import bisect
-import difflib
 import fnmatch
 import os
 import re
@@ -18,6 +17,7 @@ from textwrap import dedent, indent
 from typing import TYPE_CHECKING
 
 from rich.console import Console
+from rich.columns import Columns
 from rich.syntax import Syntax
 from rich.text import Text
 from rich.table import Table
@@ -343,92 +343,135 @@ def pretty_print_dircmp(diffs: 'git.diff.DiffIndex'):
             elif op_code == 'T':
                 console.print(f'typechange: {a_path} -> {b_path}', style='blue')
 
+
 # 1d572d, 12261e
 # 792e2d, 25171c
-def format_code_diff(diff: 'git.diff.Diff'):
-    old_script_lines = old.splitlines(keepends=True)
-    new_script_lines = new.splitlines(keepends=True)
-    code_width = len(str(max(len(old_script_lines), len(new_script_lines))))
-    table = Table.grid(expand=True)
-    table.add_column('old_lineno', justify='right', min_width=code_width + 1, style='bright_white')
-    table.add_column('new_lineno', justify='right', min_width=code_width + 1, style='bright_white')
-    table.add_column('op_code', justify='center', width=3, style='bright_white')
-    table.add_column('text', justify='left')
+def pretty_print_diff(diffs: 'git.diff.DiffIndex'):
+    """Pretty print the diff result.
 
-    old_lineno, new_lineno = 0, 0
+    Args:
+        diffs (git.diff.DiffIndex): The repository diff result by GitPython.
+    """
+    diff_lists = list()
+    for change_type in 'ACDMRT':
+        for diff in diffs.iter_change_type(change_type):
+            diff_lists.append((change_type, diff))
 
-    with Console() as console:
-        for text in diff:
-            if text[:3] == '@@ ':
-                # In the context of diff, recover the line_no
-                # @@ -old_file_lineno,old_file_linecount +new_file_lineno,new_file_linecount @@
-                table.add_row(
-                    '',
-                    '',
-                    '',
-                    text.rstrip(),
-                )
-                old_lineno, new_lineno = re.match(r'@@ -(\d+),\d+ \+(\d+),\d+ @@', text).groups()
-                old_lineno, new_lineno = int(old_lineno), int(new_lineno)
-            elif text[:3] in ('---', '+++'):
-                continue
-            else:
-                if text[0] == ' ':
-                    # No change, count both old and new file line no
-                    text_syntax = Syntax(
-                        old,
-                        'python',
-                        line_numbers=False,
-                        word_wrap=True,
-                        background_color='default',
-                        line_range=(old_lineno, old_lineno),
-                        code_width=80,
-                    )
+    for op_code, diff in sorted(diff_lists, key=lambda x: x[1].b_path or x[1].a_path):
+        old = diff.a_blob.data_stream.read().decode() if diff.a_blob else ''
+        new = diff.b_blob.data_stream.read().decode() if diff.b_blob else ''
+
+        with Console() as console:
+            console.print('')
+            if op_code == 'A':
+                console.print('new file:   ', style='green', end='')
+                console.print(diff.b_path, style='underline green')
+            elif op_code == 'C':
+                console.print('copied:     ', style='blue', end='')
+                console.print(diff.a_path, style='underline blue', end='')
+                console.print(' -> ', style='blue', end='')
+                console.print(diff.b_path, style='underline blue')
+            elif op_code == 'D':
+                console.print('deleted:    ', style='red', end='')
+                console.print(diff.b_path, style='underline red')
+            elif op_code == 'M':
+                console.print('            ', end='')
+                console.print(diff.a_path, style='underline bright_yellow')
+            elif op_code == 'R':
+                console.print('renamed:    ', style='blue', end='')
+                console.print(diff.a_path, style='underline blue', end='')
+                console.print(' -> ', style='blue', end='')
+                console.print(diff.b_path, style='underline blue')
+            console.rule(style='light_white')
+
+            code_width = len(str(max(len(old.splitlines()), len(new.splitlines()))))
+            table = Table.grid(expand=True)
+            table.add_column('old_lineno', justify='left', min_width=code_width + 1, style='white')
+            table.add_column('new_lineno', justify='left', min_width=code_width + 1, style='white')
+            table.add_column('text', justify='left', style='white')
+
+            old_lineno, new_lineno = 0, 0
+
+            for text in diff.diff.decode().splitlines():
+                if text[:3] == '@@ ':
+                    # In the context of diff, recover the line_no
+                    # @@ -old_file_lineno,old_file_linecount +new_file_lineno,new_file_linecount @@ context
+
+                    match = re.match(r'@@ -(\d+),\d+ \+(\d+),\d+ @@', text)
+                    line_info, context = match.group(), text[match.end():].strip()
                     table.add_row(
-                        str(old_lineno),
-                        str(new_lineno),
-                        '   ',
-                        text_syntax,
-                        style='white',
+                        '',
+                        '',
+                        Columns([
+                            Text(line_info),
+                            Syntax(
+                                context,
+                                'python',
+                                line_numbers=False,
+                                word_wrap=True,
+                                background_color='default',
+                                line_range=(1, 1),
+                            )
+                        ])
                     )
-                    old_lineno += 1
-                    new_lineno += 1
-                elif text[0] == '-':
-                    # Remove line, only count old file line no
-                    text_syntax = Syntax(
-                        old,
-                        'python',
-                        line_numbers=False,
-                        word_wrap=True,
-                        theme='github-dark',
-                        background_color='default',
-                        line_range=(old_lineno, old_lineno),
-                        code_width=80,
-                    )
-                    table.add_row(
-                        Text(str(old_lineno), style='on color(88)'),
-                        Text(' ', style='on color(88)'),
-                        Text('-', style='on color(88)'),
-                        text_syntax,
-                    )
-                    old_lineno += 1
-                elif text[0] == '+':
-                    text_syntax = Syntax(
-                        new,
-                        'python',
-                        line_numbers=False,
-                        word_wrap=True,
-                        theme='github-dark',
-                        background_color='default',
-                        line_range=(new_lineno, new_lineno),
-                        code_width=80,
-                    )
-                    # Add line, only count new file line no
-                    table.add_row(
-                        Text(' ', style='on color(22)'),
-                        Text(str(new_lineno), style='on color(22)'),
-                        Text('+', style='on color(22)'),
-                        text_syntax,
-                    )
-                    new_lineno += 1
-        console.print(table)
+                    old_lineno, new_lineno = match.groups()
+                    old_lineno, new_lineno = int(old_lineno), int(new_lineno)
+                elif text[:3] in ('---', '+++'):
+                    continue
+                else:
+                    if text[0] == ' ':
+                        # No change, count both old and new file line no
+                        text_syntax = Syntax(
+                            old,
+                            'python',
+                            line_numbers=False,
+                            word_wrap=True,
+                            background_color='default',
+                            line_range=(old_lineno, old_lineno),
+                            code_width=80,
+                        )
+                        table.add_row(
+                            str(old_lineno),
+                            str(new_lineno),
+                            text_syntax,
+                            style='white',
+                        )
+                        old_lineno += 1
+                        new_lineno += 1
+                    elif text[0] == '-':
+                        # Remove line, only count old file line no
+                        text_syntax = Syntax(
+                            old,
+                            'python',
+                            line_numbers=False,
+                            word_wrap=True,
+                            theme='github-dark',
+                            background_color='color(52)',
+                            line_range=(old_lineno, old_lineno),
+                            code_width=80,
+                        )
+                        table.add_row(
+                            Text(str(old_lineno), style='color(52)'),
+                            Text(' '),
+                            text_syntax,
+                        )
+                        old_lineno += 1
+                    elif text[0] == '+':
+                        text_syntax = Syntax(
+                            new,
+                            'python',
+                            line_numbers=False,
+                            word_wrap=True,
+                            theme='github-dark',
+                            background_color='color(22)',
+                            line_range=(new_lineno, new_lineno),
+                            code_width=80,
+                        )
+                        # Add line, only count new file line no
+                        table.add_row(
+                            Text(' '),
+                            Text(str(new_lineno), style='color(22)'),
+                            text_syntax,
+                        )
+                        new_lineno += 1
+            console.print(table)

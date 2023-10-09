@@ -73,8 +73,6 @@ from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, List, Set
 
 import git
-from unidiff import PatchSet
-from io import StringIO
 
 import networkx as nx
 import pygraphviz
@@ -82,7 +80,7 @@ import pygraphviz
 from dataci.models import Stage
 from dataci.models.script import (
     get_source_segment, replace_source_segment,
-    format_code_diff,
+    pretty_print_diff,
     pretty_print_dircmp
 )
 from dataci.utils import cwd
@@ -445,10 +443,9 @@ if __name__ == '__main__':
 
         (tmp_dir / 'README.md').rename(tmp_dir / 'README.md.bak')
         repo.git.add(all=True)
-        diffs = repo.index.diff(None, staged=True, create_patch=True, word_diff=True)
+        diffs = repo.index.diff(None, staged=True, create_patch=True)
         # File compare
         print('File compare:')
         pretty_print_dircmp(diffs)
         print('Code diff:')
-        # for diff in diffs:
-        #     format_code_diff(diff)
+        pretty_print_diff(diffs)
