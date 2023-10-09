@@ -8,7 +8,6 @@ Date: Sep 25, 2023
 import ast
 import bisect
 import difflib
-import filecmp
 import fnmatch
 import os
 import re
@@ -27,8 +26,7 @@ from dataci.utils import hash_file
 
 if TYPE_CHECKING:
     from typing import Optional, Literal, Union, Tuple, List
-
-    import rich.segment
+    import git.diff
 
 
 class Script(object):
@@ -314,82 +312,42 @@ def replace_source_segment(source, nodes, replace_segments):
     return new_script
 
 
-def dircmp(
-        old: 'Union[str, os.PathLike]', new: 'Union[str, os.PathLike]'
-) -> 'Tuple[List[str], List[str], List[str]]':
-    """Compare two directories recursively.
-
-    Args:
-        old (str or os.PathLike): The old directory.
-        new (str or os.PathLike): The new directory.
-    Returns:
-        A tuple of three lists:
-            add_files (list): The list of files added in the new directory.
-            del_files (list): The list of files deleted in the new directory.
-            mod_files (list): The list of files modified in the new directory.
-    """
-    dcmp = filecmp.dircmp(old, new)
-    old, new = Path(old), Path(new)
-    add_files, del_files, mod_files = list(), list(), list()
-    for file in dcmp.left_only:
-        file = old / file
-        if file.is_dir():
-            # recursive add all files
-            del_files.extend(filter(Path.is_file, file.glob('**/*')))
-        else:
-            del_files.append(file)
-    del_files = list(map(lambda f: f.relative_to(old).as_posix(), del_files))
-
-    for file in dcmp.right_only:
-        file = new / file
-        if file.is_dir():
-            # recursive add all files
-            add_files.extend(filter(Path.is_file, file.glob('**/*')))
-        else:
-            add_files.append(file)
-    add_files = list(map(lambda f: f.relative_to(new).as_posix(), add_files))
-
-    for file in dcmp.diff_files:
-        mod_files.append(file)
-
-    for subdir, sub_dcmp in dcmp.subdirs.items():
-        subdir_add_files, subdir_del_files, subdir_mod_files = dircmp(
-            old / subdir, new / subdir
-        )
-        subdir = Path(subdir)
-        map_to_relative = lambda f: (subdir / f).as_posix()
-        add_files.extend(map(map_to_relative, subdir_add_files))
-        del_files.extend(map(map_to_relative, subdir_del_files))
-        mod_files.extend(map(map_to_relative, subdir_mod_files))
-
-    return add_files, del_files, mod_files
-
-
-def pretty_print_dircmp(add_files, del_files, mod_files):
+def pretty_print_dircmp(diffs: 'git.diff.DiffIndex'):
     """Pretty print the directory comparison result.
 
     Args:
-        add_files (list): The list of files added in the new directory.
-        del_files (list): The list of files deleted in the new directory.
-        mod_files (list): The list of files modified in the new directory.
+        diffs (git.diff.DiffIndex): The repository diff result by GitPython.
 
     Returns:
         str: The pretty print result.
     """
+    diff_lists = list()
+    for change_type in 'ACDMRT':
+        for diff in diffs.iter_change_type(change_type):
+            diff_lists.append((change_type, diff.a_path, diff.b_path))
+
     with Console() as console:
-        if add_files:
-            console.print(os.sep.join(f'new file: {f}' for f in add_files), style='green')
-        if del_files:
-            console.print(os.sep.join(f'deleted:  {f}' for f in del_files), style='red')
-        if mod_files:
-            console.print(os.sep.join(f'modified: {f}' for f in mod_files), style='yellow')
+        # Use the new file path as the key to sort the diff list
+        # if the new file path is None, use the old file path
+        for op_code, a_path, b_path in sorted(diff_lists, key=lambda x: x[2] or x[1]):
+            if op_code == 'A':
+                console.print(f'new file:   {b_path}', style='green')
+            elif op_code == 'C':
+                console.print(f'copied:     {a_path} -> {b_path}', style='blue')
+            elif op_code == 'D':
+                console.print(f'deleted:    {b_path}', style='red')
+            elif op_code == 'M':
+                console.print(f'modified:   {a_path}', style='bright_yellow')
+            elif op_code == 'R':
+                console.print(f'renamed:    {a_path} -> {b_path}', style='blue')
+            elif op_code == 'T':
+                console.print(f'typechange: {a_path} -> {b_path}', style='blue')
 
 # 1d572d, 12261e
 # 792e2d, 25171c
-def format_code_diff(old: str, new: str, n: int = 3):
+def format_code_diff(diff: 'git.diff.Diff'):
     old_script_lines = old.splitlines(keepends=True)
     new_script_lines = new.splitlines(keepends=True)
-    diff = difflib.unified_diff(old_script_lines, new_script_lines, n=n)
     code_width = len(str(max(len(old_script_lines), len(new_script_lines))))
     table = Table.grid(expand=True)
     table.add_column('old_lineno', justify='right', min_width=code_width + 1, style='bright_white')
@@ -408,7 +366,7 @@ def format_code_diff(old: str, new: str, n: int = 3):
                     '',
                     '',
                     '',
-                    text,
+                    text.rstrip(),
                 )
                 old_lineno, new_lineno = re.match(r'@@ -(\d+),\d+ \+(\d+),\d+ @@', text).groups()
                 old_lineno, new_lineno = int(old_lineno), int(new_lineno)
