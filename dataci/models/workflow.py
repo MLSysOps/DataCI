@@ -33,7 +33,8 @@ from .stage import Stage
 from ..utils import hash_binary, cwd, hash_file
 
 if TYPE_CHECKING:
-    from typing import Optional, Iterable, Sequence, Dict
+    import os
+    from typing import Optional, Iterable, Sequence, Dict, Union
     from dataci.models import Dataset
 
 logger = logging.getLogger(__name__)
@@ -123,10 +124,16 @@ class Workflow(BaseModel, ABC):
     @classmethod
     def from_dict(cls, config: 'dict'):
         # Build class object from script
+        script = Script.from_dict(config['script'])
+        self = cls.from_path(script.dir, script.entrypoint)
+        return self.reload(config)
+
+    @classmethod
+    def from_path(cls, script_dir: 'Union[str, os.PathLike]', entry_path: 'Union[str, os.PathLike]'):
         # TODO: make the build process more secure with sandbox / allowed safe methods
         local_dict = dict()
-        with cwd(config['script']['path']):
-            entry_file = Path(config['script']['entrypoint'])
+        with cwd(script_dir):
+            entry_file = Path(entry_path)
             entry_module = '.'.join(entry_file.parts[:-1] + (entry_file.stem,))
             exec(
                 f'import os, sys; sys.path.insert(0, os.getcwd()); from {entry_module} import *',
@@ -137,8 +144,9 @@ class Workflow(BaseModel, ABC):
                 self = v
                 break
         else:
-            raise ValueError(f'Stage not found in directory:\n{config["script"]["path"]}')
-        return self.reload(config)
+            raise ValueError(f'Workflow not found in directory: {script_dir}')
+
+        return self
 
     def __repr__(self) -> str:
         if all((self.workspace.name, self.name)):

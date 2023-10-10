@@ -12,10 +12,11 @@ import itertools
 import os
 import re
 import shutil
+import sys
 import tokenize
 from pathlib import Path
 from textwrap import dedent, indent
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, IO
 
 from rich.console import Console
 from rich.columns import Columns
@@ -313,11 +314,12 @@ def replace_source_segment(source, nodes, replace_segments):
     return new_script
 
 
-def pretty_print_dircmp(diffs: 'git.diff.DiffIndex'):
+def pretty_print_dircmp(diffs: 'git.diff.DiffIndex', file: 'IO' = sys.stdout):
     """Pretty print the directory comparison result.
 
     Args:
         diffs (git.diff.DiffIndex): The repository diff result by GitPython.
+        file (IO): The file to write the result. Defaults to sys.stdout.
 
     Returns:
         str: The pretty print result.
@@ -327,7 +329,7 @@ def pretty_print_dircmp(diffs: 'git.diff.DiffIndex'):
         for diff in diffs.iter_change_type(change_type):
             diff_lists.append((change_type, diff.a_path, diff.b_path))
 
-    with Console() as console:
+    with Console(file=file, force_terminal=True) as console:
         # Use the new file path as the key to sort the diff list
         # if the new file path is None, use the old file path
         for op_code, a_path, b_path in sorted(diff_lists, key=lambda x: x[2] or x[1]):
@@ -347,11 +349,12 @@ def pretty_print_dircmp(diffs: 'git.diff.DiffIndex'):
 
 # 1d572d, 12261e
 # 792e2d, 25171c
-def pretty_print_diff(diffs: 'git.diff.DiffIndex'):
+def pretty_print_diff(diffs: 'git.diff.DiffIndex', file: 'IO' = sys.stdout):
     """Pretty print the diff result.
 
     Args:
         diffs (git.diff.DiffIndex): The repository diff result by GitPython.
+        file (IO): The file to write the result. Defaults to sys.stdout.
     """
     def get_syntax_lines(syntax: Syntax) -> int:
         """Get the number of lines and renderables of the syntax.
@@ -380,7 +383,7 @@ def pretty_print_diff(diffs: 'git.diff.DiffIndex'):
 
     # Get filelist
     for op_code, diff, old, new in sorted(diff_lists, key=lambda x: x[1].b_path or x[1].a_path):
-        with Console() as console:
+        with Console(file=file, force_terminal=True) as console:
             console.print('')
             if op_code == 'A':
                 console.print('new file:   ', style='green', end='')

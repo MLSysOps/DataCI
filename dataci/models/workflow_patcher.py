@@ -66,9 +66,13 @@ Else:
     no need to take care of func / import name
 """
 import ast
+import logging
 import os
 import re
+from io import StringIO
 from pathlib import Path
+from pydoc import pipepager
+from shutil import rmtree
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, List, Set
 
@@ -76,6 +80,7 @@ import git
 
 import networkx as nx
 import pygraphviz
+from pyan import create_callgraph
 
 from dataci.models import Stage
 from dataci.models.script import (
@@ -101,13 +106,18 @@ def replace_package(basedir: 'Path', source: 'Stage', target: 'Stage'):
     for add_file in map(lambda x: new_mountdir / x, target.script.filelist):
         print(f"Add file '{add_file}'")
     target.script.copy(new_mountdir, dirs_exist_ok=True)
+    # Check if the package has '__init__.py' file
+    if not (new_mountdir / '__init__.py').exists():
+        (new_mountdir / '__init__.py').touch()
 
     return new_mountdir
 
 
-def replace_entry_func(basedir: Path, source: 'Stage', target: 'Stage', fix_import_name: bool = False):
+def replace_entry_func(basedir: Path, source: 'Stage', target: 'Stage', fix_import_name: bool):
     new_mountdir = basedir / target.name
     target_stage_entrypoint = path_to_module_name(new_mountdir.relative_to(basedir)) + '.' + target.script.entrypoint
+    target_func_name = target_stage_entrypoint.split('.')[-1]
+    target_stage_mod = '.'.join(target_stage_entrypoint.split('.')[:-1]) or '.'
     source_func_name = source.script.entrypoint.split('.')[-1]
 
     print(f"replace entry func {source} -> {target}")
@@ -116,7 +126,7 @@ def replace_entry_func(basedir: Path, source: 'Stage', target: 'Stage', fix_impo
     new_file_script = replace_source_segment(
         modify_file_script,
         source.script.entry_node,
-        f'import {target_stage_entrypoint} as {source_func_name}' if fix_import_name else '',
+        f'from {target_stage_mod} import {target_func_name} as {source_func_name}' if fix_import_name else '',
     )
     print(f"Modify file '{modify_file}'")
     modify_file.write_text(new_file_script)
@@ -302,27 +312,23 @@ def get_all_successors(
     return set(nx.dfs_preorder_nodes(search_graph, entry))
 
 
-if __name__ == '__main__':
-    from pyan import create_callgraph
-    import logging
-
+def patch(
+        workflow: 'Workflow',
+        source_name: str,
+        target: 'Stage',
+        verbose: bool = True,
+        logger: 'logging.Logger' = None
+):
+    logger = logger or logging.getLogger(__name__)
     # Disable logger for pyan
     logging.getLogger('pyan').setLevel('CRITICAL')
 
-    from exp.text_classification.text_classification_dag import text_classification_dag
-    from example.text_process.text_process_ci import text_process_ci_pipeline
-    from exp.text_classification.step00_data_augmentation import text_augmentation
-
-    replace_func_name = 'default.text_augmentation'
-    new_func = text_augmentation
-    dag = text_process_ci_pipeline
-
-    basedir = Path(dag.script.dir)
+    basedir = Path(workflow.script.dir)
     # Get all package and entrypoint info for all stages
     stage_pkg_info = dict()
-    for stage in dag.stages.values():
+    for stage in workflow.stages.values():
         # Get stage package path
-        package_relpath = Path(dag.stage_script_paths[stage.full_name])
+        package_relpath = Path(workflow.stage_script_paths[stage.full_name])
 
         package = path_to_module_name(package_relpath)
         entrypoint = package + '.' + stage.script.entrypoint if package != '.' else stage.script.entrypoint
@@ -334,10 +340,10 @@ if __name__ == '__main__':
             'include': [path_to_module_name(package_relpath / file) for file in stage.script.filelist]
         }
     # Get dag entrypoint info
-    dag_entrypoint = dag.script.entrypoint
+    dag_entrypoint = workflow.script.entrypoint
 
     # Function to be patched
-    replace_func_info = stage_pkg_info.pop(replace_func_name)
+    replace_func_info = stage_pkg_info.pop(source_name)
     package = replace_func_info['package']
     entrypoint = replace_func_info['entrypoint']
     include = replace_func_info['include']
@@ -387,65 +393,95 @@ if __name__ == '__main__':
     inner_func_inner_callers = inner_func_callers & inner_func_nodes
     inner_func_outer_callers = inner_func_callers & outer_func_nodes
 
-    print('inner function nodes:')
-    print(inner_func_nodes)
-    print('inner function inner callers:')
-    print(inner_func_inner_callers)
-    print('inner function outer callers:')
-    print(inner_func_outer_callers)
+    logger.debug(
+        'inner function nodes:\n'
+        f'{inner_func_nodes}\n'
+        'inner function inner callers:\n'
+        f'{inner_func_inner_callers}\n'
+        'inner function outer callers:\n'
+        f'{inner_func_outer_callers}\n'
+    )
 
     # Check entrypoint outer caller number
     entrypoint_callers = get_all_predecessors(call_graph, entrypoint_id) - {entrypoint_id}
     entrypoint_inner_caller = entrypoint_callers & inner_func_nodes
     entrypoint_outer_caller = entrypoint_callers & outer_func_nodes
 
-    print('entrypoint inner caller nodes:')
-    print(entrypoint_inner_caller)
-    print('entrypoint outer caller nodes:')
-    print(entrypoint_outer_caller)
+    logger.debug(
+        'entrypoint inner caller nodes:\n'
+        f'{entrypoint_inner_caller}\n'
+        'entrypoint outer caller nodes:\n'
+        f'{entrypoint_outer_caller}\n'
+    )
 
-    with TemporaryDirectory(dir=dag.workspace.tmp_dir) as tmp_dir:
-        tmp_dir = Path(tmp_dir)
+    tmp_dir = TemporaryDirectory(dir=workflow.workspace.tmp_dir)
+    tmp_dir = Path(tmp_dir.name)
 
-        # Copy the dag package to a temp dir
-        dag.script.copy(tmp_dir, dirs_exist_ok=True)
+    # Copy the dag package to a temp dir
+    workflow.script.copy(tmp_dir, dirs_exist_ok=True)
 
+    if verbose:
         try:
             repo = git.Repo(tmp_dir)
+            git_exists = True
         except git.InvalidGitRepositoryError:
             repo = git.Repo.init(tmp_dir)
+            git_exists = False
         repo.git.add(all=True)
-        commit_main = repo.index.commit('main')
+        repo.index.commit('main')
 
-        stage_base_dir = tmp_dir / replace_func_info['path'].relative_to(basedir)
-        flg_replace_pkg = len(inner_func_outer_callers) == 0
-        flg_fix_import_name = len(entrypoint_outer_caller) \
-                              or (len(entrypoint_inner_caller) and len(inner_func_outer_callers))
+    stage_base_dir = tmp_dir / replace_func_info['path'].relative_to(basedir)
+    flg_replace_pkg = len(inner_func_outer_callers) == 0
+    flg_fix_import_name = bool(
+        len(entrypoint_outer_caller) \
+        or (len(entrypoint_inner_caller) and len(inner_func_outer_callers))
+    )
 
-        if flg_replace_pkg:
-            new_stage_dir = replace_package(stage_base_dir, dag.stages[replace_func_name], new_func)
-        else:
-            new_stage_dir = replace_entry_func(stage_base_dir, dag.stages[replace_func_name], new_func)
-        new_entrypoint = path_to_module_name(new_stage_dir.relative_to(tmp_dir)) + '.' + new_func.script.entrypoint
+    if flg_replace_pkg:
+        new_stage_dir = replace_package(stage_base_dir, workflow.stages[source_name], target)
+    else:
+        new_stage_dir = replace_entry_func(stage_base_dir, workflow.stages[source_name], target, flg_fix_import_name)
+    new_entrypoint = path_to_module_name(new_stage_dir.relative_to(tmp_dir)) + '.' + target.script.entrypoint
 
-        if flg_fix_import_name:
-            paths = list()
-            for caller in entrypoint_callers & package_nodes - {top_node_id}:
-                label = call_graph.nodes[caller]['label']
-                paths.append((tmp_dir / label.replace('.', '/')).with_suffix('.py'))
-            fixup_entry_func_import_name(
-                paths=paths,
-                source_stage_entrypoint=entrypoint,
-                target_stage_entrypoint=new_entrypoint,
-                source_stage_package=package,
-                replace_package=bool(len(inner_func_outer_callers))
-            )
+    if flg_fix_import_name:
+        paths = list()
+        for caller in entrypoint_callers & package_nodes - {top_node_id}:
+            label = call_graph.nodes[caller]['label']
+            paths.append((tmp_dir / label.replace('.', '/')).with_suffix('.py'))
+        fixup_entry_func_import_name(
+            paths=paths,
+            source_stage_entrypoint=entrypoint,
+            target_stage_entrypoint=new_entrypoint,
+            source_stage_package=package,
+            replace_package=bool(len(inner_func_outer_callers))
+        )
 
-        (tmp_dir / 'README.md').rename(tmp_dir / 'README.md.bak')
+    if verbose:
         repo.git.add(all=True)
         diffs = repo.index.diff(None, staged=True, create_patch=True)
-        # File compare
-        print('File compare:')
+        # File compare (like git status)
+        logger.info('File changed:')
         pretty_print_dircmp(diffs)
-        print('Code diff:')
-        pretty_print_diff(diffs)
+        # Code diff (like git diff), print to pager
+        logger.info('Code diff:')
+        diff_log_str = StringIO()
+        pretty_print_diff(diffs, file=diff_log_str)
+        pipepager(diff_log_str.getvalue(), cmd='less -R')
+
+        # Clean up git
+        if not git_exists:
+            rmtree(str(repo.git_dir))
+        else:
+            repo.head.reset('HEAD~1', index=False)
+    return Workflow.from_path(tmp_dir, entry_path=workflow.script.entry_path)
+
+
+if __name__ == '__main__':
+    from dataci.models import Workflow
+
+    from exp.text_classification.text_classification_dag import text_classification_dag
+    from example.text_process.text_process_ci import text_process_ci_pipeline
+    from exp.text_classification.step00_data_augmentation import text_augmentation
+
+    new_workflow = patch(text_process_ci_pipeline, 'default.text_augmentation', text_augmentation, verbose=False)
+    new_workflow.test()
