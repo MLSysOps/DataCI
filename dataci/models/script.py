@@ -8,6 +8,7 @@ Date: Sep 25, 2023
 import ast
 import bisect
 import fnmatch
+import itertools
 import os
 import re
 import shutil
@@ -20,7 +21,7 @@ from rich.console import Console
 from rich.columns import Columns
 from rich.syntax import Syntax
 from rich.text import Text
-from rich.table import Table
+from rich.table import Table, Column
 
 from dataci.utils import hash_file
 
@@ -352,15 +353,33 @@ def pretty_print_diff(diffs: 'git.diff.DiffIndex'):
     Args:
         diffs (git.diff.DiffIndex): The repository diff result by GitPython.
     """
+    def get_syntax_lines(syntax: Syntax) -> int:
+        """Get the number of lines and renderables of the syntax.
+
+        Returns:
+            Tuple[int, List[Renderable]]: The number of lines and syntax renderables.
+        """
+        # convert to renderables
+        renderables = list(text_syntax.__rich_console__(console, console.options))
+        # counter # \n in renderables
+        segements = itertools.chain(*map(lambda x: x.segments, renderables))
+        num_lines = list(map(lambda x: x.text, segements)).count('\n')
+        return num_lines
+
     diff_lists = list()
     for change_type in 'ACDMRT':
         for diff in diffs.iter_change_type(change_type):
-            diff_lists.append((change_type, diff))
+            old = diff.a_blob.data_stream.read().decode() if diff.a_blob else ''
+            new = diff.b_blob.data_stream.read().decode() if diff.b_blob else ''
+            diff_lists.append((change_type, diff, old, new))
 
-    for op_code, diff in sorted(diff_lists, key=lambda x: x[1].b_path or x[1].a_path):
-        old = diff.a_blob.data_stream.read().decode() if diff.a_blob else ''
-        new = diff.b_blob.data_stream.read().decode() if diff.b_blob else ''
+    lineno_width = max(map(
+        lambda x: len(str(len(x.splitlines()))),
+        itertools.chain(*list(zip(*diff_lists))[2:3])
+    ))
 
+    # Get filelist
+    for op_code, diff, old, new in sorted(diff_lists, key=lambda x: x[1].b_path or x[1].a_path):
         with Console() as console:
             console.print('')
             if op_code == 'A':
@@ -384,10 +403,11 @@ def pretty_print_diff(diffs: 'git.diff.DiffIndex'):
                 console.print(diff.b_path, style='underline blue')
             console.rule(style='light_white')
 
-            code_width = len(str(max(len(old.splitlines()), len(new.splitlines()))))
             table = Table.grid(expand=True)
-            table.add_column('old_lineno', justify='left', min_width=code_width + 1, style='white')
-            table.add_column('new_lineno', justify='left', min_width=code_width + 1, style='white')
+            table.add_column('old_lineno', justify='right', width=lineno_width, style='white')
+            table.add_column('old-new-sep', justify='right', width=2, style='blue')
+            table.add_column('new_lineno', justify='right', width=lineno_width, style='white')
+            table.add_column('new-text-sep', justify='right', width=2, style='blue')
             table.add_column('text', justify='left', style='white')
 
             old_lineno, new_lineno = 0, 0
@@ -402,7 +422,10 @@ def pretty_print_diff(diffs: 'git.diff.DiffIndex'):
                     table.add_row(
                         '',
                         '',
+                        '',
+                        '',
                         Columns([
+                            '\n',
                             Text(line_info),
                             Syntax(
                                 context,
@@ -411,7 +434,8 @@ def pretty_print_diff(diffs: 'git.diff.DiffIndex'):
                                 word_wrap=True,
                                 background_color='default',
                                 line_range=(1, 1),
-                            )
+                            ),
+                            '\n',
                         ])
                     )
                     old_lineno, new_lineno = match.groups()
@@ -430,11 +454,13 @@ def pretty_print_diff(diffs: 'git.diff.DiffIndex'):
                             line_range=(old_lineno, old_lineno),
                             code_width=80,
                         )
+                        num_lines = get_syntax_lines(text_syntax)
                         table.add_row(
                             str(old_lineno),
+                            '\n'.join('⋮' * num_lines),
                             str(new_lineno),
+                            '\n'.join('│' * num_lines),
                             text_syntax,
-                            style='white',
                         )
                         old_lineno += 1
                         new_lineno += 1
@@ -450,9 +476,12 @@ def pretty_print_diff(diffs: 'git.diff.DiffIndex'):
                             line_range=(old_lineno, old_lineno),
                             code_width=80,
                         )
+                        num_lines = get_syntax_lines(text_syntax)
                         table.add_row(
                             Text(str(old_lineno), style='color(52)'),
+                            '\n'.join('⋮' * num_lines),
                             Text(' '),
+                            '\n'.join('│' * num_lines),
                             text_syntax,
                         )
                         old_lineno += 1
@@ -468,9 +497,12 @@ def pretty_print_diff(diffs: 'git.diff.DiffIndex'):
                             code_width=80,
                         )
                         # Add line, only count new file line no
+                        num_lines = get_syntax_lines(text_syntax)
                         table.add_row(
                             Text(' '),
+                            '\n'.join('⋮' * num_lines),
                             Text(str(new_lineno), style='color(22)'),
+                            '\n'.join('│' * num_lines),
                             text_syntax,
                         )
                         new_lineno += 1
