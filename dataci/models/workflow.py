@@ -29,6 +29,7 @@ from .base import BaseModel
 from .event import Event
 from .script import Script
 from .stage import Stage
+from .workflow_patcher import patch as patch_func
 # from dataci.run import Run
 from ..utils import hash_binary, cwd, hash_file
 
@@ -275,16 +276,25 @@ class Workflow(BaseModel, ABC):
         create_one_workflow(config)
         return self.reload(config)
 
-    # def patch(self, stage: Stage):
-    #     """Patch the new stage to the same name stage in workflow."""
-    #     patch_mapping = dict()
-    #     for s in self.stages:
-    #         if s.full_name == stage.full_name:
-    #             patch_mapping[s] = stage
-    #
-    #     # Relabel the graph
-    #     self.dag = nx.relabel_nodes(self.dag, patch_mapping, copy=True)
-    #     return self
+    def patch(self, verbose=True, **kwargs):
+        """Patch the new stage to the same name stage in workflow."""
+        assert len(kwargs) == 1, 'Only one stage can be patched at a time.'
+
+        # Save the workflow first
+        self.save()
+
+        full_k, stage = None, None
+        for k, stage in kwargs.items():
+            # Convert k to full stage name
+            full_k = f'{self.workspace.name}.{k}' if self.workspace else k
+            if full_k not in self.stages:
+                raise ValueError(f'Cannot find stage name={k} in workflow {self.name}')
+            if stage.name != k:
+                raise ValueError(f'Cannot patch stage {stage.name} to {k} in workflow {self.name}')
+        new_workflow = patch_func(self, source_name=full_k, target=stage, logger=self.logger, verbose=verbose)
+        new_workflow = self.reload(new_workflow.dict())
+
+        return new_workflow
 
     def publish(self):
         """Publish the models to the workspace."""

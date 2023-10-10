@@ -92,6 +92,7 @@ from dataci.utils import cwd
 
 if TYPE_CHECKING:
     from typing import Any, Tuple, Union
+    from dataci.models import Workflow
 
 
 def replace_package(basedir: 'Path', source: 'Stage', target: 'Stage'):
@@ -473,15 +474,4 @@ def patch(
             rmtree(str(repo.git_dir))
         else:
             repo.head.reset('HEAD~1', index=False)
-    return Workflow.from_path(tmp_dir, entry_path=workflow.script.entry_path)
-
-
-if __name__ == '__main__':
-    from dataci.models import Workflow
-
-    from exp.text_classification.text_classification_dag import text_classification_dag
-    from example.text_process.text_process_ci import text_process_ci_pipeline
-    from exp.text_classification.step00_data_augmentation import text_augmentation
-
-    new_workflow = patch(text_process_ci_pipeline, 'default.text_augmentation', text_augmentation, verbose=False)
-    new_workflow.test()
+    return workflow.from_path(tmp_dir, entry_path=workflow.script.entry_path)

@@ -64,7 +64,7 @@ def hash_file(filepaths: 'Union[str, os.PathLike, List[Union[os.PathLike, str]]]
             # Skip directories
             continue
         # hash relative name
-        sha_hash.update(path.relative_to(root).encode())
+        sha_hash.update(path.relative_to(root).as_posix().encode())
         with open(path, 'rb') as f:
             while True:
                 # Read file in as little chunks

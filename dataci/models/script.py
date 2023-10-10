@@ -63,7 +63,8 @@ class Script(object):
         self.dir = Path(dir)
         self.entry_path = Path(entry_path)
         if filelist:
-            self.filelist = list(map(lambda f: Path(f).relative_to(self.dir) if f.is_absolute() else f, filelist))
+            filelist = map(Path, filelist)
+            self.filelist = list(map(lambda f: f.relative_to(self.dir) if f.is_absolute() else f, filelist))
         else:
             self.filelist = self._scan_file_list(
                 self.dir, includes=includes, excludes=excludes, match_syntax=match_syntax
