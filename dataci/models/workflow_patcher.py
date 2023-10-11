@@ -107,9 +107,6 @@ def replace_package(basedir: 'Path', source: 'Stage', target: 'Stage'):
     for add_file in map(lambda x: new_mountdir / x, target.script.filelist):
         print(f"Add file '{add_file}'")
     target.script.copy(new_mountdir, dirs_exist_ok=True)
-    # Check if the package has '__init__.py' file
-    if not (new_mountdir / '__init__.py').exists():
-        (new_mountdir / '__init__.py').touch()
 
     return new_mountdir
 
