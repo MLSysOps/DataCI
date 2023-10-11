@@ -8,6 +8,11 @@ Date: Mar 15, 2023
 import hashlib
 import os
 from contextlib import contextmanager
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Union, List
 
 
 @contextmanager
@@ -29,12 +34,12 @@ def symlink_force(target, link_name, target_is_directory=False):
     os.symlink(target, link_name, target_is_directory)
 
 
-def hash_file(filepath):
+def hash_file(filepaths: 'Union[str, os.PathLike, List[Union[os.PathLike, str]]]'):
     """
     Compute the hash of a single file or a directory tree, including all files and subdirectories.
 
     Args:
-        filepath: File path or the directory to hash
+        filepaths: A list of file path or the directory to hash
 
     Returns:
         The hash of the directory tree.
@@ -43,20 +48,23 @@ def hash_file(filepath):
         https://stackoverflow.com/a/24937710
     """
     sha_hash = hashlib.md5()
-    # Append all files in the directory recursively
-    filepath_list = list()
-    if os.path.isfile(filepath):
-        filepath_list.append(filepath)
-    else:
-        for root, dirs, files in os.walk(filepath):
-            for names in files:
-                filepath_list.append(os.path.join(root, names))
-    # Sort the file paths
-    filepath_list.sort()
+    if isinstance(filepaths, (str, os.PathLike)):
+        filepaths = [filepaths]
+    # Find common prefix
+    root = os.path.commonpath(filepaths)
+    # Tree scan of all file paths / directories
+    paths = list()
+    for path in filepaths:
+        paths.append(path)
+        paths.extend(Path(path).glob('**/*'))
 
-    for path in filepath_list:
+    # Sort the file paths for consistent hash
+    for path in sorted(paths):
+        if not path.is_file():
+            # Skip directories
+            continue
         # hash relative name
-        sha_hash.update(os.path.relpath(path, filepath).encode())
+        sha_hash.update(path.relative_to(root).as_posix().encode())
         with open(path, 'rb') as f:
             while True:
                 # Read file in as little chunks

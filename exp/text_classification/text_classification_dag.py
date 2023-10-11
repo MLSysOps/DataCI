@@ -9,10 +9,10 @@ from datetime import datetime
 
 from dataci.models import Event
 from dataci.plugins.decorators import Dataset, dag
-from exp.text_classification.step00_data_augmentation import text_augmentation
-from exp.text_classification.step01_data_selection import select_data
-from exp.text_classification.step03_predict import main as predict_text_classification
-from exp.text_classification.step02_train import main as train_text_classification
+from step00_data_augmentation import text_augmentation as test1
+from step01_data_selection import select_data
+from step03_predict import main as predict_text_classification
+from step02_train import main as train_text_classification
 
 
 @dag(
@@ -23,7 +23,7 @@ def text_classification():
     raw_dataset_train = Dataset.get('yelp_review@2020-10')
     raw_dataset_val = Dataset.get('yelp_review@2020-10', file_reader=None)
 
-    text_aug_df = text_augmentation(raw_dataset_train)
+    text_aug_df = test1(raw_dataset_train)
     text_aug_dataset = Dataset(name='text_aug', dataset_files=text_aug_df)
     data_selection_df = select_data(text_aug_dataset, 3, 'bert-base-uncased')
     data_select_dataset = Dataset(name='data_selection', dataset_files=data_selection_df, file_reader=None)

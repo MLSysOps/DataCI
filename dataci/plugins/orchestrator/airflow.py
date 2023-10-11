@@ -7,12 +7,10 @@ Date: Jun 11, 2023
 """
 import ast
 import inspect
-import os.path
 import re
 import shutil
 import subprocess
 import sys
-import time
 from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -24,8 +22,9 @@ from airflow.models import DAG as _DAG
 from airflow.operators.python import PythonOperator as _PythonOperator
 
 from dataci.models import Workflow, Stage, Dataset
-from dataci.plugins.orchestrator.script import get_source_segment, \
-    locate_dag_function
+from dataci.models.script import Script, get_source_segment
+from dataci.plugins.orchestrator.script import \
+    locate_dag_function, locate_stage_function
 from dataci.server.trigger import Trigger as _Trigger, EVENT_QUEUE, QUEUE_END
 
 if TYPE_CHECKING:
@@ -49,7 +48,11 @@ class DAG(Workflow, _DAG):
 
     @property
     def stages(self):
-        return self.tasks
+        d = dict()
+        for t in self.tasks:
+            stage_name = t.full_name if isinstance(t, Stage) else t.task_id
+            d[stage_name] = t
+        return d
 
     @property
     def dag(self):
@@ -66,7 +69,7 @@ class DAG(Workflow, _DAG):
     @property
     def input_datasets(self):
         dataset_names = set()
-        for stage in self.stages:
+        for stage in self.stages.values():
             if isinstance(stage, Stage):
                 # Only add input table names
                 for v in stage.input_table.values():
@@ -81,23 +84,38 @@ class DAG(Workflow, _DAG):
         raise NotImplementedError
 
     @property
-    def script(self):
-        if self._script_dir is None:
-            base_dir = Path(self.fileloc)
-            self._script_dir = self._script_dir_local = base_dir.parent.as_posix()
-            self._entrypoint = os.path.basename(self.fileloc)
-
-        return super().script
+    def script(self) -> Script:
+        if self._script is None:
+            fileloc = Path(self.fileloc)
+            entryfile = fileloc.relative_to(fileloc.parent)
+            ignorefile = fileloc.parent / '.airflowignore'
+            if ignorefile.exists():
+                # Read the ignore file
+                excludes = ignorefile.read_text().splitlines()
+            else:
+                # Default ignore __pycache__
+                excludes = [r'(^|\/)__pycache__']
+            # Scan the entry file to get the entrypoint (module name w.r.t. the stage base dir)
+            # 1. build a abstract syntax tree
+            # 2. locate the function definition
+            tree = ast.parse(Path(fileloc).read_text())
+            dag_node = locate_dag_function(tree, self.name)[0]
+            assert len(dag_node) == 1, f'Found multiple dag definition {self.name} in {self._entryfile}'
+            self._script = Script(
+                dir=fileloc.parent, entry_path=entryfile, entry_node=dag_node[0], local_dir=fileloc.parent,
+                excludes=excludes, match_syntax='regex',
+            )
+        return self._script
 
     @property
     def stage_script_paths(self):
         """Get all stage script relative paths."""
         if len(self._stage_script_paths) == 0:
-            for stage in self.stages:
-                stage_local_path = Path(stage.script['local_path'])
-                dag_local_path = Path(self.script['local_path'])
-                if stage_local_path in dag_local_path.parents or stage_local_path == dag_local_path:
-                    script_rel_dir = str(stage_local_path.relative_to(self.script['local_path']).as_posix())
+            for stage in self.stages.values():
+                stage_local_path = stage.script.local_dir
+                dag_local_path = self.script.local_dir
+                if dag_local_path in stage_local_path.parents or stage_local_path == dag_local_path:
+                    script_rel_dir = str(stage_local_path.relative_to(dag_local_path).as_posix())
                 else:
                     # stage is from an external script
                     script_rel_dir = None
@@ -111,11 +129,11 @@ class DAG(Workflow, _DAG):
 
         with TemporaryDirectory(dir=self.workspace.tmp_dir) as tmp_dir:
             # Copy to temp dir
-            shutil.copytree(self.script['local_path'], tmp_dir, dirs_exist_ok=True)
+            shutil.copytree(self.script.local_dir, tmp_dir, dirs_exist_ok=True)
 
             # Adjust the workflow name in dag script (entry file)
             # Use workspace__name__version as dag id
-            dag_script_path = Path(tmp_dir) / self.script['entrypoint']
+            dag_script_path = Path(tmp_dir) / self.script.entry_path
             script = dag_script_path.read_text()
             # FIXME: we need some trick for airflow to recognize the dag
             #     Add a commented line with import airflow dag, otherwise airflow will not scan the script
@@ -246,12 +264,21 @@ class PythonOperator(Stage, _PythonOperator):
             self.op_args, self.op_kwargs = args, kwargs
 
     @property
-    def script(self):
-        if self._script_dir is None:
-            fileloc = inspect.getsourcefile(self.python_callable)
-            self._script_dir = self._script_dir_local = Path(fileloc).parent.as_posix()
-            self._entrypoint = os.path.basename(fileloc)
-        return super().script
+    def script(self) -> Script:
+        if self._script is None:
+            fileloc = Path(inspect.getsourcefile(self.python_callable)).resolve()
+            entryfile = fileloc.relative_to(fileloc.parent)
+            # Scan the entry file to get the entrypoint (module name w.r.t. the stage base dir)
+            # 1. build a abstract syntax tree
+            # 2. locate the function definition
+            tree = ast.parse(Path(fileloc).read_text())
+            func_node = locate_stage_function(tree, self.name)[0]
+            assert len(func_node) == 1, f'Found multiple function definition for stage {self.name} in {entryfile}'
+            self._script = Script(
+                dir=fileloc.parent, entry_path=entryfile, entry_node=func_node[0], local_dir=fileloc.parent,
+                filelist=[fileloc.relative_to(fileloc.parent)],
+            )
+        return self._script
 
 
 class Trigger(_Trigger):

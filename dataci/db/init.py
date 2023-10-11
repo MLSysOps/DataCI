@@ -40,8 +40,10 @@ with db_connection:
         flag        TEXT,
         schedule    TEXT,
         dag         TEXT,
-        script_path TEXT,
-        entrypoint  TEXT,
+        script_dir       TEXT,
+        script_entry     TEXT,
+        script_filelist  TEXT,
+        script_hash      TEXT,
         PRIMARY KEY (workspace, name, version),
         UNIQUE (workspace, name, version)
     );
@@ -61,13 +63,15 @@ with db_connection:
     
     CREATE TABLE stage
     (
-        workspace   TEXT,
-        name        TEXT,
-        version     TEXT,
-        params      TEXT,
-        script_path TEXT,
-        entrypoint  TEXT,
-        timestamp   INTEGER,
+        workspace        TEXT,
+        name             TEXT,
+        version          TEXT,
+        params           TEXT,
+        timestamp        INTEGER,
+        script_dir       TEXT,
+        script_entry     TEXT,
+        script_filelist  TEXT,
+        script_hash      TEXT,
         PRIMARY KEY (workspace, name, version),
         UNIQUE (workspace, name, version)
     );

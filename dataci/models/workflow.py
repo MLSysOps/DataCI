@@ -9,13 +9,11 @@ import abc
 import itertools
 import json
 import logging
-import os
 import shutil
 from abc import ABC
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 import networkx as nx
@@ -29,13 +27,15 @@ from dataci.db.workflow import (
 )
 from .base import BaseModel
 from .event import Event
+from .script import Script
 from .stage import Stage
-from .workspace import Workspace
+from .workflow_patcher import patch as patch_func
 # from dataci.run import Run
 from ..utils import hash_binary, cwd, hash_file
 
 if TYPE_CHECKING:
-    from typing import Optional, Iterable, Sequence
+    import os
+    from typing import Optional, Iterable, Sequence, Dict, Union
     from dataci.models import Dataset
 
 logger = logging.getLogger(__name__)
@@ -51,15 +51,13 @@ class Workflow(BaseModel, ABC):
         self.create_date: 'Optional[datetime]' = datetime.now()
         self.logger = logging.getLogger(__name__)
         self.trigger: 'Sequence[Event]' = trigger or list()
-        self._script_dir = None
-        self._entrypoint = None
-        self._script_dir_local = None
+        self._script: 'Optional[Script]' = None
         self._stage_script_paths = dict()
         self._init_params = (args, kwargs)
 
     @property
     @abc.abstractmethod
-    def stages(self) -> 'Iterable[Stage]':
+    def stages(self) -> 'Dict[str, Stage]':
         raise NotImplementedError
 
     @property
@@ -79,14 +77,9 @@ class Workflow(BaseModel, ABC):
         raise NotImplementedError
 
     @property
-    def script(self):
-        if self._script_dir is None:
-            return None
-        return {
-            'path': self._script_dir,
-            'entrypoint': self._entrypoint,
-            'local_path': self._script_dir_local,
-        }
+    @abc.abstractmethod
+    def script(self) -> Script:
+        raise NotImplementedError
 
     @property
     @abc.abstractmethod
@@ -122,7 +115,7 @@ class Workflow(BaseModel, ABC):
                 },
                 'edge': dag_edge_list,
             },
-            'script': self.script,
+            'script': self.script.dict(),
             'timestamp': int(self.create_date.timestamp()) if self.create_date else None,
             'trigger': [str(evt) for evt in self.trigger],
             'input_datasets': [dataset.dict(id_only=True) for dataset in self.input_datasets],
@@ -132,10 +125,16 @@ class Workflow(BaseModel, ABC):
     @classmethod
     def from_dict(cls, config: 'dict'):
         # Build class object from script
+        script = Script.from_dict(config['script'])
+        self = cls.from_path(script.dir, script.entrypoint)
+        return self.reload(config)
+
+    @classmethod
+    def from_path(cls, script_dir: 'Union[str, os.PathLike]', entry_path: 'Union[str, os.PathLike]'):
         # TODO: make the build process more secure with sandbox / allowed safe methods
         local_dict = dict()
-        with cwd(config['script']['path']):
-            entry_file = Path(config['script']['entrypoint'])
+        with cwd(script_dir):
+            entry_file = Path(entry_path)
             entry_module = '.'.join(entry_file.parts[:-1] + (entry_file.stem,))
             exec(
                 f'import os, sys; sys.path.insert(0, os.getcwd()); from {entry_module} import *',
@@ -146,8 +145,9 @@ class Workflow(BaseModel, ABC):
                 self = v
                 break
         else:
-            raise ValueError(f'Stage not found in directory:\n{config["script"]["path"]}')
-        return self.reload(config)
+            raise ValueError(f'Workflow not found in directory: {script_dir}')
+
+        return self
 
     def __repr__(self) -> str:
         if all((self.workspace.name, self.name)):
@@ -171,9 +171,8 @@ class Workflow(BaseModel, ABC):
         fingerprint_dict = {
             'workspace': config['workspace'],
             'name': config['name'],
-            'stages': [stage.fingerprint for stage in self.stages],
-            'script_dir': hash_file(config['script']['path']),
-            'entrypoint': config['script']['entrypoint'],
+            'stages': [stage.fingerprint for stage in self.stages.values()],
+            'script': config['script']['hash'],
         }
         return hash_binary(json.dumps(fingerprint_dict, sort_keys=True).encode('utf-8'))
 
@@ -188,8 +187,7 @@ class Workflow(BaseModel, ABC):
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
         self.trigger = [Event.from_str(evt) for evt in config['trigger']]
         if 'script' in config:
-            self._script_dir = config['script']['path']
-            self._entrypoint = config['script']['entrypoint']
+            self._script = Script.from_dict(config['script'])
         if 'dag' in config:
             self._stage_script_paths.clear()
             # Reload stages by stage config fetched from DB
@@ -201,7 +199,7 @@ class Workflow(BaseModel, ABC):
                     stage_mapping[stage_full_name] = config
                 # Update the stage script base path
                 self._stage_script_paths[stage_full_name] = stage_config['path']
-            for stage in self.stages:
+            for stage in self.stages.values():
                 if stage.full_name in stage_mapping:
                     stage.reload(stage_mapping[stage.full_name])
         return self
@@ -219,7 +217,7 @@ class Workflow(BaseModel, ABC):
         if self.NAME_PATTERN.match(f'{self.workspace.name}.{self.name}') is None:
             raise ValueError(f'Workflow name {self.workspace}.{self.name} is not valid.')
         # Save the used stages (only if the stage is not saved)
-        for stage in self.stages:
+        for stage in self.stages.values():
             stage.save()
 
         # Get config after call save on all stages, since the stage version might be updated
@@ -233,8 +231,10 @@ class Workflow(BaseModel, ABC):
         if save_dir.exists():
             shutil.rmtree(save_dir)
         # Copy the workflow script dir
-        from_dir = Path(config['script']['path'])
-        shutil.copytree(from_dir, save_dir)
+        from_dir = Path(config['script']['dir'])
+        for file in config['script']['filelist']:
+            (save_dir / file).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(from_dir / file, save_dir / file)
 
         # Scan workflow script dir
         file_checksums, filemap = dict(), defaultdict(list)
@@ -247,16 +247,16 @@ class Workflow(BaseModel, ABC):
             filemap[rel_file_name].append('workflow')
 
         # Copy the script content of each stage to the save dir
-        for stage in self.stages:
+        for stage in self.stages.values():
             if (dag_stage_rel_dir := self.stage_script_paths[stage.full_name]) is None:
                 # Skip the stage if the stage script is external
                 continue
             dag_stage_rel_dir = Path(dag_stage_rel_dir)
-            stage_root_dir = Path(stage.script['path'])
+            stage_root_dir = Path(stage.script.dir)
             for abs_file_name in Path(stage_root_dir).glob('**/*'):
                 if abs_file_name.is_dir():
                     continue
-                rel_file_name = str(dag_stage_rel_dir / abs_file_name.relative_to(stage_root_dir).as_posix())
+                rel_file_name = (dag_stage_rel_dir / abs_file_name.relative_to(stage_root_dir)).as_posix()
                 file_checksum = hash_file(abs_file_name)
                 if file_checksums.get(rel_file_name, file_checksum) != file_checksum:
                     raise FileExistsError(
@@ -276,16 +276,25 @@ class Workflow(BaseModel, ABC):
         create_one_workflow(config)
         return self.reload(config)
 
-    # def patch(self, stage: Stage):
-    #     """Patch the new stage to the same name stage in workflow."""
-    #     patch_mapping = dict()
-    #     for s in self.stages:
-    #         if s.full_name == stage.full_name:
-    #             patch_mapping[s] = stage
-    #
-    #     # Relabel the graph
-    #     self.dag = nx.relabel_nodes(self.dag, patch_mapping, copy=True)
-    #     return self
+    def patch(self, verbose=True, **kwargs):
+        """Patch the new stage to the same name stage in workflow."""
+        assert len(kwargs) == 1, 'Only one stage can be patched at a time.'
+
+        # Save the workflow first
+        self.save()
+
+        full_k, stage = None, None
+        for k, stage in kwargs.items():
+            # Convert k to full stage name
+            full_k = f'{self.workspace.name}.{k}' if self.workspace else k
+            if full_k not in self.stages:
+                raise ValueError(f'Cannot find stage name={k} in workflow {self.name}')
+            if stage.name != k:
+                raise ValueError(f'Cannot patch stage {stage.name} to {k} in workflow {self.name}')
+        new_workflow = patch_func(self, source_name=full_k, target=stage, logger=self.logger, verbose=verbose)
+        new_workflow = self.reload(new_workflow.dict())
+
+        return new_workflow
 
     def publish(self):
         """Publish the models to the workspace."""
@@ -297,7 +306,7 @@ class Workflow(BaseModel, ABC):
             return self
 
         # Publish the used stages
-        for stage in self.stages:
+        for stage in self.stages.values():
             stage.publish()
 
         config = self.dict()
