@@ -187,6 +187,7 @@ class Workflow(BaseModel, ABC):
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
         self.trigger = [Event.from_str(evt) for evt in config['trigger']]
         if 'script' in config:
+            # fixme: reload the object if the script hash is changed
             self._script = Script.from_dict(config['script'])
         if 'dag' in config:
             self._stage_script_paths.clear()
@@ -287,12 +288,12 @@ class Workflow(BaseModel, ABC):
         for k, stage in kwargs.items():
             # Convert k to full stage name
             full_k = f'{self.workspace.name}.{k}' if self.workspace else k
+            # Check if the stage is in the workflow
             if full_k not in self.stages:
                 raise ValueError(f'Cannot find stage name={k} in workflow {self.name}')
-            if stage.name != k:
-                raise ValueError(f'Cannot patch stage {stage.name} to {k} in workflow {self.name}')
+            # TODO: Check if the stage has the same signature
+            # Warning if the new stage has different signature with the old stage
         new_workflow = patch_func(self, source_name=full_k, target=stage, logger=self.logger, verbose=verbose)
-        new_workflow = self.reload(new_workflow.dict())
 
         return new_workflow
 

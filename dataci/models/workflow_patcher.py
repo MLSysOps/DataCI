@@ -66,12 +66,13 @@ Else:
     no need to take care of func / import name
 """
 import ast
+import inspect
 import logging
 import os
 import re
 from io import StringIO
 from pathlib import Path
-from pydoc import pipepager
+from pydoc import getpager, pipepager
 from shutil import rmtree
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, List, Set
@@ -95,30 +96,36 @@ if TYPE_CHECKING:
     from dataci.models import Workflow
 
 
-def replace_package(basedir: 'Path', source: 'Stage', target: 'Stage'):
+def replace_package(basedir: 'Path', source: 'Stage', target: 'Stage', logger: 'logging.Logger'):
     new_mountdir = basedir / target.name
 
-    print(f"replace package {source} -> {target}")
+    logger.debug(f"replace package {source} -> {target}")
     rm_files = list(map(lambda x: basedir / x, source.script.filelist))
     for rm_file in rm_files:
-        print(f"Remove file '{rm_file}'")
+        logger.debug(f"Remove file '{rm_file}'")
         rm_file.unlink()
 
     for add_file in map(lambda x: new_mountdir / x, target.script.filelist):
-        print(f"Add file '{add_file}'")
+        logger.debug(f"Add file '{add_file}'")
     target.script.copy(new_mountdir, dirs_exist_ok=True)
 
     return new_mountdir
 
 
-def replace_entry_func(basedir: Path, source: 'Stage', target: 'Stage', fix_import_name: bool):
+def replace_entry_func(
+        basedir: Path,
+        source: 'Stage',
+        target: 'Stage',
+        fix_import_name: bool,
+        logger: 'logging.Logger'
+):
     new_mountdir = basedir / target.name
     target_stage_entrypoint = path_to_module_name(new_mountdir.relative_to(basedir)) + '.' + target.script.entrypoint
     target_func_name = target_stage_entrypoint.split('.')[-1]
     target_stage_mod = '.'.join(target_stage_entrypoint.split('.')[:-1]) or '.'
     source_func_name = source.script.entrypoint.split('.')[-1]
 
-    print(f"replace entry func {source} -> {target}")
+    logger.debug(f"replace entry func {source} -> {target}")
     modify_file = basedir / source.script.entry_path
     modify_file_script = modify_file.read_text()
     new_file_script = replace_source_segment(
@@ -126,11 +133,11 @@ def replace_entry_func(basedir: Path, source: 'Stage', target: 'Stage', fix_impo
         source.script.entry_node,
         f'from {target_stage_mod} import {target_func_name} as {source_func_name}' if fix_import_name else '',
     )
-    print(f"Modify file '{modify_file}'")
+    logger.debug(f"Modify file '{modify_file}'")
     modify_file.write_text(new_file_script)
 
     for add_file in map(lambda x: new_mountdir / x, target.script.filelist):
-        print(f"Add file '{add_file}'")
+        logger.debug(f"Add file '{add_file}'")
     target.script.copy(new_mountdir, dirs_exist_ok=True)
 
     return new_mountdir
@@ -141,9 +148,10 @@ def fixup_entry_func_import_name(
         source_stage_entrypoint: str,
         target_stage_entrypoint: str,
         source_stage_package: str,
-        replace_package: bool = False,
+        replace_package: bool,
+        logger: 'logging.Logger',
 ):
-    print('fixup entry func import name')
+    logger.debug('fixup entry func import name')
     pat = re.compile(
         re.escape((source_stage_package + '.').lstrip('.')) +
         r'(.*)\.([^.]+)'
@@ -267,7 +275,7 @@ def fixup_entry_func_import_name(
         # Replace all import statements at one time
         if len(replace_nodes) > 0:
             new_script = replace_source_segment(script, replace_nodes, replace_segs)
-            print(f"Modify file '{path}'")
+            logger.debug(f"Modify file '{path}'")
             path.write_text(new_script)
 
 
@@ -436,9 +444,20 @@ def patch(
     )
 
     if flg_replace_pkg:
-        new_stage_dir = replace_package(stage_base_dir, workflow.stages[source_name], target)
+        new_stage_dir = replace_package(
+            basedir=stage_base_dir,
+            source=workflow.stages[source_name],
+            target=target,
+            logger=logger
+        )
     else:
-        new_stage_dir = replace_entry_func(stage_base_dir, workflow.stages[source_name], target, flg_fix_import_name)
+        new_stage_dir = replace_entry_func(
+            basedir=stage_base_dir,
+            source=workflow.stages[source_name],
+            target=target,
+            fix_import_name=flg_fix_import_name,
+            logger=logger
+        )
     new_entrypoint = path_to_module_name(new_stage_dir.relative_to(tmp_dir)) + '.' + target.script.entrypoint
 
     if flg_fix_import_name:
@@ -451,7 +470,8 @@ def patch(
             source_stage_entrypoint=entrypoint,
             target_stage_entrypoint=new_entrypoint,
             source_stage_package=package,
-            replace_package=bool(len(inner_func_outer_callers))
+            replace_package=bool(len(inner_func_outer_callers)),
+            logger=logger,
         )
 
     if verbose:
@@ -464,7 +484,14 @@ def patch(
         logger.info('Code diff:')
         diff_log_str = StringIO()
         pretty_print_diff(diffs, file=diff_log_str)
-        pipepager(diff_log_str.getvalue(), cmd='less -R')
+
+        # Print to pager, overwirte the default pager to support color output
+        pager = getpager()
+        # pager is a `less` called function
+        pager_code = inspect.getsource(pager).strip()
+        if pager_code == 'return lambda text: pipepager(text, \'less\')':
+            pager = lambda text: pipepager(text, 'less -R')
+        pager(diff_log_str.getvalue())
 
         # Clean up git
         if not git_exists:
