@@ -51,7 +51,8 @@ def hash_file(filepaths: 'Union[str, os.PathLike, List[Union[os.PathLike, str]]]
     if isinstance(filepaths, (str, os.PathLike)):
         filepaths = [filepaths]
     # Find common prefix
-    root = os.path.commonpath(filepaths)
+    root = Path(os.path.commonpath(filepaths))
+    root = root.parent if root.is_file() else root
     # Tree scan of all file paths / directories
     paths = list()
     for path in filepaths:

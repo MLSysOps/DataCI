@@ -21,12 +21,12 @@ from utils import common_util
 )
 def normal_import_pipeline():
     common_util()
-    raw_dataset_train = Dataset.get('test_yelp_review@latest')
+    raw_dataset_train = Dataset.get('yelp_review@latest')
     df = used_stage(raw_dataset_train)
     df = used_stage_w_util(df)
     df = multi_file_stage_w_util(df)
     df = multi_file_stage(df)
-    Dataset(name='test_text_aug', dataset_files=df)
+    Dataset(name='text_aug', dataset_files=df)
 
 
 # Build the pipeline
