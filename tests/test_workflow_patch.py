@@ -120,10 +120,10 @@ class TestWorkflowPatchMultiFilePipelineBase(AbstractTestCase, abc.ABC):
 
     def setUp(self):
         """Set up test fixtures.
-                1. Create a test workspace and set it as the current default workspace
-                2. Save and publish a test dataset
-                3. Save the test pipeline
-                """
+        1. Create a test workspace and set it as the current default workspace
+        2. Save and publish a test dataset
+        3. Save the test pipeline
+        """
         from dataci.models import workspace
         from dataci.models import Dataset
 
@@ -237,7 +237,7 @@ class TestWorkflowPatchMultiFilePipelineNormal(TestWorkflowPatchMultiFilePipelin
         if self._workflow is None:
             from dataci.models import Workflow
             self._workflow = Workflow.from_path(
-                TEST_DIR / 'multi_file_pipeline/normal_import_pipeline.py',
+                TEST_DIR / 'workflow_patch/multi_file_pipeline',
                 entry_path='normal_import_pipeline.py'
             )
         return self._workflow
@@ -247,10 +247,11 @@ class TestWorkflowPatchMultiFilePipelineImportAlias(TestWorkflowPatchMultiFilePi
     @property
     def workflow(self):
         if self._workflow is None:
-            with cwd('tests/workflow_patch/multi_file_pipeline'):
-                from tests.workflow_patch.multi_file_pipeline.import_alias_pipeline import standard_import_pipeline
-
-            self._workflow = standard_import_pipeline
+            from dataci.models import Workflow
+            self._workflow = Workflow.from_path(
+                TEST_DIR / 'workflow_patch/multi_file_pipeline',
+                entry_path='import_alias_pipeline.py'
+            )
         return self._workflow
 
 

@@ -6,9 +6,11 @@ Email: yuanmingleee@gmail.com
 Date: Feb 23, 2023
 """
 import abc
+import importlib
 import itertools
 import json
 import logging
+import multiprocessing as mp
 import shutil
 from abc import ABC
 from collections import defaultdict
@@ -16,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import cloudpickle
 import networkx as nx
 
 from dataci.db.workflow import (
@@ -132,20 +135,31 @@ class Workflow(BaseModel, ABC):
     @classmethod
     def from_path(cls, script_dir: 'Union[str, os.PathLike]', entry_path: 'Union[str, os.PathLike]'):
         # TODO: make the build process more secure with sandbox / allowed safe methods
-        local_dict = dict()
+        def _import_module(import_pickle):
+            import os
+            import cloudpickle
+            import sys
+            from dataci.models import Workflow
+            sys.path.insert(0, os.getcwd())
+
+            mod = importlib.import_module(entry_module)
+            # get all variables from the module
+            for k, v in mod.__dict__.items():
+                if not k.startswith('__') and isinstance(v, Workflow):
+                    import_pickle['__return__'] = cloudpickle.dumps(v)
+                    break
+            else:
+                raise ValueError(f'Workflow not found in directory: {script_dir}')
+
         with cwd(script_dir):
             entry_file = Path(entry_path)
             entry_module = '.'.join(entry_file.parts[:-1] + (entry_file.stem,))
-            exec(
-                f'import os, sys; sys.path.insert(0, os.getcwd()); from {entry_module} import *',
-                local_dict, local_dict
-            )
-        for v in local_dict.copy().values():
-            if isinstance(v, Workflow):
-                self = v
-                break
-        else:
-            raise ValueError(f'Workflow not found in directory: {script_dir}')
+            with mp.Manager() as manager:
+                import_pickle = manager.dict()
+                p = mp.Process(target=_import_module, args=(import_pickle,))
+                p.start()
+                p.join()
+                self = cloudpickle.loads(import_pickle['__return__'])
 
         return self
 

@@ -66,15 +66,16 @@ Else:
     no need to take care of func / import name
 """
 import ast
+import atexit
 import inspect
 import logging
 import os
 import re
+import tempfile
 from io import StringIO
 from pathlib import Path
 from pydoc import getpager, pipepager
 from shutil import rmtree
-from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, List, Set
 
 import git
@@ -109,6 +110,12 @@ def replace_package(basedir: 'Path', source: 'Stage', target: 'Stage', logger: '
         logger.debug(f"Add file '{add_file}'")
     target.script.copy(new_mountdir, dirs_exist_ok=True)
 
+    # Make the new stage package importable
+    init_file = new_mountdir / '__init__.py'
+    if not init_file.exists():
+        logger.debug(f"Add file '{init_file}'")
+        init_file.touch()
+
     return new_mountdir
 
 
@@ -131,7 +138,7 @@ def replace_entry_func(
     new_file_script = replace_source_segment(
         modify_file_script,
         source.script.entry_node,
-        f'from {target_stage_mod} import {target_func_name} as {source_func_name}' if fix_import_name else '',
+        gen_import_script(target_stage_entrypoint, source_func_name) if fix_import_name else '',
     )
     logger.debug(f"Modify file '{modify_file}'")
     modify_file.write_text(new_file_script)
@@ -139,6 +146,12 @@ def replace_entry_func(
     for add_file in map(lambda x: new_mountdir / x, target.script.filelist):
         logger.debug(f"Add file '{add_file}'")
     target.script.copy(new_mountdir, dirs_exist_ok=True)
+
+    # Make the new stage package importable
+    init_file = new_mountdir / '__init__.py'
+    if not init_file.exists():
+        logger.debug(f"Add file '{init_file}'")
+        init_file.touch()
 
     return new_mountdir
 
@@ -189,7 +202,7 @@ def fixup_entry_func_import_name(
                 # -import stage_root.stg_pkg.func as var_name
                 # +import new_stage_root.new_stage_pkg.new_func as var_name
                 replace_nodes.append(node)
-                replace_segs.append(f"import {target_stage_entrypoint} as {var_name}")
+                replace_segs.append(gen_import_script(target_stage_entrypoint, alias=var_name))
             else:
                 # stage is imported / ref as a package name
                 if not replace_package:
@@ -284,6 +297,12 @@ def path_to_module_name(path: Path):
         return '.'.join(path.parts).strip('/') or '.'
 
     return '.'.join(path.with_suffix('').parts).strip('/')
+
+
+def gen_import_script(entrypoint: str, alias: str = None):
+    func_name = entrypoint.split('.')[-1]
+    mod = '.'.join(entrypoint.split('.')[:-1]) or '.'
+    return f'from {mod} import {func_name}' + (f' as {alias}' if (alias and alias != func_name) else '')
 
 
 def get_all_predecessors(
@@ -420,8 +439,9 @@ def patch(
         f'{entrypoint_outer_caller}\n'
     )
 
-    tmp_dir = TemporaryDirectory(dir=workflow.workspace.tmp_dir)
-    tmp_dir = Path(tmp_dir.name)
+    tmp_dir = tempfile.mkdtemp(dir=workflow.workspace.tmp_dir)
+    atexit.register(tempfile.TemporaryDirectory._rmtree, tmp_dir)
+    tmp_dir = Path(tmp_dir)
 
     # Copy the dag package to a temp dir
     workflow.script.copy(tmp_dir, dirs_exist_ok=True)
@@ -464,7 +484,9 @@ def patch(
         paths = list()
         for caller in entrypoint_callers & package_nodes - {top_node_id}:
             label = call_graph.nodes[caller]['label']
-            paths.append((tmp_dir / label.replace('.', '/')).with_suffix('.py'))
+            path = (tmp_dir / label.replace('.', '/')).with_suffix('.py')
+            if path.exists():
+                paths.append(path)
         fixup_entry_func_import_name(
             paths=paths,
             source_stage_entrypoint=entrypoint,

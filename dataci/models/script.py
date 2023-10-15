@@ -202,6 +202,8 @@ class Script(object):
         dst_path = Path(dst)
         dst_path.mkdir(parents=True, exist_ok=dirs_exist_ok)
         for file in self.filelist:
+            # Create the parent directory if not exist
+            (dst_path / file).parent.mkdir(parents=True, exist_ok=True)
             copy_function(self.dir / file, dst_path / file)
 
         return dst
@@ -309,7 +311,7 @@ def replace_source_segment(source, nodes, replace_segments):
                     replace_segment = indent(dedent(replace_segment), indent_prefix).strip()
                     # Replace code segment
                     new_script += source[prev_end:start] + replace_segment
-                    prev_end = end + 1
+                    prev_end = end
                     break
     new_script += source[prev_end:]
     return new_script
