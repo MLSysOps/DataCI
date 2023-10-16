@@ -259,11 +259,11 @@ class TestWorkflowPatchMultiFilePipelineImportAndAssignToVar(TestWorkflowPatchMu
     @property
     def workflow(self):
         if self._workflow is None:
-            with cwd('tests/workflow_patch/multi_file_pipeline'):
-                from tests.workflow_patch.multi_file_pipeline.import_and_assign_to_var_pipeline import \
-                    standard_import_pipeline
-
-            self._workflow = standard_import_pipeline
+            from dataci.models import Workflow
+            self._workflow = Workflow.from_path(
+                TEST_DIR / 'workflow_patch/multi_file_pipeline',
+                entry_path='import_and_assign_to_var_pipeline.py'
+            )
         return self._workflow
 
 
@@ -271,10 +271,11 @@ class TestWorkflowPatchMultiFilePipelineLocalImport(TestWorkflowPatchMultiFilePi
     @property
     def workflow(self):
         if self._workflow is None:
-            with cwd('tests/workflow_patch/multi_file_pipeline'):
-                from tests.workflow_patch.multi_file_pipeline.local_import_pipeline import standard_import_pipeline
-
-            self._workflow = standard_import_pipeline
+            from dataci.models import Workflow
+            self._workflow = Workflow.from_path(
+                TEST_DIR / 'workflow_patch/multi_file_pipeline',
+                entry_path='local_import_pipeline.py'
+            )
         return self._workflow
 
 
@@ -282,8 +283,9 @@ class TestWorkflowPatchMultiFilePipelineMultilineImport(TestWorkflowPatchMultiFi
     @property
     def workflow(self):
         if self._workflow is None:
-            with cwd('tests/workflow_patch/multi_file_pipeline'):
-                from tests.workflow_patch.multi_file_pipeline.multiline_import_pipeline import standard_import_pipeline
-
-            self._workflow = standard_import_pipeline
+            from dataci.models import Workflow
+            self._workflow = Workflow.from_path(
+                TEST_DIR / 'workflow_patch/multi_file_pipeline',
+                entry_path='multiline_import_pipeline.py'
+            )
         return self._workflow

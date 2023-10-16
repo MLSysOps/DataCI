@@ -366,7 +366,7 @@ def pretty_print_diff(diffs: 'git.diff.DiffIndex', file: 'IO' = sys.stdout):
             Tuple[int, List[Renderable]]: The number of lines and syntax renderables.
         """
         # convert to renderables
-        renderables = list(text_syntax.__rich_console__(console, console.options))
+        renderables = list(syntax.__rich_console__(console, console.options))
         # counter # \n in renderables
         segements = itertools.chain(*map(lambda x: x.segments, renderables))
         num_lines = list(map(lambda x: x.text, segements)).count('\n')
@@ -414,7 +414,7 @@ def pretty_print_diff(diffs: 'git.diff.DiffIndex', file: 'IO' = sys.stdout):
             table.add_column('old-new-sep', justify='right', width=2, style='blue')
             table.add_column('new_lineno', justify='right', width=lineno_width, style='white')
             table.add_column('new-text-sep', justify='right', width=2, style='blue')
-            table.add_column('text', justify='left', style='white')
+            table.add_column('text', justify='left', min_width=80, style='white')
 
             old_lineno, new_lineno = 0, 0
 

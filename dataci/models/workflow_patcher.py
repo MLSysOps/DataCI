@@ -128,8 +128,6 @@ def replace_entry_func(
 ):
     new_mountdir = basedir / target.name
     target_stage_entrypoint = path_to_module_name(new_mountdir.relative_to(basedir)) + '.' + target.script.entrypoint
-    target_func_name = target_stage_entrypoint.split('.')[-1]
-    target_stage_mod = '.'.join(target_stage_entrypoint.split('.')[:-1]) or '.'
     source_func_name = source.script.entrypoint.split('.')[-1]
 
     logger.debug(f"replace entry func {source} -> {target}")
@@ -138,7 +136,7 @@ def replace_entry_func(
     new_file_script = replace_source_segment(
         modify_file_script,
         source.script.entry_node,
-        gen_import_script(target_stage_entrypoint, source_func_name) if fix_import_name else '',
+        gen_import_script(target_stage_entrypoint, alias=source_func_name) if fix_import_name else '',
     )
     logger.debug(f"Modify file '{modify_file}'")
     modify_file.write_text(new_file_script)
@@ -207,7 +205,7 @@ def fixup_entry_func_import_name(
                 # stage is imported / ref as a package name
                 if not replace_package:
                     # Case 1: replace the old function module name with the new function module name
-                    if global_import_name.endswith(func_name):
+                    if global_import_name == source_stage_entrypoint:
                         # i. import statement include the function name,
                         #   replace the import statement, since the function is not valid
                         # ```diff
@@ -218,8 +216,8 @@ def fixup_entry_func_import_name(
                         # ```
                         replace_nodes.append(node)
                         replace_segs.append(
-                            f"import {global_import_name.rstrip(func_name)}\n"
-                            f"import {target_stage_entrypoint}\n"
+                            f"import {global_import_name.rstrip('.' + func_name)}\n"
+                            f"{gen_import_script(target_stage_entrypoint, absolute_import=True)}\n"
                             f"{var_name} = {target_stage_entrypoint}"
                         )
                     else:
@@ -232,7 +230,7 @@ def fixup_entry_func_import_name(
                         replace_nodes.append(node)
                         replace_segs.append(
                             get_source_segment(script, node) + '\n' +
-                            f"import {target_stage_entrypoint}\n"
+                            f"{gen_import_script(target_stage_entrypoint, absolute_import=True)}\n"
                             f"{var_name} = {target_stage_entrypoint}"
                         )
                 else:
@@ -280,7 +278,7 @@ def fixup_entry_func_import_name(
                     # +import new_stage_root.new_stage_pkg.new_func
                     # +alias.func = new_stage_root.new_stage_pkg.new_func
                     # ```
-                    add_lines.append(f'import {target_stage_entrypoint}')
+                    add_lines.append(gen_import_script(target_stage_entrypoint, absolute_import=True))
                     add_lines.append(f'{var_name} = {target_stage_entrypoint}')
                     replace_nodes.append(node)
                     replace_segs.append(f'{os.linesep}'.join(add_lines))
@@ -299,9 +297,11 @@ def path_to_module_name(path: Path):
     return '.'.join(path.with_suffix('').parts).strip('/')
 
 
-def gen_import_script(entrypoint: str, alias: str = None):
+def gen_import_script(entrypoint: str, absolute_import: bool = False, alias: str = None):
     func_name = entrypoint.split('.')[-1]
     mod = '.'.join(entrypoint.split('.')[:-1]) or '.'
+    if absolute_import:
+        return f'import {mod}'
     return f'from {mod} import {func_name}' + (f' as {alias}' if (alias and alias != func_name) else '')
 
 
@@ -492,7 +492,7 @@ def patch(
             source_stage_entrypoint=entrypoint,
             target_stage_entrypoint=new_entrypoint,
             source_stage_package=package,
-            replace_package=bool(len(inner_func_outer_callers)),
+            replace_package=flg_replace_pkg,
             logger=logger,
         )
 
