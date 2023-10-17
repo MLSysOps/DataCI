@@ -7,6 +7,7 @@ Date: Mar 15, 2023
 """
 import hashlib
 import os
+import sys
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -94,3 +95,14 @@ def hash_binary(b: bytes):
     sha_hash.update(b)
 
     return sha_hash.hexdigest()
+
+
+if sys.version_info < (3, 9):
+    def removeprefix(text, prefix):
+        return text[text.startswith(prefix) and len(prefix):]
+
+    def removesuffix(text, suffix):
+        return text[:len(text) - len(suffix)] if text.endswith(suffix) else text
+else:
+    removeprefix = str.removeprefix
+    removesuffix = str.removesuffix
