@@ -102,9 +102,14 @@ def replace_package(basedir: 'Path', source: 'Stage', target: 'Stage', logger: '
 
     logger.debug(f"replace package {source} -> {target}")
     rm_files = list(map(lambda x: basedir / x, source.script.filelist))
+    source_entry_path_abs = basedir / source.script.entry_path
     for rm_file in rm_files:
-        logger.debug(f"Remove file '{rm_file}'")
-        rm_file.unlink()
+        if rm_file != source_entry_path_abs:
+            logger.debug(f"Remove file '{rm_file}'")
+            rm_file.unlink()
+        else:
+            logger.debug(f"Truncate file '{rm_file}'")
+            rm_file.write_text('')
 
     for add_file in map(lambda x: new_mountdir / x, target.script.filelist):
         logger.debug(f"Add file '{add_file}'")
@@ -233,22 +238,22 @@ def fixup_entry_func_import_name(
                         f"{gen_import_script(target_stage_entrypoint, absolute_import=True)}\n"
                         f"{var_name} = {target_stage_entrypoint}"
                     )
-                if replace_package:
-                    # if stage package is replaced, need to mock the stage package
-                    stage_pkg_mods = removeprefix(global_import_name, source_stage_package)
-                    if f'{stage_pkg_name}.{func_name}'.lstrip('.').startswith(stage_pkg_mods):
-                        # Fix import path by create a mock package
-                        stage_base_dir = Path(source_stage_package.replace('.', '/'))
-                        stage_pkg_file = Path(stage_pkg_name.replace('.', '/')).with_suffix('.py')
-                        for par in reversed(stage_pkg_file.parents):
-                            # 1. Create empty python module
-                            (stage_base_dir / par).mkdir(exist_ok=True)
-                            if not (init_file := (stage_base_dir / par / '__init__.py')).exists():
-                                init_file.touch()
-
-                        # 2. Create empty python file
-                        if not (stage_file := stage_base_dir / stage_pkg_file).exists():
-                            stage_file.touch(exist_ok=True)
+                # if replace_package:
+                #     # if stage package is replaced, need to mock the stage package
+                #     stage_pkg_mods = removeprefix(global_import_name, source_stage_package)
+                #     if f'{stage_pkg_name}.{func_name}'.lstrip('.').startswith(stage_pkg_mods):
+                #         # Fix import path by create a mock package
+                #         stage_base_dir = Path(source_stage_package.replace('.', '/'))
+                #         stage_pkg_file = Path(stage_pkg_name.replace('.', '/')).with_suffix('.py')
+                #         for par in reversed(stage_pkg_file.parents):
+                #             # 1. Create empty python module
+                #             (stage_base_dir / par).mkdir(exist_ok=True)
+                #             if not (init_file := (stage_base_dir / par / '__init__.py')).exists():
+                #                 init_file.touch()
+                #
+                #         # 2. Create empty python file
+                #         if not (stage_file := stage_base_dir / stage_pkg_file).exists():
+                #             stage_file.touch(exist_ok=True)
 
         # Replace all import statements at one time
         if len(replace_nodes) > 0:

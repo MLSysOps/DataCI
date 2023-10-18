@@ -6,12 +6,12 @@ Email: yuanmingleee@gmail.com
 Date: Feb 23, 2023
 """
 import abc
-import importlib
 import itertools
 import json
 import logging
 import multiprocessing as mp
 import shutil
+import sys
 from abc import ABC
 from collections import defaultdict
 from datetime import datetime
@@ -135,31 +135,39 @@ class Workflow(BaseModel, ABC):
     @classmethod
     def from_path(cls, script_dir: 'Union[str, os.PathLike]', entry_path: 'Union[str, os.PathLike]'):
         # TODO: make the build process more secure with sandbox / allowed safe methods
-        def _import_module(import_pickle):
-            import os
+        def _import_module(entry_module, shared_import_pickle):
             import cloudpickle
-            import sys
+            import importlib
+            import os
             from dataci.models import Workflow
-            sys.path.insert(0, os.getcwd())
 
             mod = importlib.import_module(entry_module)
             # get all variables from the module
             for k, v in mod.__dict__.items():
                 if not k.startswith('__') and isinstance(v, Workflow):
-                    import_pickle['__return__'] = cloudpickle.dumps(v)
+                    shared_import_pickle['__return__'] = cloudpickle.dumps(v)
                     break
             else:
-                raise ValueError(f'Workflow not found in directory: {script_dir}')
+                raise ValueError(f'Workflow not found in directory: {os.getcwd()}')
 
         with cwd(script_dir):
+            import sys
             entry_file = Path(entry_path)
+            sys_path = sys.path.copy()
+            # Append the local dir to the sys path
+            sys.path.insert(0, '')
             entry_module = '.'.join(entry_file.parts[:-1] + (entry_file.stem,))
             with mp.Manager() as manager:
                 import_pickle = manager.dict()
-                p = mp.Process(target=_import_module, args=(import_pickle,))
+                p = mp.Process(target=_import_module, args=(entry_module, import_pickle,))
                 p.start()
                 p.join()
-                self = cloudpickle.loads(import_pickle['__return__'])
+                try:
+                    self = cloudpickle.loads(import_pickle['__return__'])
+                except KeyError:
+                    raise ValueError(f'Workflow not found in directory: {script_dir}')
+            # restore sys path
+            sys.path = sys_path
 
         return self
 
