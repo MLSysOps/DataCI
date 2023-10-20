@@ -273,7 +273,7 @@ class PythonOperator(Stage, _PythonOperator):
             # 2. locate the function definition
             tree = ast.parse(Path(fileloc).read_text())
             func_node = locate_stage_function(tree, self.name)[0]
-            assert len(func_node) == 1, f'Found multiple function definition for stage {self.name} in {entryfile}'
+            assert len(func_node) == 1, f'Found {len(func_node)} function definition for stage {self.name} in {entryfile}'
             self._script = Script(
                 dir=fileloc.parent, entry_path=entryfile, entry_node=func_node[0], local_dir=fileloc.parent,
                 filelist=[fileloc.relative_to(fileloc.parent)],

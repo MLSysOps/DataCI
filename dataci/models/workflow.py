@@ -9,13 +9,16 @@ import abc
 import itertools
 import json
 import logging
+import multiprocessing as mp
 import shutil
+import sys
 from abc import ABC
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import cloudpickle
 import networkx as nx
 
 from dataci.db.workflow import (
@@ -132,20 +135,39 @@ class Workflow(BaseModel, ABC):
     @classmethod
     def from_path(cls, script_dir: 'Union[str, os.PathLike]', entry_path: 'Union[str, os.PathLike]'):
         # TODO: make the build process more secure with sandbox / allowed safe methods
-        local_dict = dict()
+        def _import_module(entry_module, shared_import_pickle):
+            import cloudpickle
+            import importlib
+            import os
+            from dataci.models import Workflow
+
+            mod = importlib.import_module(entry_module)
+            # get all variables from the module
+            for k, v in mod.__dict__.items():
+                if not k.startswith('__') and isinstance(v, Workflow):
+                    shared_import_pickle['__return__'] = cloudpickle.dumps(v)
+                    break
+            else:
+                raise ValueError(f'Workflow not found in directory: {os.getcwd()}')
+
         with cwd(script_dir):
+            import sys
             entry_file = Path(entry_path)
+            sys_path = sys.path.copy()
+            # Append the local dir to the sys path
+            sys.path.insert(0, '')
             entry_module = '.'.join(entry_file.parts[:-1] + (entry_file.stem,))
-            exec(
-                f'import os, sys; sys.path.insert(0, os.getcwd()); from {entry_module} import *',
-                local_dict, local_dict
-            )
-        for v in local_dict.copy().values():
-            if isinstance(v, Workflow):
-                self = v
-                break
-        else:
-            raise ValueError(f'Workflow not found in directory: {script_dir}')
+            with mp.Manager() as manager:
+                import_pickle = manager.dict()
+                p = mp.Process(target=_import_module, args=(entry_module, import_pickle,))
+                p.start()
+                p.join()
+                try:
+                    self = cloudpickle.loads(import_pickle['__return__'])
+                except KeyError:
+                    raise ValueError(f'Workflow not found in directory: {script_dir}')
+            # restore sys path
+            sys.path = sys_path
 
         return self
 
@@ -187,6 +209,7 @@ class Workflow(BaseModel, ABC):
         self.create_date = datetime.fromtimestamp(config['timestamp']) if config['timestamp'] else None
         self.trigger = [Event.from_str(evt) for evt in config['trigger']]
         if 'script' in config:
+            # fixme: reload the object if the script hash is changed
             self._script = Script.from_dict(config['script'])
         if 'dag' in config:
             self._stage_script_paths.clear()
@@ -287,12 +310,12 @@ class Workflow(BaseModel, ABC):
         for k, stage in kwargs.items():
             # Convert k to full stage name
             full_k = f'{self.workspace.name}.{k}' if self.workspace else k
+            # Check if the stage is in the workflow
             if full_k not in self.stages:
                 raise ValueError(f'Cannot find stage name={k} in workflow {self.name}')
-            if stage.name != k:
-                raise ValueError(f'Cannot patch stage {stage.name} to {k} in workflow {self.name}')
+            # TODO: Check if the stage has the same signature
+            # Warning if the new stage has different signature with the old stage
         new_workflow = patch_func(self, source_name=full_k, target=stage, logger=self.logger, verbose=verbose)
-        new_workflow = self.reload(new_workflow.dict())
 
         return new_workflow
 

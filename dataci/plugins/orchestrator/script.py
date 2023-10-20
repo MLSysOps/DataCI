@@ -102,7 +102,7 @@ def locate_stage_function(
         elif node.name in stage_names:
             stage_nodes.append(node)
             deco_nodes.append(decorator)
-        return stage_nodes, deco_nodes
+    return stage_nodes, deco_nodes
 
 
 def locate_dag_function(

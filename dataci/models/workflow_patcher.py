@@ -66,14 +66,16 @@ Else:
     no need to take care of func / import name
 """
 import ast
+import atexit
+import inspect
 import logging
 import os
 import re
+import tempfile
 from io import StringIO
 from pathlib import Path
-from pydoc import pipepager
+from pydoc import getpager, pipepager
 from shutil import rmtree
-from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, List, Set
 
 import git
@@ -88,53 +90,71 @@ from dataci.models.script import (
     pretty_print_diff,
     pretty_print_dircmp
 )
-from dataci.utils import cwd
+from dataci.utils import cwd, removeprefix, removesuffix
 
 if TYPE_CHECKING:
     from typing import Any, Tuple, Union
     from dataci.models import Workflow
 
 
-def replace_package(basedir: 'Path', source: 'Stage', target: 'Stage'):
+def replace_package(basedir: 'Path', source: 'Stage', target: 'Stage', logger: 'logging.Logger'):
     new_mountdir = basedir / target.name
 
-    print(f"replace package {source} -> {target}")
+    logger.debug(f"replace package {source} -> {target}")
     rm_files = list(map(lambda x: basedir / x, source.script.filelist))
+    source_entry_path_abs = basedir / source.script.entry_path
     for rm_file in rm_files:
-        print(f"Remove file '{rm_file}'")
-        rm_file.unlink()
+        if rm_file != source_entry_path_abs:
+            logger.debug(f"Remove file '{rm_file}'")
+            rm_file.unlink()
+        else:
+            logger.debug(f"Truncate file '{rm_file}'")
+            rm_file.write_text('')
 
     for add_file in map(lambda x: new_mountdir / x, target.script.filelist):
-        print(f"Add file '{add_file}'")
+        logger.debug(f"Add file '{add_file}'")
     target.script.copy(new_mountdir, dirs_exist_ok=True)
-    # Check if the package has '__init__.py' file
-    if not (new_mountdir / '__init__.py').exists():
-        (new_mountdir / '__init__.py').touch()
+
+    # Make the new stage package importable
+    init_file = new_mountdir / '__init__.py'
+    if not init_file.exists():
+        logger.debug(f"Add file '{init_file}'")
+        init_file.touch()
 
     return new_mountdir
 
 
-def replace_entry_func(basedir: Path, source: 'Stage', target: 'Stage', fix_import_name: bool):
+def replace_entry_func(
+        basedir: Path,
+        source: 'Stage',
+        target: 'Stage',
+        fix_import_name: bool,
+        logger: 'logging.Logger'
+):
     new_mountdir = basedir / target.name
     target_stage_entrypoint = path_to_module_name(new_mountdir.relative_to(basedir)) + '.' + target.script.entrypoint
-    target_func_name = target_stage_entrypoint.split('.')[-1]
-    target_stage_mod = '.'.join(target_stage_entrypoint.split('.')[:-1]) or '.'
     source_func_name = source.script.entrypoint.split('.')[-1]
 
-    print(f"replace entry func {source} -> {target}")
+    logger.debug(f"replace entry func {source} -> {target}")
     modify_file = basedir / source.script.entry_path
     modify_file_script = modify_file.read_text()
     new_file_script = replace_source_segment(
         modify_file_script,
         source.script.entry_node,
-        f'from {target_stage_mod} import {target_func_name} as {source_func_name}' if fix_import_name else '',
+        gen_import_script(target_stage_entrypoint, alias=source_func_name) if fix_import_name else '',
     )
-    print(f"Modify file '{modify_file}'")
+    logger.debug(f"Modify file '{modify_file}'")
     modify_file.write_text(new_file_script)
 
     for add_file in map(lambda x: new_mountdir / x, target.script.filelist):
-        print(f"Add file '{add_file}'")
+        logger.debug(f"Add file '{add_file}'")
     target.script.copy(new_mountdir, dirs_exist_ok=True)
+
+    # Make the new stage package importable
+    init_file = new_mountdir / '__init__.py'
+    if not init_file.exists():
+        logger.debug(f"Add file '{init_file}'")
+        init_file.touch()
 
     return new_mountdir
 
@@ -144,11 +164,13 @@ def fixup_entry_func_import_name(
         source_stage_entrypoint: str,
         target_stage_entrypoint: str,
         source_stage_package: str,
-        replace_package: bool = False,
+        replace_package: bool,
+        logger: 'logging.Logger',
 ):
-    print('fixup entry func import name')
+    logger.debug('fixup entry func import name')
+    source_stage_package = (source_stage_package + '.').lstrip('.')
     pat = re.compile(
-        re.escape((source_stage_package + '.').lstrip('.')) +
+        re.escape(source_stage_package) +
         r'(.*)\.([^.]+)'
     )
     if match := pat.match(source_stage_entrypoint):
@@ -184,93 +206,59 @@ def fixup_entry_func_import_name(
                 # -import stage_root.stg_pkg.func as var_name
                 # +import new_stage_root.new_stage_pkg.new_func as var_name
                 replace_nodes.append(node)
-                replace_segs.append(f"import {target_stage_entrypoint} as {var_name}")
+                replace_segs.append(gen_import_script(target_stage_entrypoint, alias=var_name))
             else:
                 # stage is imported / ref as a package name
-                if not replace_package:
-                    # Case 1: replace the old function module name with the new function module name
-                    if global_import_name.endswith(func_name):
-                        # i. import statement include the function name,
-                        #   replace the import statement, since the function is not valid
-                        # ```diff
-                        # -import stage_root.stg_pkg.func
-                        # +import stage_root.stg_pkg
-                        # +import stage_root.new_stage_pkg.new_func
-                        # +stage_root.stg_pkg.func = new_stage_root.new_stage_pkg.new_func
-                        # ```
-                        replace_nodes.append(node)
-                        replace_segs.append(
-                            f"import {global_import_name.rstrip(func_name)}\n"
-                            f"import {target_stage_entrypoint}\n"
-                            f"{var_name} = {target_stage_entrypoint}"
-                        )
-                    else:
-                        # ii. Otherwise,
-                        # ```diff
-                        # import stage_root.stg_pkg as alias
-                        # +import stage_root.new_stage_pkg.new_func
-                        # +alias.func = dag_pkg.new_stage_pkg.func
-                        # ```
-                        replace_nodes.append(node)
-                        replace_segs.append(
-                            get_source_segment(script, node) + '\n' +
-                            f"import {target_stage_entrypoint}\n"
-                            f"{var_name} = {target_stage_entrypoint}"
-                        )
-                else:
-                    # Case 2: if stage package is replaced, need to mock the stage package
-                    stage_pkg_mods = global_import_name.lstrip(source_stage_package + '.')
-                    add_lines = list()
-                    if f'{stage_pkg_name}.{func_name}'.lstrip('.').startswith(stage_pkg_mods):
-                        # i. import statement include the stage package name
-                        # Alias import is used
-                        # ```diff
-                        # -import stage_root.stg_mod1 as alias
-                        # +alias = types.ModuleType('stage_root.stg_mod1')
-                        # +alias.stg_mod2 = types.ModuleType('stage_root.stg_mod1.stg_mod2')
-                        # ```
-                        # Or direct import is used
-                        # ```diff
-                        # -import stage_root.stg_mod1.stg_mod2
-                        # +import stage_root
-                        # +stage_root.stg_mod1 = types.ModuleType('stage_root.stg_mod1')
-                        # +stage_root.stg_mod1.stg_mod2 = types.ModuleType('stage_root.stg_mod1.stg_mod2')
-                        # ```
-                        import_name = ''
-                        add_stage_root_import, add_types_import = False, True
-                        for mod in var_name.split('.')[:-1]:
-                            import_name = import_name + '.' + mod if import_name else mod  # prevent leading '.'
-                            if source_stage_package.startswith(import_name):
-                                # found: import stage_root_mod1, import stage_root_mod1.stage_root_mod2, etc
-                                add_stage_root_import = True
-                                continue
-                            elif add_stage_root_import:
-                                # Not found stage_root import any further, add stage_root import:
-                                # +import stage_root_mod1.stage_root_mod2
-                                add_lines.append(f'import {import_name}')
-                                add_stage_root_import = False
-                            if add_types_import:
-                                add_lines.append(f'import types')
-                                add_types_import = False
-                            add_lines.append(f'{import_name} = types.ModuleType({mod!r})')
-                    else:
-                        # ii. Otherwise, do nothing for import fixing
-                        add_lines.append(get_source_segment(script, node))
-
-                    # Add the new function import and fix import
+                # Case 1: replace the old function module name with the new function module name
+                if global_import_name == source_stage_entrypoint:
+                    # i. import statement include the function name,
+                    #   replace the import statement, since the function is not valid
                     # ```diff
-                    # +import new_stage_root.new_stage_pkg.new_func
-                    # +alias.func = new_stage_root.new_stage_pkg.new_func
+                    # -import stage_root.stg_pkg.func
+                    # +import stage_root.stg_pkg
+                    # +import stage_root.new_stage_pkg.new_func
+                    # +stage_root.stg_pkg.func = new_stage_root.new_stage_pkg.new_func
                     # ```
-                    add_lines.append(f'import {target_stage_entrypoint}')
-                    add_lines.append(f'{var_name} = {target_stage_entrypoint}')
                     replace_nodes.append(node)
-                    replace_segs.append(f'{os.linesep}'.join(add_lines))
+                    replace_segs.append(
+                        f"import {removesuffix(global_import_name, '.' + func_name)}\n"
+                        f"{gen_import_script(target_stage_entrypoint, absolute_import=True)}\n"
+                        f"{var_name} = {target_stage_entrypoint}"
+                    )
+                else:
+                    # ii. Otherwise,
+                    # ```diff
+                    # import stage_root.stg_pkg as alias
+                    # +import stage_root.new_stage_pkg.new_func
+                    # +alias.func = dag_pkg.new_stage_pkg.func
+                    # ```
+                    replace_nodes.append(node)
+                    replace_segs.append(
+                        get_source_segment(script, node) + '\n' +
+                        f"{gen_import_script(target_stage_entrypoint, absolute_import=True)}\n"
+                        f"{var_name} = {target_stage_entrypoint}"
+                    )
+                # if replace_package:
+                #     # if stage package is replaced, need to mock the stage package
+                #     stage_pkg_mods = removeprefix(global_import_name, source_stage_package)
+                #     if f'{stage_pkg_name}.{func_name}'.lstrip('.').startswith(stage_pkg_mods):
+                #         # Fix import path by create a mock package
+                #         stage_base_dir = Path(source_stage_package.replace('.', '/'))
+                #         stage_pkg_file = Path(stage_pkg_name.replace('.', '/')).with_suffix('.py')
+                #         for par in reversed(stage_pkg_file.parents):
+                #             # 1. Create empty python module
+                #             (stage_base_dir / par).mkdir(exist_ok=True)
+                #             if not (init_file := (stage_base_dir / par / '__init__.py')).exists():
+                #                 init_file.touch()
+                #
+                #         # 2. Create empty python file
+                #         if not (stage_file := stage_base_dir / stage_pkg_file).exists():
+                #             stage_file.touch(exist_ok=True)
 
         # Replace all import statements at one time
         if len(replace_nodes) > 0:
             new_script = replace_source_segment(script, replace_nodes, replace_segs)
-            print(f"Modify file '{path}'")
+            logger.debug(f"Modify file '{path}'")
             path.write_text(new_script)
 
 
@@ -279,6 +267,14 @@ def path_to_module_name(path: Path):
         return '.'.join(path.parts).strip('/') or '.'
 
     return '.'.join(path.with_suffix('').parts).strip('/')
+
+
+def gen_import_script(entrypoint: str, absolute_import: bool = False, alias: str = None):
+    func_name = entrypoint.split('.')[-1]
+    mod = '.'.join(entrypoint.split('.')[:-1]) or '.'
+    if absolute_import:
+        return f'import {mod}'
+    return f'from {mod} import {func_name}' + (f' as {alias}' if (alias and alias != func_name) else '')
 
 
 def get_all_predecessors(
@@ -415,8 +411,9 @@ def patch(
         f'{entrypoint_outer_caller}\n'
     )
 
-    tmp_dir = TemporaryDirectory(dir=workflow.workspace.tmp_dir)
-    tmp_dir = Path(tmp_dir.name)
+    tmp_dir = tempfile.mkdtemp(dir=workflow.workspace.tmp_dir)
+    atexit.register(tempfile.TemporaryDirectory._rmtree, tmp_dir)
+    tmp_dir = Path(tmp_dir)
 
     # Copy the dag package to a temp dir
     workflow.script.copy(tmp_dir, dirs_exist_ok=True)
@@ -439,22 +436,36 @@ def patch(
     )
 
     if flg_replace_pkg:
-        new_stage_dir = replace_package(stage_base_dir, workflow.stages[source_name], target)
+        new_stage_dir = replace_package(
+            basedir=stage_base_dir,
+            source=workflow.stages[source_name],
+            target=target,
+            logger=logger
+        )
     else:
-        new_stage_dir = replace_entry_func(stage_base_dir, workflow.stages[source_name], target, flg_fix_import_name)
+        new_stage_dir = replace_entry_func(
+            basedir=stage_base_dir,
+            source=workflow.stages[source_name],
+            target=target,
+            fix_import_name=flg_fix_import_name,
+            logger=logger
+        )
     new_entrypoint = path_to_module_name(new_stage_dir.relative_to(tmp_dir)) + '.' + target.script.entrypoint
 
     if flg_fix_import_name:
         paths = list()
         for caller in entrypoint_callers & package_nodes - {top_node_id}:
             label = call_graph.nodes[caller]['label']
-            paths.append((tmp_dir / label.replace('.', '/')).with_suffix('.py'))
+            path = (tmp_dir / label.replace('.', '/')).with_suffix('.py')
+            if path.exists():
+                paths.append(path)
         fixup_entry_func_import_name(
             paths=paths,
             source_stage_entrypoint=entrypoint,
             target_stage_entrypoint=new_entrypoint,
             source_stage_package=package,
-            replace_package=bool(len(inner_func_outer_callers))
+            replace_package=flg_replace_pkg,
+            logger=logger,
         )
 
     if verbose:
@@ -467,7 +478,14 @@ def patch(
         logger.info('Code diff:')
         diff_log_str = StringIO()
         pretty_print_diff(diffs, file=diff_log_str)
-        pipepager(diff_log_str.getvalue(), cmd='less -R')
+
+        # Print to pager, overwirte the default pager to support color output
+        pager = getpager()
+        # pager is a `less` called function
+        pager_code = inspect.getsource(pager).strip()
+        if pager_code == 'return lambda text: pipepager(text, \'less\')':
+            pager = lambda text: pipepager(text, 'less -R')
+        pager(diff_log_str.getvalue())
 
         # Clean up git
         if not git_exists:

@@ -202,6 +202,8 @@ class Script(object):
         dst_path = Path(dst)
         dst_path.mkdir(parents=True, exist_ok=dirs_exist_ok)
         for file in self.filelist:
+            # Create the parent directory if not exist
+            (dst_path / file).parent.mkdir(parents=True, exist_ok=True)
             copy_function(self.dir / file, dst_path / file)
 
         return dst
@@ -309,7 +311,7 @@ def replace_source_segment(source, nodes, replace_segments):
                     replace_segment = indent(dedent(replace_segment), indent_prefix).strip()
                     # Replace code segment
                     new_script += source[prev_end:start] + replace_segment
-                    prev_end = end + 1
+                    prev_end = end
                     break
     new_script += source[prev_end:]
     return new_script
@@ -364,7 +366,7 @@ def pretty_print_diff(diffs: 'git.diff.DiffIndex', file: 'IO' = sys.stdout):
             Tuple[int, List[Renderable]]: The number of lines and syntax renderables.
         """
         # convert to renderables
-        renderables = list(text_syntax.__rich_console__(console, console.options))
+        renderables = list(syntax.__rich_console__(console, console.options))
         # counter # \n in renderables
         segements = itertools.chain(*map(lambda x: x.segments, renderables))
         num_lines = list(map(lambda x: x.text, segements)).count('\n')
@@ -412,7 +414,7 @@ def pretty_print_diff(diffs: 'git.diff.DiffIndex', file: 'IO' = sys.stdout):
             table.add_column('old-new-sep', justify='right', width=2, style='blue')
             table.add_column('new_lineno', justify='right', width=lineno_width, style='white')
             table.add_column('new-text-sep', justify='right', width=2, style='blue')
-            table.add_column('text', justify='left', style='white')
+            table.add_column('text', justify='left', min_width=80, style='white')
 
             old_lineno, new_lineno = 0, 0
 
@@ -436,6 +438,7 @@ def pretty_print_diff(diffs: 'git.diff.DiffIndex', file: 'IO' = sys.stdout):
                                 'python',
                                 line_numbers=False,
                                 word_wrap=True,
+                                theme='github-dark',
                                 background_color='default',
                                 line_range=(1, 1),
                             ),
@@ -454,6 +457,7 @@ def pretty_print_diff(diffs: 'git.diff.DiffIndex', file: 'IO' = sys.stdout):
                             'python',
                             line_numbers=False,
                             word_wrap=True,
+                            theme='github-dark',
                             background_color='default',
                             line_range=(old_lineno, old_lineno),
                             code_width=80,
