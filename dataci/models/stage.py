@@ -74,6 +74,7 @@ class Stage(BaseModel):
         if id_only:
             return {
                 'workspace': self.workspace.name,
+                'type': self.type_name,
                 'name': self.name,
                 'version': self.version,
             }

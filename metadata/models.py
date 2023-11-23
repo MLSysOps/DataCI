@@ -5,12 +5,25 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Nov 20, 2023
 """
+import re
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field, AnyUrl, Extra, root_validator
+from packaging import version
+from pydantic import BaseModel, Field, AnyUrl, Extra, root_validator, validator
+
+SCHEMA_VERSION = "2-0-2"
+SCHEMA_PATH_PATTERN = re.compile(r'^/spec/(\d+)-(\d+)-(\d+)/OpenLineage.json$')
+
+
+def parse_schema_version(schema_url: AnyUrl) -> str:
+    match = SCHEMA_PATH_PATTERN.match(schema_url.path)
+    if match:
+        major, minor, micro = match.groups()
+        return f"{major}-{minor}-{micro}"
+    raise ValueError(f"Invalid schema url: {schema_url}")
 
 
 class BaseEvent(BaseModel):
@@ -23,6 +36,14 @@ class BaseEvent(BaseModel):
         description="The JSON Pointer (https://tools.ietf.org/html/rfc6901) URL to the corresponding version of the schema definition for this RunEvent",
         example="https://openlineage.io/spec/0-0-1/OpenLineage.json",
     )
+
+    @validator("schemaURL")
+    def check_schema_version(cls, v):
+        schema_version = parse_schema_version(v)
+        if version.parse(schema_version.replace('-', '.')) <= \
+            version.parse(SCHEMA_VERSION.replace('-', '.')):
+            return v
+        raise ValueError(f"Invalid schema version: {v}")
 
 class BaseFacet(BaseModel, extra=Extra.allow):
     """all fields of the base facet are prefixed with _ to avoid name conflicts in facets"""

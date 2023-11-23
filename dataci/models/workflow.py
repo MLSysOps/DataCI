@@ -91,7 +91,12 @@ class Workflow(BaseModel, ABC):
 
     def dict(self, id_only=False):
         if id_only:
-            return {'workspace': self.workspace.name, 'name': self.name, 'version': self.version}
+            return {
+                'workspace': self.workspace.name,
+                'type': self.type_name,
+                'name': self.name,
+                'version': self.version
+            }
         # export the dag as a dict
         # 1. convert the dag to a list of edges
         # 2. convert each node from Stage to an id

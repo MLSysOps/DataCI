@@ -55,7 +55,7 @@ class BaseModel(abc.ABC):
         return f'dataci://{self.workspace.name}/{self.type_name}/{self.name}/{self.version}'
 
     @abc.abstractmethod
-    def dict(self):
+    def dict(self, id_only=False):
         pass
 
     @classmethod
