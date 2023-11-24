@@ -10,11 +10,12 @@ Run for pipeline.
 import re
 from typing import TYPE_CHECKING
 
+from dataci.db.run import exist_run, create_one_run, get_next_run_version, get_one_run
 from dataci.models import BaseModel
 
 if TYPE_CHECKING:
     from datetime import datetime
-    from typing import Union
+    from typing import Optional, Union
 
     from dataci.models import Workflow, Stage
 
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
 class Run(BaseModel):
     # run id (uuid)
     NAME_PATTERN = re.compile(r'^[a-f0-9]{8}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{12}$', flags=re.IGNORECASE)
-    VERSION_PATTERN = re.compile(r'^\d+$', flags=re.IGNORECASE)
+    VERSION_PATTERN = re.compile(r'^\d+|latest$', flags=re.IGNORECASE)
     type_name = 'run'
 
     def __init__(
@@ -31,8 +32,8 @@ class Run(BaseModel):
             status: str,
             job: 'Union[Workflow, Stage, dict]',
             try_num: int,
-            create_time: 'datetime',
-            update_time: 'datetime',
+            create_time: 'Optional[datetime]' = None,
+            update_time: 'Optional[datetime]' = None,
             **kwargs
     ):
         super().__init__(name, **kwargs)
@@ -85,9 +86,9 @@ class Run(BaseModel):
 
     def save(self, version=None):
         # Get next run try number
-        version = self.version or get_next_run_version(name)
+        version = self.version or get_next_run_version(self.name)
         # Check if run exists
-        if exist_run_by_version(self.name, version):
+        if exist_run(self.name, version):
             # update run
             return self.update()
         create_one_run(self.dict())
@@ -99,6 +100,12 @@ class Run(BaseModel):
     def get(cls, name, version=None, not_found_ok=False):
         """Get run by name and version."""
         workspace, name, version = cls.parse_data_model_get_identifier(name, version)
-        config = get_run_by_uuid(name)
+        # If version not set, get the latest version
+        version = version or 'latest'
+        config = get_one_run(name, version)
+        if config is None:
+            if not_found_ok:
+                return
+            raise ValueError(f'Run {name}@{version} not found.')
 
         return cls.from_dict(config)

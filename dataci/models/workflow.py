@@ -114,6 +114,7 @@ class Workflow(BaseModel, ABC):
 
         return {
             'workspace': self.workspace.name,
+            'type': self.type_name,
             'name': self.name,
             'version': self.version,
             'dag': {
@@ -226,6 +227,7 @@ class Workflow(BaseModel, ABC):
                 if config is not None:
                     stage_mapping[stage_full_name] = config
                 # Update the stage script base path
+                print(config)
                 self._stage_script_paths[stage_full_name] = stage_config['path']
             for stage in self.stages.values():
                 if stage.full_name in stage_mapping:

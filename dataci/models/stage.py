@@ -80,6 +80,7 @@ class Stage(BaseModel):
             }
         return {
             'name': self.name,
+            'type': self.type_name,
             'workspace': self.workspace.name,
             'version': self.version,
             'version_tag': self.version_tag,

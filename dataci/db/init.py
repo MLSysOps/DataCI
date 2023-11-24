@@ -17,6 +17,7 @@ db_connection = sqlite3.connect(DB_FILE)
 # Drop all tables
 with db_connection:
     db_connection.executescript("""
+    DROP TABLE IF EXISTS run;
     DROP TABLE IF EXISTS dataset_tag;
     DROP TABLE IF EXISTS dataset;
     DROP TABLE IF EXISTS workflow_dag_node;
@@ -24,12 +25,23 @@ with db_connection:
     DROP TABLE IF EXISTS stage;
     DROP TABLE IF EXISTS workflow_tag;
     DROP TABLE IF EXISTS workflow;
+    DROP TABLE IF EXISTS job;
     """)
 logger.info('Drop all tables.')
 
 # Create dataset table
 with db_connection:
     db_connection.executescript("""
+    CREATE TABLE job
+    (
+        workspace TEXT,
+        name      TEXT,
+        version   TEXT,
+        type      TEXT,
+        PRIMARY KEY (workspace, name, version, type),
+        UNIQUE (workspace, name, version, type)
+    );
+    
     CREATE TABLE workflow
     (
         workspace   TEXT,
@@ -45,7 +57,9 @@ with db_connection:
         script_filelist  TEXT,
         script_hash      TEXT,
         PRIMARY KEY (workspace, name, version),
-        UNIQUE (workspace, name, version)
+        UNIQUE (workspace, name, version),
+        FOREIGN KEY (workspace, name, version)
+            REFERENCES job (workspace, name, version)
     );
     
     CREATE TABLE workflow_tag
@@ -73,7 +87,9 @@ with db_connection:
         script_filelist  TEXT,
         script_hash      TEXT,
         PRIMARY KEY (workspace, name, version),
-        UNIQUE (workspace, name, version)
+        UNIQUE (workspace, name, version),
+        FOREIGN KEY (workspace, name, version)
+            REFERENCES job (workspace, name, version)
     );
     
     CREATE TABLE stage_tag
@@ -132,6 +148,24 @@ with db_connection:
         UNIQUE (workspace, name, version),
         FOREIGN KEY (workspace, name, version)
             REFERENCES dataset (workspace, name, version)
+    );
+    
+    CREATE TABLE run
+    (
+        workspace     TEXT,
+        name          TEXT,
+        version       INTEGER,
+        status        TEXT,
+        job_workspace TEXT,
+        job_name      TEXT,
+        job_version   TEXT,
+        job_type      TEXT,
+        create_time   INTEGER,
+        update_time   INTEGER,
+        PRIMARY KEY (workspace, name, version),
+        UNIQUE (name, version),
+        FOREIGN KEY (workspace, name, version, job_type)
+            REFERENCES job (workspace, name, version, type)
     );
     """)
 logger.info('Create all tables.')

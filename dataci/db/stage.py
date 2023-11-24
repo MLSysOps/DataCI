@@ -24,6 +24,14 @@ def create_one_stage(stage_dict):
         cur = conn.cursor()
         cur.execute(
             """
+            -- Insert into job first
+            INSERT INTO job (workspace, name, version, type)
+            VALUES (:workspace, :name, :version, :type)
+            ;
+            """,
+            stage_dict,
+        )
+        cur.execute("""
             INSERT INTO stage (
                 workspace, name, version, params, timestamp, script_dir, script_entry, script_filelist, script_hash
             )
