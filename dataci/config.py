@@ -8,6 +8,7 @@ Date: May 01, 2023
 import configparser
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from textwrap import dedent
 from threading import Event as ThreadEvent
@@ -97,6 +98,7 @@ DB_FILE = None
 LOG_DIR = None
 LOG_LEVEL = None
 STORAGE_BACKEND = None
+TIMEZONE = datetime.now(timezone.utc).astimezone().tzinfo
 
 # DataCI Trigger and Scheduler server
 SERVER_ADDRESS = '0.0.0.0'

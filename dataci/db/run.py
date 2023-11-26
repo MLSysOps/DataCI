@@ -42,6 +42,33 @@ def create_one_run(config: dict):
         return cur.lastrowid
 
 
+def update_one_run(config):
+    config = deepcopy(config)
+    job_config = config.pop('job')
+    config['job_workspace'] = job_config['workspace']
+    config['job_name'] = job_config['name']
+    config['job_version'] = job_config['version']
+    config['job_type'] = job_config['type']
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE run
+            SET    status = :status
+                 , job_workspace = :job_workspace
+                 , job_name = :job_name
+                 , job_version = :job_version
+                 , job_type = :job_type
+                 , update_time = :update_time
+            WHERE  name = :name
+            AND    version = :version
+            ;
+            """,
+            config
+        )
+        return cur.lastrowid
+
+
 def exist_run(name, version):
     with sqlite3.connect(DB_FILE) as conn:
         cur = conn.cursor()
@@ -60,19 +87,23 @@ def exist_run(name, version):
     return exists
 
 
-def get_next_run_version(name):
+def get_latest_run_version(name):
     with sqlite3.connect(DB_FILE) as conn:
         cur = conn.cursor()
         (version,), = cur.execute(
             """
-            SELECT MAX(version) + 1
+            SELECT MAX(version)
             FROM   run
             WHERE  name = ?
             ;
             """,
             (name,)
         )
-    return version or 1
+    return version or 0
+
+
+def get_next_run_version(name):
+    return get_latest_run_version(name) + 1
 
 
 def get_one_run(name, version='latest'):

@@ -10,11 +10,13 @@ Run for pipeline.
 import re
 from typing import TYPE_CHECKING
 
-from dataci.db.run import exist_run, create_one_run, get_next_run_version, get_one_run
+from dataci.config import TIMEZONE
+from dataci.db.run import exist_run, create_one_run, get_next_run_version, get_latest_run_version, get_one_run, \
+    patch_one_run
 from dataci.models import BaseModel
 
 if TYPE_CHECKING:
-    from datetime import datetime
+    from datetime import datetime, timezone
     from typing import Optional, Union
 
     from dataci.models import Workflow, Stage
@@ -31,7 +33,7 @@ class Run(BaseModel):
             name: str,
             status: str,
             job: 'Union[Workflow, Stage, dict]',
-            try_num: int,
+            version: int,
             create_time: 'Optional[datetime]' = None,
             update_time: 'Optional[datetime]' = None,
             **kwargs
@@ -39,7 +41,7 @@ class Run(BaseModel):
         super().__init__(name, **kwargs)
         self.status: str = status
         self._job = job
-        self.version = try_num
+        self.version = version
         self.create_time = create_time
         self.update_time = update_time
 
@@ -75,26 +77,56 @@ class Run(BaseModel):
             'name': self.name,
             'version': self.version,
             'status': self.status,
-            'job': self.job.dict(id_only=True),
-            'create_time': int(self.create_time.timestamp()),
-            'update_time': int(self.update_time.timestamp()),
+            'job': self.job.dict(id_only=True) if self.job else None,
+            'create_time': int(self.create_time.replace(tzinfo=timezone.utc).timestamp()) if self.create_time else None,
+            'update_time': int(self.update_time.replace(tzinfo=timezone.utc).timestamp()) if self.update_time else None,
         }
 
     @classmethod
     def from_dict(cls, config):
-        return cls(**config)
+        self = cls(**config)
+        return self.reload(config)
+
+    def reload(self, config=None):
+        if config is None:
+            config = get_one_run(self.name, self.version)
+        self.version = config['version']
+        self.create_time = datetime.fromtimestamp(config['create_time'], tz=TIMEZONE)
+        self.update_time = datetime.fromtimestamp(config['update_time'], tz=TIMEZONE)
 
     def save(self, version=None):
         # Get next run try number
         version = self.version or get_next_run_version(self.name)
         # Check if run exists
         if exist_run(self.name, version):
-            # update run
-            return self.update()
-        create_one_run(self.dict())
+            # reload
+            config = get_one_run(self.name, version)
+            return self.reload(config)
+
+        config = self.dict()
+        config['version'] = version
+        config['update_time'] = config['create_time']
+        create_one_run(config)
+        return self.reload(config)
 
     def update(self):
-        pass
+        # Get latest run try number
+        version = self.version or get_latest_run_version(self.name)
+        # Check if run exists
+        run_prev = get_one_run(self.name, version)
+        if run_prev is None:
+            raise ValueError(f'Run {self.name}@{version} not found.')
+        # Update run by merging with previous run
+        config = self.dict()
+        config['version'] = version
+        config['create_time'] = run_prev['create_time']
+        # Overwrite with previous field values if not set
+        for k, v in run_prev.items():
+            if k not in config:
+                config[k] = v
+
+        patch_one_run(config)
+        return self.reload(config)
 
     @classmethod
     def get(cls, name, version=None, not_found_ok=False):
