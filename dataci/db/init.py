@@ -17,6 +17,8 @@ db_connection = sqlite3.connect(DB_FILE)
 # Drop all tables
 with db_connection:
     db_connection.executescript("""
+    DROP TABLE IF EXISTS run_dataset_lineage;
+    DROP TABLE IF EXISTS run_lineage;
     DROP TABLE IF EXISTS run;
     DROP TABLE IF EXISTS dataset_tag;
     DROP TABLE IF EXISTS dataset;
@@ -166,6 +168,34 @@ with db_connection:
         UNIQUE (name, version),
         FOREIGN KEY (workspace, name, version, job_type)
             REFERENCES job (workspace, name, version, type)
+    );
+    
+    CREATE TABLE run_lineage
+    (
+        run_name           TEXT,
+        run_version        INTEGER,
+        parent_run_name    TEXT,
+        parent_run_version INTEGER,
+        PRIMARY KEY (run_name, run_version, parent_run_name, parent_run_version),
+        FOREIGN KEY (run_name, run_version)
+            REFERENCES run (name, version),
+        FOREIGN KEY (parent_run_name, parent_run_version)
+            REFERENCES run (name, version)
+    );
+    
+    CREATE TABLE run_dataset_lineage
+    (
+        run_name          TEXT,
+        run_version       INTEGER,
+        dataset_workspace TEXT,
+        dataset_name      TEXT,
+        dataset_version   INTEGER,
+        direction         TEXT,
+        PRIMARY KEY (run_name, run_version, dataset_workspace, dataset_name, dataset_version, direction),
+        FOREIGN KEY (run_name, run_version)
+            REFERENCES run (name, version),
+        FOREIGN KEY (dataset_workspace, dataset_name, dataset_version)
+            REFERENCES dataset (workspace, name, version)
     );
     """)
 logger.info('Create all tables.')
