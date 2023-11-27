@@ -227,7 +227,6 @@ class Workflow(BaseModel, ABC):
                 if config is not None:
                     stage_mapping[stage_full_name] = config
                 # Update the stage script base path
-                print(config)
                 self._stage_script_paths[stage_full_name] = stage_config['path']
             for stage in self.stages.values():
                 if stage.full_name in stage_mapping:
@@ -346,8 +345,8 @@ class Workflow(BaseModel, ABC):
         return self.reload(config)
 
     @classmethod
-    def get(cls, name: str, version: str = None):
-        """Get a models from the workspace."""
+    def get_config(cls, name: str, version: str = None):
+        """Get workflow config only"""
         workspace, name, version = cls.parse_data_model_get_identifier(name, version)
 
         if version is None or version == 'latest' or version.startswith('v'):
@@ -358,6 +357,12 @@ class Workflow(BaseModel, ABC):
             if version.lower() == 'none':
                 version = None
             config = get_one_workflow_by_version(workspace, name, version)
+        return config
+
+    @classmethod
+    def get(cls, name: str, version: str = None):
+        """Get a models from the workspace."""
+        config = cls.get_config(name, version)
         if config is None:
             return
 

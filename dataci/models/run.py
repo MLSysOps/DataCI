@@ -8,15 +8,16 @@ Date: Mar 09, 2023
 Run for pipeline.
 """
 import re
+import warnings
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from dataci.config import TIMEZONE
 from dataci.db.run import exist_run, create_one_run, get_next_run_version, get_latest_run_version, get_one_run, \
-    patch_one_run
+    update_one_run
 from dataci.models import BaseModel
 
 if TYPE_CHECKING:
-    from datetime import datetime, timezone
     from typing import Optional, Union
 
     from dataci.models import Workflow, Stage
@@ -33,7 +34,6 @@ class Run(BaseModel):
             name: str,
             status: str,
             job: 'Union[Workflow, Stage, dict]',
-            version: int,
             create_time: 'Optional[datetime]' = None,
             update_time: 'Optional[datetime]' = None,
             **kwargs
@@ -41,7 +41,7 @@ class Run(BaseModel):
         super().__init__(name, **kwargs)
         self.status: str = status
         self._job = job
-        self.version = version
+        self.version = None
         self.create_time = create_time
         self.update_time = update_time
 
@@ -53,13 +53,14 @@ class Run(BaseModel):
     def job(self) -> 'Union[Workflow, Stage]':
         """Lazy load job (workflow or stage) from database."""
         from dataci.models import Workflow, Stage
+        from dataci.decorators.base import DecoratedOperatorStageMixin
 
-        if not isinstance(self._job, (Workflow, Stage)):
-            job_id = self._job['workspace'] + '.' + self._job['name'] + '@' + self._job['version']
+        if not isinstance(self._job, (Workflow, Stage, DecoratedOperatorStageMixin)):
+            workflow_id = self._job['workspace'] + '.' + self._job['name'] + '@' + self._job['version']
             if self._job['type'] == 'workflow':
-                self._job = Workflow.get(job_id)
+                self._job = Workflow.get(workflow_id)
             elif self._job['type'] == 'stage':
-                self._job = Stage(self._job)
+                self._job = Stage.get_by_workflow(self._job['stage_name'], workflow_id)
             else:
                 raise ValueError(f'Invalid job type: {self._job}')
         return self._job
@@ -91,8 +92,10 @@ class Run(BaseModel):
         if config is None:
             config = get_one_run(self.name, self.version)
         self.version = config['version']
+        self.status = config['status']
         self.create_time = datetime.fromtimestamp(config['create_time'], tz=TIMEZONE)
         self.update_time = datetime.fromtimestamp(config['update_time'], tz=TIMEZONE)
+        return self
 
     def save(self, version=None):
         # Get next run try number
@@ -108,6 +111,10 @@ class Run(BaseModel):
         config['update_time'] = config['create_time']
         create_one_run(config)
         return self.reload(config)
+
+    def publish(self):
+        warnings.warn('Run.publish(...) is not implemented. Use Run.save() instead.', DeprecationWarning)
+        pass
 
     def update(self):
         # Get latest run try number
@@ -125,7 +132,7 @@ class Run(BaseModel):
             if k not in config:
                 config[k] = v
 
-        patch_one_run(config)
+        update_one_run(config)
         return self.reload(config)
 
     @classmethod

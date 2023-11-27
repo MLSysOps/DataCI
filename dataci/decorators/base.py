@@ -48,8 +48,8 @@ class DecoratedOperatorStageMixin:
     def test(self, *args, **kwargs):
         return self._stage.test(*args, **kwargs)
 
-    def dict(self):
-        return self._stage.dict()
+    def dict(self, id_only=False):
+        return self._stage.dict(id_only=id_only)
 
     def from_dict(self, config):
         self._stage.from_dict(config)

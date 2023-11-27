@@ -11,7 +11,6 @@ import logging
 import shutil
 from collections import defaultdict
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from dataci.db.stage import (
@@ -203,6 +202,24 @@ class Stage(BaseModel):
             return
 
         return cls.from_dict(config)
+
+    @classmethod
+    def get_by_workflow(cls, stage_name, workflow_name, workflow_version=None):
+        """Get the stage from the workspace."""
+        from dataci.models.workflow import Workflow
+
+        workflow_config = Workflow.get_config(workflow_name, workflow_version)
+        if workflow_config is None:
+            raise ValueError(f'Workflow {workflow_name}@{workflow_version} not found')
+        # Find stage version
+        for _, v in workflow_config['dag']['node'].items():
+            if v['name'] == stage_name:
+                stage_version = v['version']
+                break
+        else:
+            raise ValueError(f'Stage {stage_name} not found in workflow {workflow_name}@{workflow_version}')
+
+        return cls.get(stage_name, stage_version)
 
     @classmethod
     def find(cls, stage_identifier, tree_view=False, all=False):
