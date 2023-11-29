@@ -27,6 +27,9 @@ class Run(BaseModel):
     # run id (uuid)
     NAME_PATTERN = re.compile(r'^[a-f0-9]{8}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{12}$', flags=re.IGNORECASE)
     VERSION_PATTERN = re.compile(r'^\d+|latest$', flags=re.IGNORECASE)
+    GET_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
+        r'^(?:([a-z]\w*)\.)?([a-f0-9]{8}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{12})(\d+|latest$)?$', flags=re.IGNORECASE
+    )
     type_name = 'run'
 
     def __init__(
@@ -114,7 +117,7 @@ class Run(BaseModel):
 
     def publish(self):
         warnings.warn('Run.publish(...) is not implemented. Use Run.save() instead.', DeprecationWarning)
-        pass
+        return self
 
     def update(self):
         # Get latest run try number

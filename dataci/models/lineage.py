@@ -5,9 +5,13 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Nov 22, 2023
 """
+import sqlite3
 from typing import TYPE_CHECKING
 
-from dataci.db.lineage import create_one_lineage, exist_run_lineage, exist_many_run_dataset_lineage
+from dataci.config import DB_FILE
+from dataci.db.lineage import (
+    exist_run_lineage, exist_many_run_dataset_lineage, create_one_run_lineage, create_many_dataset_lineage
+)
 
 if TYPE_CHECKING:
     from typing import List, Optional, Union
@@ -91,37 +95,56 @@ class Lineage(object):
         self._outputs = outputs
         return self._outputs
 
-    def save(self, exist_ok=False):
+    def save(self, exist_ok=True):
         config = self.dict()
-        run_lineage_exist = exist_run_lineage(
+        run_lineage_exist = (config['parent_run'] is None) or exist_run_lineage(
             config['run']['name'],
             config['run']['version'],
             config['parent_run'].get('name', None),
             config['parent_run'].get('version', None)
         )
-        dataset_config_list = config['inputs'] + config['outputs']
 
         dataset_lineage_exist_list = exist_many_run_dataset_lineage(
             config['run']['name'],
             config['run']['version'],
-            dataset_config_list
+            config['inputs'] + config['outputs']
         )
 
         # Check if run lineage exists
+        is_create_run_lineage = False
         if run_lineage_exist:
             if not exist_ok:
                 raise ValueError(f'Run lineage {self.parent_run} -> {self.run} exists.')
-            else:
-                # Create run lineage
-                ...
+        else:
+            # Set create run lineage to True
+            is_create_run_lineage = True
 
         # Check if dataset lineage exists
         if any(dataset_lineage_exist_list):
             if not exist_ok:
                 raise ValueError(f'Dataset lineage exists.')
             else:
-                # Create dataset lineage
-                ...
+                # Remove the existed dataset lineage
+                config['inputs'] = [
+                    dataset_config for dataset_config, exist in zip(
+                        config['inputs'], dataset_lineage_exist_list[:len(config['inputs'])]
+                    ) if exist
+                ]
+                config['outputs'] = [
+                    dataset_config for dataset_config, exist in zip(
+                        config['outputs'], dataset_lineage_exist_list[len(config['inputs']):]
+                    ) if exist
+                ]
 
-        create_one_lineage(config)
+        with sqlite3.connect(DB_FILE) as conn:
+            cur = conn.cursor()
+            # Create run lineage
+            if is_create_run_lineage:
+                create_one_run_lineage(config, cur)
+            # Create dataset lineage
+            create_many_dataset_lineage(config, cur)
 
+        return self
+
+    def get(self, run_name, run_version):
+        pass

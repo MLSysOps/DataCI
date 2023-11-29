@@ -5,11 +5,12 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Nov 20, 2023
 """
+import json
 from typing import Union
 
 from fastapi import APIRouter, FastAPI
 
-from dataci.models import Run as RunModel
+from dataci.models import Run as RunModel, Lineage
 from metadata.models import RunEvent, DatasetEvent, JobEvent, RunState
 
 app = FastAPI()
@@ -68,6 +69,22 @@ def post_lineage(event: Union[RunEvent, DatasetEvent, JobEvent]):
             update_time=event.eventTime,
         )
         run.update()
+
+    # get parent run if exists
+    if 'parent' in event.run.facets:
+        parent_run_config = {
+            'name': str(event.run.facets['parent'].run['runId']),
+        }
+    else:
+        parent_run_config = None
+
+    Lineage(
+        run=run,
+        parent_run=parent_run_config,
+        inputs=[],
+        outputs=[],
+    ).save()
+
     return {'status': 'success'}
 
 

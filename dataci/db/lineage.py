@@ -6,6 +6,7 @@ Email: yuanmingleee@gmail.com
 Date: Nov 27, 2023
 """
 import sqlite3
+from contextlib import nullcontext
 
 from dataci.config import DB_FILE
 
@@ -74,7 +75,7 @@ def exist_many_run_dataset_lineage(run_name, run_version, dataset_configs):
         return [row[0] for row in cur.fetchall()]
 
 
-def create_one_lineage(config):
+def create_one_run_lineage(config, cursor=None):
     run_lineage_config = {
         'run_name': config['run']['name'],
         'run_version': config['run']['version'],
@@ -82,26 +83,8 @@ def create_one_lineage(config):
         'parent_run_version': config['parent_run']['version'],
     }
 
-    run_dataset_lineage_configs = list()
-    for dataset in config['inputs']:
-        run_dataset_lineage_configs.append({
-            'run_name': config['run']['name'],
-            'run_version': config['run']['version'],
-            'dataset_name': dataset['name'],
-            'dataset_version': dataset['version'],
-            'direction': 'input',
-        })
-    for dataset in config['outputs']:
-        run_dataset_lineage_configs.append({
-            'run_name': config['run']['name'],
-            'run_version': config['run']['version'],
-            'dataset_name': dataset['name'],
-            'dataset_version': dataset['version'],
-            'direction': 'output',
-        })
-
-    with sqlite3.connect(DB_FILE) as conn:
-        cur = conn.cursor()
+    with sqlite3.connect(DB_FILE) if cursor is None else nullcontext() as conn:
+        cur = cursor or conn.cursor()
         # add parent_run -> run
         cur.execute(
             """
@@ -117,19 +100,39 @@ def create_one_lineage(config):
             run_lineage_config
         )
 
-        # add run -> dataset
+
+def create_many_dataset_lineage(config, cursor=None):
+    dataset_configs = list()
+    for dataset in config['inputs']:
+        dataset_configs.append({
+            'run_name': config['run']['name'],
+            'run_version': config['run']['version'],
+            'dataset_name': dataset['name'],
+            'dataset_version': dataset['version'],
+            'direction': 'input',
+        })
+    for dataset in config['outputs']:
+        dataset_configs.append({
+            'run_name': config['run']['name'],
+            'run_version': config['run']['version'],
+            'dataset_name': dataset['name'],
+            'dataset_version': dataset['version'],
+            'direction': 'output',
+        })
+    with sqlite3.connect(DB_FILE) if cursor is None else nullcontext() as conn:
+        cur = cursor or conn.cursor()
         cur.executemany(
             """
             INSERT INTO run_dataset_lineage (
-                 run_name
-                 ,run_version
-                 ,dataset_workspace
-                 ,dataset_name
-                 ,dataset_version
-                 ,direction
+                run_name
+                ,run_version
+                ,dataset_workspace
+                ,dataset_name
+                ,dataset_version
+                ,direction
             )
             VALUES (:run_name, :run_version, :dataset_workspace, :dataset_name, :dataset_version, :direction)
             ;
             """,
-            run_dataset_lineage_configs
+            dataset_configs,
         )
