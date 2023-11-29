@@ -227,6 +227,12 @@ class PythonOperator(Stage, _PythonOperator):
                 bound.arguments[arg_name] = dataset.read()
                 # For logging
                 self.log.info(f'Input table {arg_name}: {dataset.identifier}')
+                # Load back to the input table
+                self.input_table[arg_name] = {
+                    'name': dataset.identifier,
+                    'file_reader': dataset.file_reader.NAME,
+                    'file_writer': dataset.file_writer.NAME
+                }
 
         self.op_args, self.op_kwargs = bound.args, bound.kwargs
         # Run the stage by backend
@@ -237,7 +243,7 @@ class PythonOperator(Stage, _PythonOperator):
             if self.multiple_outputs:
                 dataset.dataset_files = ret[key]
                 dataset.save()
-                ret[key] = {
+                self.output_table[key] = ret[key] = {
                     'name': dataset.identifier,
                     'file_reader': dataset.file_reader.NAME,
                     'file_writer': dataset.file_writer.NAME
@@ -245,7 +251,7 @@ class PythonOperator(Stage, _PythonOperator):
             else:
                 dataset.dataset_files = ret
                 dataset.save()
-                ret = {
+                self.output_table[key] = ret = {
                     'name': dataset.identifier,
                     'file_reader': dataset.file_reader.NAME,
                     'file_writer': dataset.file_writer.NAME

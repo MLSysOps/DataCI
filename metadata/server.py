@@ -6,6 +6,7 @@ Email: yuanmingleee@gmail.com
 Date: Nov 20, 2023
 """
 import json
+import traceback
 from typing import Union
 
 from fastapi import APIRouter, FastAPI
@@ -78,11 +79,19 @@ def post_lineage(event: Union[RunEvent, DatasetEvent, JobEvent]):
     else:
         parent_run_config = None
 
+    # Get input and output dataset
+    # Inputs: event.run.facets['unknownSourceAttribute'].unknownItems[0]['properties']['input_table']
+    # Outputs: event.run.facets['unknownSourceAttribute'].unknownItems[0]['properties']['output_table']
+    unknown_src_attr = event.run.facets.get('unknownSourceAttribute', object())
+    ops_props = (getattr(unknown_src_attr, 'unknownItems', None) or [dict()])[0].get('properties', dict())
+    inputs = list(ops_props.get('input_table', dict()).values())
+    outputs = list(ops_props.get('output_table', dict()).values())
+
     Lineage(
         run=run,
         parent_run=parent_run_config,
-        inputs=[],
-        outputs=[],
+        inputs=inputs,
+        outputs=outputs,
     ).save()
 
     return {'status': 'success'}

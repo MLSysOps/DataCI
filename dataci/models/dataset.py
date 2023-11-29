@@ -341,6 +341,13 @@ class Dataset(BaseModel):
         return dataset_obj
 
     def dict(self, id_only=False):
+        if id_only:
+            return {
+                'workspace': self.workspace.name,
+                'type': self.type_name,
+                'name': self.name,
+                'version': self.version,
+            }
         config = {
             'workspace': self.workspace.name,
             'name': self.name,
@@ -447,7 +454,8 @@ class Dataset(BaseModel):
         return self.reload(config)
 
     @classmethod
-    def get(cls, name: str, version=None, not_found_ok=False, file_reader='auto', file_writer='csv'):
+    def get(cls, name: str, workspace=None, version=None, not_found_ok=False, file_reader='auto', file_writer='csv'):
+        name = workspace + '.' + name if workspace else name
         workspace, name, version_or_tag = cls.parse_data_model_get_identifier(name, version)
 
         if version_or_tag is None or cls.VERSION_TAG_PATTERN.match(version_or_tag) is not None:

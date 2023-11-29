@@ -41,36 +41,42 @@ def exist_run_lineage(run_name, run_version, parent_run_name, parent_run_version
 
 
 def exist_many_run_dataset_lineage(run_name, run_version, dataset_configs):
-
-    run_dataset_params = [
-        {
-            'run_name': run_name,
-            'run_version': run_version,
-            'dataset_workspace': dataset_configs['workspace'],
-            'dataset_name': dataset_configs['name'],
-            'dataset_version': dataset_configs['version'],
-            'direction': dataset_configs['direction'],
-        }
-        for dataset_configs in dataset_configs
-    ]
+    # Return empty list if no dataset_configs,
+    # this prevents SQL syntax error when generating SQL statement
+    if len(dataset_configs) == 0:
+        return list()
 
     with sqlite3.connect(DB_FILE) as conn:
         cur = conn.cursor()
-        cur.executemany(
-            """
-            SELECT EXISTS(
-                SELECT 1
+        sql_dataset_values = ',\n'.join([
+                repr((dataset_config['workspace'], dataset_config['name'], dataset_config['version'],
+                      dataset_config['direction']))
+                for dataset_config in dataset_configs
+        ])
+        cur.execute(
+            f"""
+            WITH datasets (dataset_workspace, dataset_name, dataset_version, direction) AS (
+                VALUES {sql_dataset_values}
+            )
+            ,lineage AS (
+                SELECT TRUE AS flg
+                       ,dataset_workspace
+                       ,dataset_name
+                       ,dataset_version
+                       ,direction
                 FROM run_dataset_lineage
                 WHERE run_name = :run_name
                   AND run_version = :run_version
-                  AND dataset_workspace = :dataset_workspace
-                  AND dataset_name = :dataset_name
-                  AND dataset_version = :dataset_version
-                  AND direction = :direction
-                  )
+            )
+            SELECT COALESCE(flg, FALSE) AS flg
+            FROM datasets
+            LEFT JOIN lineage USING (dataset_workspace, dataset_name, dataset_version, direction)
             ;
             """,
-            run_dataset_params,
+            {
+                'run_name': run_name,
+                'run_version': run_version,
+            }
         )
         return [row[0] for row in cur.fetchall()]
 
@@ -103,22 +109,16 @@ def create_one_run_lineage(config, cursor=None):
 
 def create_many_dataset_lineage(config, cursor=None):
     dataset_configs = list()
-    for dataset in config['inputs']:
+    for dataset in config['inputs'] + config['outputs']:
         dataset_configs.append({
             'run_name': config['run']['name'],
             'run_version': config['run']['version'],
+            'dataset_workspace': dataset['workspace'],
             'dataset_name': dataset['name'],
             'dataset_version': dataset['version'],
-            'direction': 'input',
+            'direction': dataset['direction'],
         })
-    for dataset in config['outputs']:
-        dataset_configs.append({
-            'run_name': config['run']['name'],
-            'run_version': config['run']['version'],
-            'dataset_name': dataset['name'],
-            'dataset_version': dataset['version'],
-            'direction': 'output',
-        })
+
     with sqlite3.connect(DB_FILE) if cursor is None else nullcontext() as conn:
         cur = cursor or conn.cursor()
         cur.executemany(

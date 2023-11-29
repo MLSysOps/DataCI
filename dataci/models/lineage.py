@@ -6,17 +6,19 @@ Email: yuanmingleee@gmail.com
 Date: Nov 22, 2023
 """
 import sqlite3
+import warnings
 from typing import TYPE_CHECKING
 
 from dataci.config import DB_FILE
 from dataci.db.lineage import (
     exist_run_lineage, exist_many_run_dataset_lineage, create_one_run_lineage, create_many_dataset_lineage
 )
+from dataci.models.dataset import Dataset
 
 if TYPE_CHECKING:
     from typing import List, Optional, Union
 
-    from dataci.models import Dataset, Workflow, Stage, Run
+    from dataci.models import Workflow, Stage, Run
 
 class Lineage(object):
 
@@ -24,8 +26,8 @@ class Lineage(object):
             self,
             run: 'Union[Run, dict]',
             parent_run: 'Optional[Union[Run, dict]]' = None,
-            inputs: 'List[Union[Dataset, dict]]' = None,
-            outputs: 'List[Union[Dataset, dict]]' = None,
+            inputs: 'List[Union[Dataset, dict, str]]' = None,
+            outputs: 'List[Union[Dataset, dict, str]]' = None,
     ):
         self._run = run
         self._parent_run = parent_run
@@ -74,11 +76,12 @@ class Lineage(object):
         """Lazy load inputs from database."""
         inputs = list()
         for input_ in self._inputs:
-            if not isinstance(input_, Dataset):
-                dataset_id = input_['workspace'] + '.' + input_['name'] + '@' + input_['version']
-                inputs.append(Dataset.get(dataset_id))
-            else:
+            if isinstance(input_, Dataset):
                 inputs.append(input_)
+            elif isinstance(input_, dict):
+                inputs.append(Dataset.get(**input_))
+            else:
+                warnings.warn(f'Unable to parse input {input_}')
         self._inputs = inputs
         return self._inputs
 
@@ -87,16 +90,22 @@ class Lineage(object):
         """Lazy load outputs from database."""
         outputs = list()
         for output in self._outputs:
-            if not isinstance(output, Dataset):
-                dataset_id = output['workspace'] + '.' + output['name'] + '@' + output['version']
-                outputs.append(Dataset.get(dataset_id))
-            else:
+            if isinstance(output, Dataset):
                 outputs.append(output)
+            elif isinstance(output, dict):
+                outputs.append(Dataset.get(**output))
+            else:
+                warnings.warn(f'Unable to parse output {output}')
         self._outputs = outputs
         return self._outputs
 
     def save(self, exist_ok=True):
         config = self.dict()
+        for input_ in config['inputs']:
+            input_['direction'] = 'input'
+        for output in config['outputs']:
+            output['direction'] = 'output'
+
         run_lineage_exist = (config['parent_run'] is None) or exist_run_lineage(
             config['run']['name'],
             config['run']['version'],
@@ -128,12 +137,12 @@ class Lineage(object):
                 config['inputs'] = [
                     dataset_config for dataset_config, exist in zip(
                         config['inputs'], dataset_lineage_exist_list[:len(config['inputs'])]
-                    ) if exist
+                    ) if not exist
                 ]
                 config['outputs'] = [
                     dataset_config for dataset_config, exist in zip(
                         config['outputs'], dataset_lineage_exist_list[len(config['inputs']):]
-                    ) if exist
+                    ) if not exist
                 ]
 
         with sqlite3.connect(DB_FILE) as conn:
