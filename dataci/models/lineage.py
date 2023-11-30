@@ -130,18 +130,20 @@ class Lineage(object):
 
         # Check if dataset lineage exists
         if any(dataset_lineage_exist_list):
+            inputs_lineage_exists = dataset_lineage_exist_list[:len(config['inputs'])]
+            outputs_lineage_exists = dataset_lineage_exist_list[len(config['inputs']):]
             if not exist_ok:
                 raise ValueError(f'Dataset lineage exists.')
             else:
                 # Remove the existed dataset lineage
                 config['inputs'] = [
                     dataset_config for dataset_config, exist in zip(
-                        config['inputs'], dataset_lineage_exist_list[:len(config['inputs'])]
+                        config['inputs'], inputs_lineage_exists
                     ) if not exist
                 ]
                 config['outputs'] = [
                     dataset_config for dataset_config, exist in zip(
-                        config['outputs'], dataset_lineage_exist_list[len(config['inputs']):]
+                        config['outputs'], outputs_lineage_exists
                     ) if not exist
                 ]
 

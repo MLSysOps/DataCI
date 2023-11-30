@@ -78,7 +78,7 @@ def exist_many_run_dataset_lineage(run_name, run_version, dataset_configs):
                 'run_version': run_version,
             }
         )
-        return [row[0] for row in cur.fetchall()]
+        return [bool(row[0]) for row in cur.fetchall()]
 
 
 def create_one_run_lineage(config, cursor=None):

@@ -5,8 +5,6 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Nov 20, 2023
 """
-import json
-import traceback
 from typing import Union
 
 from fastapi import APIRouter, FastAPI
@@ -87,12 +85,13 @@ def post_lineage(event: Union[RunEvent, DatasetEvent, JobEvent]):
     inputs = list(ops_props.get('input_table', dict()).values())
     outputs = list(ops_props.get('output_table', dict()).values())
 
-    Lineage(
+    lineage = Lineage(
         run=run,
         parent_run=parent_run_config,
         inputs=inputs,
         outputs=outputs,
-    ).save()
+    )
+    lineage.save()
 
     return {'status': 'success'}
 
