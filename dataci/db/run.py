@@ -20,6 +20,21 @@ def create_one_run(config: dict):
     config['job_type'] = job_config['type']
     with sqlite3.connect(DB_FILE) as conn:
         cur = conn.cursor()
+        # Create job
+        cur.execute(
+            """
+            INSERT INTO job (
+                workspace,
+                name,
+                version,
+                type
+            )
+            VALUES (:workspace, :name, :version, :type)
+            ;
+            """,
+            config
+        )
+        # Create run
         cur.execute(
             """
             INSERT INTO run (

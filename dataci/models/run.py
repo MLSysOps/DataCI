@@ -78,6 +78,7 @@ class Run(BaseModel):
             }
         return {
             'workspace': self.workspace.name,
+            'type': self.type_name,
             'name': self.name,
             'version': self.version,
             'status': self.status,

@@ -5,41 +5,40 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Nov 22, 2023
 """
-import sqlite3
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
-from dataci.config import DB_FILE
 from dataci.db.lineage import (
-    exist_run_lineage, exist_many_run_dataset_lineage, create_one_run_lineage, create_many_dataset_lineage
+    exist_many_downstream_lineage,
+    exist_many_upstream_lineage,
+    create_many_lineage,
 )
 from dataci.models.dataset import Dataset
+from dataci.models.run import Run
 
 if TYPE_CHECKING:
-    from typing import List, Optional, Union
+    from typing import List, Union
 
-    from dataci.models import Workflow, Stage, Run
+LineageAllowedType = TypeVar('LineageAllowedType', Dataset, Run)
+
 
 class Lineage(object):
 
     def __init__(
             self,
-            run: 'Union[Run, dict]',
-            parent_run: 'Optional[Union[Run, dict]]' = None,
-            inputs: 'List[Union[Dataset, dict, str]]' = None,
-            outputs: 'List[Union[Dataset, dict, str]]' = None,
+            upstream: 'Union[List[LineageAllowedType], LineageAllowedType, dict]',
+            downstream: 'Union[List[LineageAllowedType], LineageAllowedType, dict]',
     ):
-        self._run = run
-        self._parent_run = parent_run
-        self._inputs: 'List[Dataset]' = inputs or list()
-        self._outputs: 'List[Dataset]' = outputs or list()
+        # only one of upstream and downstream can be list
+        if isinstance(upstream, list) and isinstance(downstream, list):
+            raise ValueError('Only one of upstream and downstream can be list.')
+        self._upstream = upstream if isinstance(upstream, list) else [upstream]
+        self._downstream = downstream if isinstance(downstream, list) else [downstream]
 
     def dict(self):
         return {
-            'parent_run': self.parent_run.dict(id_only=True) if self.parent_run else None,
-            'run': self.run.dict() if self.run else None,
-            'inputs': [input_.dict(id_only=True) for input_ in self.inputs],
-            'outputs': [output.dict(id_only=True) for output in self.outputs],
+            'upstream': [node.dict(id_only=True) for node in self.upstream],
+            'downstream': [node.dict(id_only=True) for node in self.downstream],
         }
 
     @classmethod
@@ -47,113 +46,95 @@ class Lineage(object):
         pass
 
     @property
-    def job(self) -> 'Union[Workflow, Stage]':
-        return self.run.job
-
-    @property
-    def run(self) -> 'Run':
-        """Lazy load run from database."""
-        from dataci.models import Run
-
-        if not isinstance(self._run, Run):
-            self._run = Run.get(self._run['name'])
-        return self._run
-
-    @property
-    def parent_run(self) -> 'Optional[Run]':
-        """Lazy load parent run from database."""
-        from dataci.models import Run
-
-        if self._parent_run is None:
-            return None
-
-        if not isinstance(self._parent_run, Run):
-            self._parent_run = Run.get(self._parent_run['name'])
-        return self._parent_run
-
-    @property
-    def inputs(self) -> 'List[Dataset]':
-        """Lazy load inputs from database."""
-        inputs = list()
-        for input_ in self._inputs:
-            if isinstance(input_, Dataset):
-                inputs.append(input_)
-            elif isinstance(input_, dict):
-                inputs.append(Dataset.get(**input_))
+    def upstream(self) -> 'List[LineageAllowedType]':
+        """Lazy load upstream from database."""
+        nodes = list()
+        for node in self._upstream:
+            if isinstance(node, (Dataset, Run)):
+                nodes.append(node)
+            elif isinstance(node, dict):
+                node_type = node.pop('type', None)
+                if node_type == 'run':
+                    node_cls = Run
+                    nodes.append(node_cls.get(**node))
+                elif node_type == 'dataset':
+                    node_cls = Dataset
+                    nodes.append(node_cls.get(**node))
+                else:
+                    warnings.warn(f'Unknown node type {node_type}')
             else:
-                warnings.warn(f'Unable to parse input {input_}')
-        self._inputs = inputs
-        return self._inputs
+                warnings.warn(f'Unable to parse upstream {node}')
+        self._upstream = nodes
+        return self._upstream
 
     @property
-    def outputs(self) -> 'List[Dataset]':
-        """Lazy load outputs from database."""
-        outputs = list()
-        for output in self._outputs:
-            if isinstance(output, Dataset):
-                outputs.append(output)
-            elif isinstance(output, dict):
-                outputs.append(Dataset.get(**output))
+    def downstream(self) -> 'List[LineageAllowedType]':
+        """Lazy load downstream from database."""
+        downstream = list()
+        for node in self._downstream:
+            if isinstance(node, (Dataset, Run)):
+                downstream.append(node)
+            elif isinstance(node, dict):
+                node_type = node.pop('type', None)
+                if node_type == 'run':
+                    node_cls = Run
+                    downstream.append(node_cls.get(**node))
+                elif node_type == 'dataset':
+                    node_cls = Dataset
+                    downstream.append(node_cls.get(**node))
+                else:
+                    warnings.warn(f'Unknown node type {node_type}')
             else:
-                warnings.warn(f'Unable to parse output {output}')
-        self._outputs = outputs
-        return self._outputs
+                warnings.warn(f'Unable to parse downstream {node}')
+        self._downstream = downstream
+        return self._downstream
 
     def save(self, exist_ok=True):
         config = self.dict()
-        for input_ in config['inputs']:
-            input_['direction'] = 'input'
-        for output in config['outputs']:
-            output['direction'] = 'output'
 
-        run_lineage_exist = (config['parent_run'] is None) or exist_run_lineage(
-            config['run']['name'],
-            config['run']['version'],
-            config['parent_run'].get('name', None),
-            config['parent_run'].get('version', None)
-        )
+        if len(config['upstream']) == 1:
+            # Check if downstream lineage exists
+            upstream_config = config['upstream'][0]
+            lineage_exist_status_list = exist_many_downstream_lineage(
+                upstream_config, config['downstream'],
+            )
 
-        dataset_lineage_exist_list = exist_many_run_dataset_lineage(
-            config['run']['name'],
-            config['run']['version'],
-            config['inputs'] + config['outputs']
-        )
-
-        # Check if run lineage exists
-        is_create_run_lineage = False
-        if run_lineage_exist:
-            if not exist_ok:
-                raise ValueError(f'Run lineage {self.parent_run} -> {self.run} exists.')
+            if any(lineage_exist_status_list):
+                if not exist_ok:
+                    exist_downstreams = [
+                        downstream_config for downstream_config, exist in zip(
+                            config['downstream'], lineage_exist_status_list
+                        ) if exist
+                    ]
+                    raise ValueError(f"Lineage exists: {upstream_config} -> {exist_downstreams}")
+                else:
+                    # Remove the existed lineage
+                    config['downstream'] = [
+                        node for node, exist in zip(config['downstream'], lineage_exist_status_list) if not exist
+                    ]
         else:
-            # Set create run lineage to True
-            is_create_run_lineage = True
+            # Check if upstream lineage exists
+            downstream_config = config['downstream'][0]
+            lineage_exist_status_list = exist_many_upstream_lineage(
+                config['upstream'], downstream_config,
+            )
 
-        # Check if dataset lineage exists
-        if any(dataset_lineage_exist_list):
-            inputs_lineage_exists = dataset_lineage_exist_list[:len(config['inputs'])]
-            outputs_lineage_exists = dataset_lineage_exist_list[len(config['inputs']):]
-            if not exist_ok:
-                raise ValueError(f'Dataset lineage exists.')
-            else:
-                # Remove the existed dataset lineage
-                config['inputs'] = [
-                    dataset_config for dataset_config, exist in zip(
-                        config['inputs'], inputs_lineage_exists
-                    ) if not exist
-                ]
-                config['outputs'] = [
-                    dataset_config for dataset_config, exist in zip(
-                        config['outputs'], outputs_lineage_exists
-                    ) if not exist
-                ]
+            if any(lineage_exist_status_list):
+                if not exist_ok:
+                    exist_upstreams = [
+                        upstream_config for upstream_config, exist in zip(
+                            config['upstream'], lineage_exist_status_list
+                        ) if exist
+                    ]
+                    raise ValueError(f"Lineage exists: {exist_upstreams} -> {downstream_config}")
+                else:
+                    # Remove the existed lineage
+                    config['upstream'] = [
+                        node for node, exist in zip(config['upstream'], lineage_exist_status_list) if not exist
+                    ]
 
-        with sqlite3.connect(DB_FILE) as conn:
-            cur = conn.cursor()
-            # Create run lineage
-            if is_create_run_lineage:
-                create_one_run_lineage(config, cur)
             # Create dataset lineage
-            create_many_dataset_lineage(config, cur)
+            create_many_lineage(config)
 
         return self
 

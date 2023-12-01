@@ -230,6 +230,7 @@ class PythonOperator(Stage, _PythonOperator):
                 # Load back to the input table
                 self.input_table[arg_name] = {
                     'name': dataset.identifier,
+                    'type': dataset.type_name,
                     'file_reader': dataset.file_reader.NAME,
                     'file_writer': dataset.file_writer.NAME
                 }
@@ -245,6 +246,7 @@ class PythonOperator(Stage, _PythonOperator):
                 dataset.save()
                 self.output_table[key] = ret[key] = {
                     'name': dataset.identifier,
+                    'type': dataset.type_name,
                     'file_reader': dataset.file_reader.NAME,
                     'file_writer': dataset.file_writer.NAME
                 }
@@ -253,6 +255,7 @@ class PythonOperator(Stage, _PythonOperator):
                 dataset.save()
                 self.output_table[key] = ret = {
                     'name': dataset.identifier,
+                    'type': dataset.type_name,
                     'file_reader': dataset.file_reader.NAME,
                     'file_writer': dataset.file_writer.NAME
                 }

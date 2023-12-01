@@ -15,124 +15,206 @@ def get_lineage():
     pass
 
 
-def exist_run_lineage(run_name, run_version, parent_run_name, parent_run_version):
+def exist_one_lineage(upstream_config, downstream_config):
     with sqlite3.connect(DB_FILE) as conn:
         cur = conn.cursor()
         cur.execute(
             """
             SELECT EXISTS(
                 SELECT 1
-                FROM run_lineage
-                WHERE run_name = :run_name
-                  AND run_version = :run_version
-                  AND parent_run_name = :parent_run_name
-                  AND parent_run_version = :parent_run_version
+                FROM lineage
+                WHERE upstream_workspace = :upstream_workspace
+                    AND upstream_name = :upstream_name
+                    AND upstream_version = :upstream_version
+                    AND upstream_type = :upstream_type
+                    AND downstream_workspace = :downstream_workspace
+                    AND downstream_name = :downstream_name
+                    AND downstream_version = :downstream_version
+                    AND downstream_type = :downstream_type
                   )
             ;
             """,
             {
-                'run_name': run_name,
-                'run_version': run_version,
-                'parent_run_name': parent_run_name,
-                'parent_run_version': parent_run_version,
+                'upstream_workspace': upstream_config['workspace'],
+                'upstream_name': upstream_config['name'],
+                'upstream_version': upstream_config['version'],
+                'upstream_type': upstream_config['type'],
+                'downstream_workspace': downstream_config['workspace'],
+                'downstream_name': downstream_config['name'],
+                'downstream_version': downstream_config['version'],
+                'downstream_type': downstream_config['type'],
             }
         )
         return cur.fetchone()[0]
 
 
-def exist_many_run_dataset_lineage(run_name, run_version, dataset_configs):
-    # Return empty list if no dataset_configs,
+def exist_many_downstream_lineage(upstream_config, downstream_configs):
+    # Return empty list if no upstream_configs or downstream_configs,
     # this prevents SQL syntax error when generating SQL statement
-    if len(dataset_configs) == 0:
+    if len(downstream_configs) == 0:
         return list()
 
     with sqlite3.connect(DB_FILE) as conn:
         cur = conn.cursor()
-        sql_dataset_values = ',\n'.join([
-                repr((dataset_config['workspace'], dataset_config['name'], dataset_config['version'],
-                      dataset_config['direction']))
-                for dataset_config in dataset_configs
+        sql_lineage_values = ',\n'.join([
+                repr((
+                    downstream_config['workspace'],
+                    downstream_config['name'],
+                    downstream_config['version'],
+                    downstream_config['type'],
+                ))
+                for downstream_config in downstream_configs
         ])
         cur.execute(
             f"""
-            WITH datasets (dataset_workspace, dataset_name, dataset_version, direction) AS (
-                VALUES {sql_dataset_values}
+            WITH downstreams (
+                downstream_workspace
+                ,downstream_name
+                ,downstream_version
+                ,downstream_type
+            ) AS (
+                VALUES {sql_lineage_values}
             )
-            ,lineage AS (
+            ,lineages AS (
                 SELECT TRUE AS flg
-                       ,dataset_workspace
-                       ,dataset_name
-                       ,dataset_version
-                       ,direction
-                FROM run_dataset_lineage
-                WHERE run_name = :run_name
-                  AND run_version = :run_version
+                       ,upstream_workspace
+                       ,upstream_name
+                       ,upstream_version
+                       ,upstream_type
+                       ,downstream_workspace
+                       ,downstream_name
+                       ,downstream_version
+                       ,downstream_type
+                FROM lineage
+                WHERE upstream_workspace = :upstream_workspace
+                    AND upstream_name = :upstream_name
+                    AND upstream_version = :upstream_version
+                    AND upstream_type = :upstream_type
             )
             SELECT COALESCE(flg, FALSE) AS flg
-            FROM datasets
-            LEFT JOIN lineage USING (dataset_workspace, dataset_name, dataset_version, direction)
+            FROM downstreams
+            LEFT JOIN lineages USING (
+                downstream_workspace
+                ,downstream_name
+                ,downstream_version
+                ,downstream_type
+            )
             ;
             """,
             {
-                'run_name': run_name,
-                'run_version': run_version,
+                'upstream_workspace': upstream_config['workspace'],
+                'upstream_name': upstream_config['name'],
+                'upstream_version': upstream_config['version'],
+                'upstream_type': upstream_config['type'],
             }
         )
         return [bool(row[0]) for row in cur.fetchall()]
 
 
-def create_one_run_lineage(config, cursor=None):
-    run_lineage_config = {
-        'run_name': config['run']['name'],
-        'run_version': config['run']['version'],
-        'parent_run_name': config['parent_run']['name'],
-        'parent_run_version': config['parent_run']['version'],
-    }
+def exist_many_upstream_lineage(upstream_configs, downstream_config):
+    # Return empty list if no upstream_configs or downstream_configs,
+    # this prevents SQL syntax error when generating SQL statement
+    if len(upstream_configs) == 0:
+        return list()
 
-    with sqlite3.connect(DB_FILE) if cursor is None else nullcontext() as conn:
-        cur = cursor or conn.cursor()
-        # add parent_run -> run
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
+        sql_lineage_values = ',\n'.join([
+                repr((
+                    upstream_config['workspace'],
+                    upstream_config['name'],
+                    upstream_config['version'],
+                    upstream_config['type'],
+                ))
+                for upstream_config in upstream_configs
+        ])
         cur.execute(
-            """
-            INSERT INTO run_lineage (
-                 run_name
-                 ,run_version
-                 ,parent_run_name
-                 ,parent_run_version
+            f"""
+            WITH upstreams (
+                upstream_workspace
+                ,upstream_name
+                ,upstream_version
+                ,upstream_type
+            ) AS (
+                VALUES {sql_lineage_values}
             )
-            VALUES (:run_name, :run_version, :parent_run_name, :parent_run_version)
+            ,lineages AS (
+                SELECT TRUE AS flg
+                       ,upstream_workspace
+                       ,upstream_name
+                       ,upstream_version
+                       ,upstream_type
+                       ,downstream_workspace
+                       ,downstream_name
+                       ,downstream_version
+                       ,downstream_type
+                FROM lineage
+                WHERE downstream_workspace = :downstream_workspace
+                    AND downstream_name = :downstream_name
+                    AND downstream_version = :downstream_version
+                    AND downstream_type = :downstream_type
+            )
+            SELECT COALESCE(flg, FALSE) AS flg
+            FROM upstreams
+            LEFT JOIN lineages USING (
+                upstream_workspace
+                ,upstream_name
+                ,upstream_version
+                ,upstream_type
+            )
             ;
             """,
-            run_lineage_config
+            {
+                'downstream_workspace': downstream_config['workspace'],
+                'downstream_name': downstream_config['name'],
+                'downstream_version': downstream_config['version'],
+                'downstream_type': downstream_config['type'],
+            }
         )
+        return [bool(row[0]) for row in cur.fetchall()]
 
 
-def create_many_dataset_lineage(config, cursor=None):
-    dataset_configs = list()
-    for dataset in config['inputs'] + config['outputs']:
-        dataset_configs.append({
-            'run_name': config['run']['name'],
-            'run_version': config['run']['version'],
-            'dataset_workspace': dataset['workspace'],
-            'dataset_name': dataset['name'],
-            'dataset_version': dataset['version'],
-            'direction': dataset['direction'],
-        })
+def create_many_lineage(config):
+    # Permute all upstream and downstream lineage
+    lineage_configs = list()
+    for upstream_config in config['upstream']:
+        for downstream_config in config['downstream']:
+            lineage_configs.append({
+                'upstream_workspace': upstream_config['workspace'],
+                'upstream_name': upstream_config['name'],
+                'upstream_version': upstream_config['version'],
+                'upstream_type': upstream_config['type'],
+                'downstream_workspace': downstream_config['workspace'],
+                'downstream_name': downstream_config['name'],
+                'downstream_version': downstream_config['version'],
+                'downstream_type': downstream_config['type'],
+            })
 
-    with sqlite3.connect(DB_FILE) if cursor is None else nullcontext() as conn:
-        cur = cursor or conn.cursor()
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
         cur.executemany(
             """
-            INSERT INTO run_dataset_lineage (
-                run_name
-                ,run_version
-                ,dataset_workspace
-                ,dataset_name
-                ,dataset_version
-                ,direction
+            INSERT INTO lineage (
+                upstream_workspace
+                ,upstream_name
+                ,upstream_version
+                ,upstream_type
+                ,downstream_workspace
+                ,downstream_name
+                ,downstream_version
+                ,downstream_type
             )
-            VALUES (:run_name, :run_version, :dataset_workspace, :dataset_name, :dataset_version, :direction)
+            VALUES (
+                :upstream_workspace
+                ,:upstream_name
+                ,:upstream_version
+                ,:upstream_type
+                ,:downstream_workspace
+                ,:downstream_name
+                ,:downstream_version
+                ,:downstream_type
+            )
             ;
             """,
-            dataset_configs,
+            lineage_configs,
         )

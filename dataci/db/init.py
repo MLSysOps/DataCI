@@ -17,8 +17,7 @@ db_connection = sqlite3.connect(DB_FILE)
 # Drop all tables
 with db_connection:
     db_connection.executescript("""
-    DROP TABLE IF EXISTS run_dataset_lineage;
-    DROP TABLE IF EXISTS run_lineage;
+    DROP TABLE IF EXISTS lineage;
     DROP TABLE IF EXISTS run;
     DROP TABLE IF EXISTS dataset_tag;
     DROP TABLE IF EXISTS dataset;
@@ -166,36 +165,27 @@ with db_connection:
         update_time   INTEGER,
         PRIMARY KEY (workspace, name, version),
         UNIQUE (name, version),
-        FOREIGN KEY (workspace, name, version, job_type)
+        FOREIGN KEY (workspace, name, version)
+            REFERENCES job (workspace, name, version),
+        FOREIGN KEY (job_workspace, job_name, job_version, job_type)
             REFERENCES job (workspace, name, version, type)
     );
     
-    CREATE TABLE run_lineage
+    CREATE TABLE lineage
     (
-        run_name           TEXT,
-        run_version        INTEGER,
-        parent_run_name    TEXT,
-        parent_run_version INTEGER,
-        PRIMARY KEY (run_name, run_version, parent_run_name, parent_run_version),
-        FOREIGN KEY (run_name, run_version)
-            REFERENCES run (name, version),
-        FOREIGN KEY (parent_run_name, parent_run_version)
-            REFERENCES run (name, version)
-    );
-    
-    CREATE TABLE run_dataset_lineage
-    (
-        run_name          TEXT,
-        run_version       INTEGER,
-        dataset_workspace TEXT,
-        dataset_name      TEXT,
-        dataset_version   INTEGER,
-        direction         TEXT,
-        PRIMARY KEY (run_name, run_version, dataset_workspace, dataset_name, dataset_version, direction),
-        FOREIGN KEY (run_name, run_version)
-            REFERENCES run (name, version),
-        FOREIGN KEY (dataset_workspace, dataset_name, dataset_version)
-            REFERENCES dataset (workspace, name, version)
+        upstream_workspace TEXT,
+        upstream_name      TEXT,
+        upstream_version   TEXT,
+        upstream_type      TEXT,
+        downstream_workspace TEXT,
+        downstream_name      TEXT,
+        downstream_version   TEXT,
+        downstream_type      TEXT,
+        PRIMARY KEY (upstream_workspace, upstream_name, upstream_version, upstream_type, downstream_workspace, downstream_name, downstream_version, downstream_type),
+        FOREIGN KEY (upstream_workspace, upstream_name, upstream_version, upstream_type)
+            REFERENCES job (workspace, name, version, type),
+        FOREIGN KEY (downstream_workspace, downstream_name, downstream_version, downstream_type)
+            REFERENCES job (workspace, name, version, type)
     );
     """)
 logger.info('Create all tables.')
