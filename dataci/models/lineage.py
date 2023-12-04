@@ -133,8 +133,8 @@ class Lineage(object):
                         node for node, exist in zip(config['upstream'], lineage_exist_status_list) if not exist
                     ]
 
-            # Create dataset lineage
-            create_many_lineage(config)
+        # Create dataset lineage
+        create_many_lineage(config)
 
         return self
 
