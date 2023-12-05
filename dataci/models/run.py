@@ -16,6 +16,7 @@ from dataci.config import TIMEZONE
 from dataci.db.run import exist_run, create_one_run, get_next_run_version, get_latest_run_version, get_one_run, \
     update_one_run
 from dataci.models import BaseModel
+from dataci.models.lineage import LineageGraph
 
 if TYPE_CHECKING:
     from typing import Optional, Union
@@ -152,3 +153,11 @@ class Run(BaseModel):
             raise ValueError(f'Run {name}@{version} not found.')
 
         return cls.from_dict(config)
+
+    def upstream(self, n=1, type=None):
+        """Get upstream lineage."""
+        return LineageGraph.upstream(self, n, type)
+
+    def downstream(self, n=1, type=None):
+        """Get downstream lineage."""
+        return LineageGraph.downstream(self, n, type)

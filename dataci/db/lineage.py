@@ -6,13 +6,226 @@ Email: yuanmingleee@gmail.com
 Date: Nov 27, 2023
 """
 import sqlite3
+from collections import OrderedDict
 from contextlib import nullcontext
 
 from dataci.config import DB_FILE
 
 
-def get_lineage():
-    pass
+def get_many_upstream_lineage(downstream_config):
+    """Config in downstream."""
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT upstream_workspace
+                   ,upstream_name
+                   ,upstream_version
+                   ,upstream_type
+            FROM lineage
+            WHERE (
+                    downstream_workspace = :workspace
+                AND downstream_name = :name
+                AND downstream_version = :version
+                AND downstream_type = :type
+            )
+            """,
+            downstream_config,
+        )
+        return [
+            {
+                'workspace': row[0],
+                'name': row[1],
+                'version': row[2],
+                'type': row[3],
+            } for row in cur.fetchall()
+        ]
+
+
+def get_many_downstream_lineage(upstream_config):
+    """Config in upstream."""
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT downstream_workspace
+                   ,downstream_name
+                   ,downstream_version
+                   ,downstream_type
+            FROM lineage
+            WHERE (
+                    upstream_workspace = :workspace
+                AND upstream_name = :name
+                AND upstream_version = :version
+                AND upstream_type = :type
+            )
+            """,
+            upstream_config,
+        )
+        return [
+            {
+                'workspace': row[0],
+                'name': row[1],
+                'version': row[2],
+                'type': row[3],
+            } for row in cur.fetchall()
+        ]
+
+
+def list_many_upstream_lineage(downstream_configs):
+    """List all upstream lineage of downstream_configs."""
+    # Return empty list if no downstream_configs,
+    # this prevents SQL syntax error when generating SQL statement
+    if len(downstream_configs) == 0:
+        return list()
+
+    # Create a ordered dict to preserve the order of downstream_configs
+    od = OrderedDict()
+    for downstream_config in downstream_configs:
+        od[(
+            downstream_config['workspace'],
+            downstream_config['name'],
+            downstream_config['version'],
+            downstream_config['type']
+        )] = list()
+
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
+        sql_lineage_values = ',\n'.join([
+            repr((
+                downstream_config['workspace'],
+                downstream_config['name'],
+                downstream_config['version'],
+                downstream_config['type'],
+            ))
+            for downstream_config in downstream_configs
+        ])
+        cur.execute(
+            f"""
+            WITH downstreams (
+                downstream_workspace
+                ,downstream_name
+                ,downstream_version
+                ,downstream_type
+            ) AS (
+                VALUES {sql_lineage_values}
+            )
+            ,lineages AS (
+                SELECT upstream_workspace
+                       ,upstream_name
+                       ,upstream_version
+                       ,upstream_type
+                       ,downstream_workspace
+                       ,downstream_name
+                       ,downstream_version
+                       ,downstream_type
+                FROM lineage
+            )
+            SELECT upstream_workspace
+                   ,upstream_name
+                   ,upstream_version
+                   ,upstream_type
+                   ,downstream_workspace
+                   ,downstream_name
+                   ,downstream_version
+                   ,downstream_type
+            FROM lineages
+            JOIN downstreams USING (
+                downstream_workspace
+                ,downstream_name
+                ,downstream_version
+                ,downstream_type
+            )
+            ;
+            """
+        )
+
+        for row in cur.fetchall():
+            od[(row[4], row[5], row[6], row[7],)].append({
+                'workspace': row[0],
+                'name': row[1],
+                'version': row[2],
+                'type': row[3],
+            })
+        return list(od.values())
+
+
+def list_many_downstream_lineage(upstream_configs):
+    """List all downstream lineage of upstream_configs."""
+    # Return empty list if no upstream_configs,
+    # this prevents SQL syntax error when generating SQL statement
+    if len(upstream_configs) == 0:
+        return list()
+
+    # Create a ordered dict to preserve the order of upstream_configs
+    od = OrderedDict()
+    for upstream_config in upstream_configs:
+        od[(
+            upstream_config['workspace'],
+            upstream_config['name'],
+            upstream_config['version'],
+            upstream_config['type']
+        )] = list()
+
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
+        sql_lineage_values = ',\n'.join([
+            repr((
+                upstream_config['workspace'],
+                upstream_config['name'],
+                upstream_config['version'],
+                upstream_config['type'],
+            ))
+            for upstream_config in upstream_configs
+        ])
+        cur.execute(
+            f"""
+            WITH upstreams (
+                upstream_workspace
+                ,upstream_name
+                ,upstream_version
+                ,upstream_type
+            ) AS (
+                VALUES {sql_lineage_values}
+            )
+            ,lineages AS (
+                SELECT upstream_workspace
+                       ,upstream_name
+                       ,upstream_version
+                       ,upstream_type
+                       ,downstream_workspace
+                       ,downstream_name
+                       ,downstream_version
+                       ,downstream_type
+                FROM lineage
+            )
+            SELECT upstream_workspace
+                   ,upstream_name
+                   ,upstream_version
+                   ,upstream_type
+                   ,downstream_workspace
+                   ,downstream_name
+                   ,downstream_version
+                   ,downstream_type
+            FROM lineages
+            JOIN upstreams USING (
+                upstream_workspace
+                ,upstream_name
+                ,upstream_version
+                ,upstream_type
+            )
+            ;
+            """
+        )
+
+        for row in cur.fetchall():
+            od[(row[0], row[1], row[2], row[3],)].append({
+                'workspace': row[4],
+                'name': row[5],
+                'version': row[6],
+                'type': row[7],
+            })
+        return list(od.values())
 
 
 def exist_one_lineage(upstream_config, downstream_config):
@@ -57,13 +270,13 @@ def exist_many_downstream_lineage(upstream_config, downstream_configs):
     with sqlite3.connect(DB_FILE) as conn:
         cur = conn.cursor()
         sql_lineage_values = ',\n'.join([
-                repr((
-                    downstream_config['workspace'],
-                    downstream_config['name'],
-                    downstream_config['version'],
-                    downstream_config['type'],
-                ))
-                for downstream_config in downstream_configs
+            repr((
+                downstream_config['workspace'],
+                downstream_config['name'],
+                downstream_config['version'],
+                downstream_config['type'],
+            ))
+            for downstream_config in downstream_configs
         ])
         cur.execute(
             f"""
@@ -120,13 +333,13 @@ def exist_many_upstream_lineage(upstream_configs, downstream_config):
     with sqlite3.connect(DB_FILE) as conn:
         cur = conn.cursor()
         sql_lineage_values = ',\n'.join([
-                repr((
-                    upstream_config['workspace'],
-                    upstream_config['name'],
-                    upstream_config['version'],
-                    upstream_config['type'],
-                ))
-                for upstream_config in upstream_configs
+            repr((
+                upstream_config['workspace'],
+                upstream_config['name'],
+                upstream_config['version'],
+                upstream_config['type'],
+            ))
+            for upstream_config in upstream_configs
         ])
         cur.execute(
             f"""

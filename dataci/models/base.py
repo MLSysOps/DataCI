@@ -76,6 +76,12 @@ class BaseModel(abc.ABC):
     def get(cls, name, version=None, not_found_ok=False):
         pass
 
+    def upstream(self, n=1, type=None):
+        pass
+
+    def downstream(self, n=1, type=None):
+        pass
+
     # @classmethod
     # @abc.abstractmethod
     # def find(cls, identifier=None, tree_view=False):
