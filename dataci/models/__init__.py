@@ -17,3 +17,7 @@ from .workspace import Workspace
 __all__ = [
     'Job', 'Workspace', 'Dataset', 'Event', 'Workflow', 'Stage', 'Run', 'Lineage',
 ]
+
+
+# Register subclasses of Job
+getattr(Job, '_Job__register_job_type')()
