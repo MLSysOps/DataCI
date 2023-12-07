@@ -32,7 +32,7 @@ from dataci.db.dataset import (
 )
 from dataci.decorators.event import event
 from dataci.utils import hash_binary
-from .base import BaseModel
+from .base import Job
 
 if TYPE_CHECKING:
     from typing import Optional, Union, Type
@@ -220,7 +220,7 @@ file_io_registry = {
 }
 
 
-class Dataset(BaseModel):
+class Dataset(Job):
     type_name = 'dataset'
 
     VERSION_PATTERN = re.compile(r'latest|none|\w+', flags=re.IGNORECASE)

@@ -5,7 +5,7 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Feb 20, 2023
 """
-from .base import BaseModel
+from .base import Job
 from .dataset import Dataset
 from .event import Event
 from .lineage import Lineage
@@ -15,5 +15,5 @@ from .workflow import Workflow
 from .workspace import Workspace
 
 __all__ = [
-    'BaseModel', 'Workspace', 'Dataset', 'Event', 'Workflow', 'Stage', 'Run', 'Lineage',
+    'Job', 'Workspace', 'Dataset', 'Event', 'Workflow', 'Stage', 'Run', 'Lineage',
 ]

@@ -12,7 +12,7 @@ from dataci.config import DEFAULT_WORKSPACE
 from dataci.models.workspace import Workspace
 
 
-class BaseModel(abc.ABC):
+class Job(abc.ABC):
     NAME_PATTERN = re.compile(r'^(?:[a-z]\w*\.)?[a-z]\w*$', flags=re.IGNORECASE)
     VERSION_PATTERN = re.compile(r'latest|v\d+|none|[\da-f]+', flags=re.IGNORECASE)
     GET_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
@@ -26,7 +26,7 @@ class BaseModel(abc.ABC):
     def __init__(self, name, *args, **kwargs):
         # Prevent to pass invalid arguments to object.__init__
         mro = type(self).mro()
-        for next_cls in mro[mro.index(BaseModel) + 1:]:
+        for next_cls in mro[mro.index(Job) + 1:]:
             if '__init__' in next_cls.__dict__:
                 break
         else:

@@ -23,7 +23,7 @@ from dataci.db.stage import (
     get_next_stage_version_tag,
     get_many_stages, create_one_stage_tag
 )
-from .base import BaseModel
+from .base import Job
 from .script import Script
 from ..utils import hash_binary, cwd
 
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from typing import Optional
 
 
-class Stage(BaseModel):
+class Stage(Job):
     """Stage mixin class.
 
     Attributes:

@@ -28,7 +28,7 @@ from dataci.db.workflow import (
     get_next_workflow_version_id, create_one_workflow_tag, get_one_workflow_by_tag,
     get_one_workflow_by_version,
 )
-from .base import BaseModel
+from .base import Job
 from .event import Event
 from .script import Script
 from .stage import Stage
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Workflow(BaseModel, ABC):
+class Workflow(Job, ABC):
     name_arg = 'name'
 
     type_name = 'workflow'

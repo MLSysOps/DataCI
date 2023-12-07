@@ -24,7 +24,7 @@ from dataci.db.run import (
     list_run_by_job,
     update_one_run
 )
-from dataci.models import BaseModel
+from dataci.models import Job
 from dataci.models.lineage import LineageGraph
 
 if TYPE_CHECKING:
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from dataci.models import Workflow, Stage
 
 
-class Run(BaseModel):
+class Run(Job):
     # run id (uuid)
     NAME_PATTERN = re.compile(r'^[a-f0-9]{8}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{12}$', flags=re.IGNORECASE)
     VERSION_PATTERN = re.compile(r'^\d+|latest$', flags=re.IGNORECASE)
