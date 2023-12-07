@@ -181,3 +181,47 @@ def get_one_run(name, version='latest'):
         'create_time': config[8],
         'update_time': config[9],
     } if config else None
+
+
+def list_run_by_job(workspace, name, version, type):
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT workspace
+                 , name
+                 , version
+                 , status
+                 , job_workspace
+                 , job_name
+                 , job_version
+                 , job_type
+                 , create_time
+                 , update_time
+            FROM   run
+            WHERE  job_workspace = ?
+            AND    job_name = ?
+            AND    job_version = ?
+            AND    job_type = ?
+            ;
+            """,
+            (workspace, name, version, type)
+        )
+        configs = cur.fetchall()
+    return [
+        {
+            'workspace': config[0],
+            'name': config[1],
+            'version': config[2],
+            'status': config[3],
+            'job': {
+                'workspace': config[4],
+                'name': config[5],
+                'version': config[6],
+                'type': config[7],
+            },
+            'create_time': config[8],
+            'update_time': config[9],
+        }
+        for config in configs
+    ]

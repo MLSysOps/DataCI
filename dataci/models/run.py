@@ -12,9 +12,18 @@ import warnings
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+import networkx as nx
+
 from dataci.config import TIMEZONE
-from dataci.db.run import exist_run, create_one_run, get_next_run_version, get_latest_run_version, get_one_run, \
+from dataci.db.run import (
+    exist_run,
+    create_one_run,
+    get_next_run_version,
+    get_latest_run_version,
+    get_one_run,
+    list_run_by_job,
     update_one_run
+)
 from dataci.models import BaseModel
 from dataci.models.lineage import LineageGraph
 
@@ -141,7 +150,7 @@ class Run(BaseModel):
         return self.reload(config)
 
     @classmethod
-    def get(cls, name, version=None, not_found_ok=False):
+    def get(cls, name, version=None, workspace=None, not_found_ok=False):
         """Get run by name and version."""
         workspace, name, version = cls.parse_data_model_get_identifier(name, version)
         # If version not set, get the latest version
@@ -154,10 +163,29 @@ class Run(BaseModel):
 
         return cls.from_dict(config)
 
+    @classmethod
+    def find_by_job(cls, workspace, name, version, type):
+        """Find run by job id."""
+        configs = list_run_by_job(workspace=workspace, name=name, version=version, type=type)
+
+        return [cls.from_dict(config) for config in configs]
+
     def upstream(self, n=1, type=None):
         """Get upstream lineage."""
-        return LineageGraph.upstream(self, n, type)
+        g = LineageGraph.upstream(self, n, type)
+        node_mapping = {node.id: node for node in g.nodes()}
+        for node in g.nodes():
+            if node['type'] == 'run':
+                node_mapping[node] = Run.get(name=node['name'], version=node['version'])
+        nx.relabel_nodes(g, node_mapping, copy=False)
+        return g
 
     def downstream(self, n=1, type=None):
         """Get downstream lineage."""
-        return LineageGraph.downstream(self, n, type)
+        g = LineageGraph.downstream(self, n, type)
+        node_mapping = {node.id: node for node in g.nodes()}
+        for node in g.nodes():
+            if node['type'] == 'run':
+                node_mapping[node] = Run.get(name=node['name'], version=node['version'])
+        nx.relabel_nodes(g, node_mapping, copy=False)
+        return g

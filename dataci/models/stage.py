@@ -13,6 +13,8 @@ from collections import defaultdict
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+import networkx as nx
+
 from dataci.db.stage import (
     create_one_stage,
     exist_stage,
@@ -184,9 +186,11 @@ class Stage(BaseModel):
         return self.reload(config)
 
     @classmethod
-    def get_config(cls, name, version=None):
+    def get_config(cls, name, version=None, workspace=None):
         """Get the stage config from the workspace."""
-        workspace, name, version_or_tag = cls.parse_data_model_get_identifier(name, version)
+        workspace_, name, version_or_tag = cls.parse_data_model_get_identifier(name, version)
+        # Override workspace if provided
+        workspace = workspace or workspace_
         if version_or_tag == 'latest' or version_or_tag.startswith('v'):
             config = get_one_stage_by_tag(workspace, name, version_or_tag)
         else:
@@ -195,10 +199,12 @@ class Stage(BaseModel):
         return config
 
     @classmethod
-    def get(cls, name, version=None):
+    def get(cls, name, version=None, workspace=None, not_found_ok=False):
         """Get the stage from the workspace."""
-        config = cls.get_config(name, version)
+        config = cls.get_config(name, version, workspace)
         if config is None:
+            if not not_found_ok:
+                raise ValueError(f'Stage {name}@{version} not found')
             return
 
         return cls.from_dict(config)
@@ -234,3 +240,54 @@ class Stage(BaseModel):
             return stage_dict
 
         return stages
+
+    def upstream(self, n=1, type=None):
+        """Get the downstream stages of the stage.
+        TODO: type is miss-aligned with stage::upstream, only 'run' and 'dataset' are supported.
+        """
+        from dataci.models.run import Run
+
+        runs = Run.find(self.full_name, job_type=self.type_name)
+        graphs = list()
+        node_mapping = dict()
+        for run in runs:
+            g = run.upstream(n=n, type=type)
+            for node in g.nodes:
+                if isinstance(node, Run):
+                    node_mapping[node] = node._job
+            nx.relabel_nodes(g, node_mapping, copy=False)
+            graphs.append(g)
+        # Merge all graphs
+        upstream_graph = nx.compose_all(graphs)
+        # Replace the node with the stage object
+        node_mapping = {
+            node: Stage.get(name=node['name'], version=node['version'], workspace=node['workspace'])
+            for node in upstream_graph.nodes() if node['type'] == 'stage'
+        }
+        nx.relabel_nodes(upstream_graph, node_mapping, copy=False)
+        return upstream_graph
+
+    def downstream(self, n=1, type=None):
+        """Get the downstream stages of the stage.
+        """
+        from dataci.models.run import Run
+
+        runs = Run.find_by_job(workspace=self.workspace.name, name=self.name, version=self.version, type=self.type_name)
+        graphs = list()
+        node_mapping = dict()
+        for run in runs:
+            g = run.downstream(n=n, type=type)
+            for node in g.nodes:
+                if isinstance(node, Run):
+                    node_mapping[node] = node._job
+            nx.relabel_nodes(g, node_mapping, copy=False)
+            graphs.append(g)
+        # Merge all graphs
+        downstream_graph = nx.compose_all(graphs)
+        # Replace the node with the stage object
+        node_mapping = {
+            node: Stage.get(name=node['name'], version=node['version'], workspace=node['workspace'])
+            for node in downstream_graph.nodes() if node['type'] == 'stage'
+        }
+        nx.relabel_nodes(downstream_graph, node_mapping, copy=False)
+        return downstream_graph

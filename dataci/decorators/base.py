@@ -66,3 +66,9 @@ class DecoratedOperatorStageMixin:
     def publish(self):
         self._stage.publish()
         return self
+
+    def upstream(self, n=1, type=None):
+        return self._stage.upstream(n, type)
+
+    def downstream(self, n=1, type=None):
+        return self._stage.downstream(n, type)
