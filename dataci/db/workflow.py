@@ -31,6 +31,14 @@ def create_one_workflow(config):
         cur = conn.cursor()
         cur.execute(
             """
+            INSERT INTO job (workspace, name, version, type)
+            VALUES (:workspace, :name, :version, :type)
+            ;
+            """,
+            workflow_dict,
+        )
+        cur.execute(
+            """
             INSERT INTO workflow (
                 workspace, name, version, timestamp, schedule, dag
               , script_dir, script_entry, script_filelist, script_hash
@@ -381,7 +389,7 @@ def get_one_workflow_by_tag(workspace, name, tag):
             'timestamp': config[4],
             'params': '',
             'flag': '',
-            'trigger': json.loads(config[6]),
+            'trigger': json.loads(config[6]) if config[6] is not None else list(),
             'dag': {
                 'edge': json.loads(config[8]),
             },
@@ -396,7 +404,7 @@ def get_one_workflow_by_tag(workspace, name, tag):
         version = workflow_dict['version']
         cur.execute(
             dedent("""
-            SELECT stage_workspace, stage_name, stage_version, dag_node_id
+            SELECT stage_workspace, stage_name, stage_version, dag_node_id, dag_node_path
             FROM   workflow_dag_node
             WHERE  workflow_workspace=:workspace
             AND    workflow_name=:name
@@ -414,6 +422,7 @@ def get_one_workflow_by_tag(workspace, name, tag):
                 'workspace': node[0],
                 'name': node[1],
                 'version': node[2] if node[2] != '' else None,
+                'path': node[4],
             } for node in cur.fetchall()
         }
         return workflow_dict

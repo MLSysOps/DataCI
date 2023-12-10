@@ -32,7 +32,8 @@ from dataci.db.dataset import (
 )
 from dataci.decorators.event import event
 from dataci.utils import hash_binary
-from .base import BaseModel
+from .base import Job
+from .lineage import LineageGraph
 
 if TYPE_CHECKING:
     from typing import Optional, Union, Type
@@ -220,7 +221,7 @@ file_io_registry = {
 }
 
 
-class Dataset(BaseModel):
+class Dataset(Job):
     type_name = 'dataset'
 
     VERSION_PATTERN = re.compile(r'latest|none|\w+', flags=re.IGNORECASE)
@@ -341,6 +342,13 @@ class Dataset(BaseModel):
         return dataset_obj
 
     def dict(self, id_only=False):
+        if id_only:
+            return {
+                'workspace': self.workspace.name,
+                'type': self.type_name,
+                'name': self.name,
+                'version': self.version,
+            }
         config = {
             'workspace': self.workspace.name,
             'name': self.name,
@@ -447,7 +455,17 @@ class Dataset(BaseModel):
         return self.reload(config)
 
     @classmethod
-    def get(cls, name: str, version=None, not_found_ok=False, file_reader='auto', file_writer='csv'):
+    def get(
+            cls,
+            name: str,
+            workspace=None,
+            version=None,
+            not_found_ok=False,
+            file_reader='auto',
+            file_writer='csv',
+            **kwargs,
+    ):
+        name = workspace + '.' + name if workspace else name
         workspace, name, version_or_tag = cls.parse_data_model_get_identifier(name, version)
 
         if version_or_tag is None or cls.VERSION_TAG_PATTERN.match(version_or_tag) is not None:
@@ -515,3 +533,13 @@ class Dataset(BaseModel):
             return dict(dataset_dict)
 
         return dataset_list
+
+    def upstream(self, n=1, type=None):
+        """Get upstream"""
+        """Get upstream lineage."""
+        g = LineageGraph.upstream(self, n, type)
+        return g
+
+    def downstream(self, n=1, type=None):
+        """Get downstream lineage."""
+        return LineageGraph.downstream(self, n, type)

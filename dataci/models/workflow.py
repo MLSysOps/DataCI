@@ -28,7 +28,7 @@ from dataci.db.workflow import (
     get_next_workflow_version_id, create_one_workflow_tag, get_one_workflow_by_tag,
     get_one_workflow_by_version,
 )
-from .base import BaseModel
+from .base import Job
 from .event import Event
 from .script import Script
 from .stage import Stage
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Workflow(BaseModel, ABC):
+class Workflow(Job, ABC):
     name_arg = 'name'
 
     type_name = 'workflow'
@@ -91,7 +91,12 @@ class Workflow(BaseModel, ABC):
 
     def dict(self, id_only=False):
         if id_only:
-            return {'workspace': self.workspace.name, 'name': self.name, 'version': self.version}
+            return {
+                'workspace': self.workspace.name,
+                'type': self.type_name,
+                'name': self.name,
+                'version': self.version
+            }
         # export the dag as a dict
         # 1. convert the dag to a list of edges
         # 2. convert each node from Stage to an id
@@ -109,6 +114,7 @@ class Workflow(BaseModel, ABC):
 
         return {
             'workspace': self.workspace.name,
+            'type': self.type_name,
             'name': self.name,
             'version': self.version,
             'dag': {
@@ -339,9 +345,11 @@ class Workflow(BaseModel, ABC):
         return self.reload(config)
 
     @classmethod
-    def get(cls, name: str, version: str = None):
-        """Get a models from the workspace."""
-        workspace, name, version = cls.parse_data_model_get_identifier(name, version)
+    def get_config(cls, name: str, version: str = None, workspace: str = None):
+        """Get workflow config only"""
+        workspace_, name, version = cls.parse_data_model_get_identifier(name, version)
+        # Override the workspace if specified
+        workspace = workspace or workspace_
 
         if version is None or version == 'latest' or version.startswith('v'):
             # Get by tag
@@ -351,6 +359,12 @@ class Workflow(BaseModel, ABC):
             if version.lower() == 'none':
                 version = None
             config = get_one_workflow_by_version(workspace, name, version)
+        return config
+
+    @classmethod
+    def get(cls, name: str, version: str = None, workspace: str = None, not_found_ok=False, **kwargs):
+        """Get a models from the workspace."""
+        config = cls.get_config(name=name, version=version, workspace=workspace)
         if config is None:
             return
 

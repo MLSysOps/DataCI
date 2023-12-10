@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Type, Union, TypeVar, Callable
-    from dataci.models.base import BaseModel
+    from dataci.models.base import Job
 
     T = TypeVar('T', bound=Callable)
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 def event(name: str = None, producer: str = None):
     def wrapper(func: 'T') -> 'T':
         @wraps(func)
-        def inner_wrapper(self: 'Union[BaseModel, Type[BaseModel]]', *args, **kwargs):
+        def inner_wrapper(self: 'Union[Job, Type[Job]]', *args, **kwargs):
             # Prevent circular import
             from dataci.models import Event
 

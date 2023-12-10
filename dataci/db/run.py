@@ -5,71 +5,267 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Mar 14, 2023
 """
-from . import db_connection
+import sqlite3
+from copy import deepcopy
+
+from dataci.config import DB_FILE
 
 
-def get_next_run_num(pipeline_name, pipeline_version):
-    with db_connection:
-        (next_run_id,), = db_connection.execute(
+def create_one_run(config: dict):
+    config = deepcopy(config)
+    job_config = config.pop('job')
+    config['job_workspace'] = job_config['workspace']
+    config['job_name'] = job_config['name']
+    config['job_version'] = job_config['version']
+    config['job_type'] = job_config['type']
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
+        # Create job
+        cur.execute(
             """
-            SELECT COALESCE(MAX(run_num), 0) + 1 AS next_run_id 
-            FROM run
-            WHERE pipeline_name = ?
-            AND   pipeline_version = ?
+            INSERT INTO job (
+                workspace,
+                name,
+                version,
+                type
+            )
+            VALUES (:workspace, :name, :version, :type)
             ;
             """,
-            (pipeline_name, pipeline_version)
+            config
         )
-    return next_run_id
-
-
-def create_one_run(run_dict):
-    pipeline_dict = run_dict['pipeline']
-    with db_connection:
-        db_connection.execute(
+        # Create run
+        cur.execute(
             """
-            INSERT INTO run(run_num, pipeline_name, pipeline_version) VALUES
-            (?,?,?)
+            INSERT INTO run (
+                workspace,
+                name,
+                version,
+                status,
+                job_workspace,
+                job_name,
+                job_version,
+                job_type,
+                create_time,
+                update_time
+            )
+            VALUES (:workspace, :name, :version, :status, :job_workspace, :job_name, :job_version, :job_type, :create_time, :update_time)
             ;
             """,
-            (run_dict['run_num'], pipeline_dict['name'],
-             pipeline_dict['version'])
+            config
         )
+        return cur.lastrowid
 
 
-def get_many_runs(pipeline_name, pipeline_version):
-    with db_connection:
-        run_dict_iter = db_connection.execute(
+def update_one_run(config):
+    config = deepcopy(config)
+    job_config = config.pop('job')
+    config['job_workspace'] = job_config['workspace']
+    config['job_name'] = job_config['name']
+    config['job_version'] = job_config['version']
+    config['job_type'] = job_config['type']
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
+        cur.execute(
             """
-            SELECT run.*,
-                   timestamp
-            FROM (
-                SELECT run_num,
-                    pipeline_name,
-                    pipeline_version
+            UPDATE run
+            SET    status = :status
+                 , job_workspace = :job_workspace
+                 , job_name = :job_name
+                 , job_version = :job_version
+                 , job_type = :job_type
+                 , update_time = :update_time
+            WHERE  name = :name
+            AND    version = :version
+            ;
+            """,
+            config
+        )
+        return cur.lastrowid
+
+
+def exist_run(name, version):
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
+        (exists,), = cur.execute(
+            """
+            SELECT EXISTS(
+                SELECT 1
                 FROM   run
-                WHERE  pipeline_name GLOB ?
-                AND    pipeline_version GLOB ?
-            ) run
-            JOIN (
-                SELECT name,
-                       version,
-                       timestamp
-                FROM   pipeline
-                WHERE  name GLOB ?
-                AND    version GLOB ?
-            ) pipeline
-            ON pipeline_name = name
-            AND pipeline_version = version
+                WHERE  name = ?
+                AND    version = ?
+            )
             ;
             """,
-            (pipeline_name, pipeline_version, pipeline_name, pipeline_version),
+            (name, version)
         )
-    run_dict_list = list()
-    for run_po in run_dict_iter:
-        run_num, pipeline_name, pipeline_version, timestamp = run_po
-        run_dict_list.append({
-            'run_num': run_num,
-            'pipeline': {'name': pipeline_name, 'version': pipeline_version, 'timestamp': timestamp},
-        })
-    return run_dict_list
+    return exists
+
+
+def get_latest_run_version(name):
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
+        (version,), = cur.execute(
+            """
+            SELECT MAX(version)
+            FROM   run
+            WHERE  name = ?
+            ;
+            """,
+            (name,)
+        )
+    return version or 0
+
+
+def get_next_run_version(name):
+    return get_latest_run_version(name) + 1
+
+
+def get_one_run(name, version='latest'):
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
+        if version == 'latest':
+            cur.execute(
+                """
+                SELECT workspace
+                     , name
+                     , version
+                     , status
+                     , job_workspace
+                     , job_name
+                     , job_version
+                     , job_type
+                     , create_time
+                     , update_time
+                FROM   run
+                WHERE  name = ?
+                ORDER BY version DESC
+                LIMIT  1
+                ;
+                """,
+                (name,)
+            )
+        else:
+            cur.execute(
+                """
+                SELECT workspace
+                     , name
+                     , version
+                     , status
+                     , job_workspace
+                     , job_name
+                     , job_version
+                     , job_type
+                     , create_time
+                     , update_time
+                FROM   run
+                WHERE  name = ?
+                AND    version = ?
+                ;
+                """,
+                (name, version)
+            )
+
+        config = cur.fetchone()
+    return {
+        'workspace': config[0],
+        'name': config[1],
+        'version': config[2],
+        'status': config[3],
+        'job': {
+            'workspace': config[4],
+            'name': config[5],
+            'version': config[6],
+            'type': config[7],
+        },
+        'create_time': config[8],
+        'update_time': config[9],
+    } if config else None
+
+
+def list_run_by_job(workspace, name, version, type):
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT workspace
+                 , name
+                 , version
+                 , status
+                 , job_workspace
+                 , job_name
+                 , job_version
+                 , job_type
+                 , create_time
+                 , update_time
+            FROM   run
+            WHERE  job_workspace = ?
+            AND    job_name = ?
+            AND    job_version = ?
+            AND    job_type = ?
+            ;
+            """,
+            (workspace, name, version, type)
+        )
+        configs = cur.fetchall()
+    return [
+        {
+            'workspace': config[0],
+            'name': config[1],
+            'version': config[2],
+            'status': config[3],
+            'job': {
+                'workspace': config[4],
+                'name': config[5],
+                'version': config[6],
+                'type': config[7],
+            },
+            'create_time': config[8],
+            'update_time': config[9],
+        }
+        for config in configs
+    ]
+
+
+def list_run_by_job(workspace, name, version, type):
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT workspace
+                 , name
+                 , version
+                 , status
+                 , job_workspace
+                 , job_name
+                 , job_version
+                 , job_type
+                 , create_time
+                 , update_time
+            FROM   run
+            WHERE  job_workspace = ?
+            AND    job_name = ?
+            AND    job_version = ?
+            AND    job_type = ?
+            ;
+            """,
+            (workspace, name, version, type)
+        )
+        configs = cur.fetchall()
+    return [
+        {
+            'workspace': config[0],
+            'name': config[1],
+            'version': config[2],
+            'status': config[3],
+            'job': {
+                'workspace': config[4],
+                'name': config[5],
+                'version': config[6],
+                'type': config[7],
+            },
+            'create_time': config[8],
+            'update_time': config[9],
+        }
+        for config in configs
+    ]

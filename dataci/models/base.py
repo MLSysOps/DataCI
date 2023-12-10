@@ -7,12 +7,17 @@ Date: May 03, 2023
 """
 import abc
 import re
+from dataclasses import dataclass, asdict
+from typing import TYPE_CHECKING
 
 from dataci.config import DEFAULT_WORKSPACE
 from dataci.models.workspace import Workspace
 
+if TYPE_CHECKING:
+    from typing import Dict, Type
 
-class BaseModel(abc.ABC):
+
+class Job(abc.ABC):
     NAME_PATTERN = re.compile(r'^(?:[a-z]\w*\.)?[a-z]\w*$', flags=re.IGNORECASE)
     VERSION_PATTERN = re.compile(r'latest|v\d+|none|[\da-f]+', flags=re.IGNORECASE)
     GET_DATA_MODEL_IDENTIFIER_PATTERN = re.compile(
@@ -22,11 +27,12 @@ class BaseModel(abc.ABC):
         r'^(?:([a-z]\w*)\.)?([\w:.*[\]]+?)(?:@(\d+|latest|none|\*))?$', re.IGNORECASE
     )
     type_name: str
+    __type_name_mapper__: 'Dict[str, Type[Job]]' = dict()
 
     def __init__(self, name, *args, **kwargs):
         # Prevent to pass invalid arguments to object.__init__
         mro = type(self).mro()
-        for next_cls in mro[mro.index(BaseModel) + 1:]:
+        for next_cls in mro[mro.index(Job) + 1:]:
             if '__init__' in next_cls.__dict__:
                 break
         else:
@@ -55,7 +61,7 @@ class BaseModel(abc.ABC):
         return f'dataci://{self.workspace.name}/{self.type_name}/{self.name}/{self.version}'
 
     @abc.abstractmethod
-    def dict(self):
+    def dict(self, id_only=False):
         pass
 
     @classmethod
@@ -72,8 +78,16 @@ class BaseModel(abc.ABC):
         pass
 
     @classmethod
-    @abc.abstractmethod
-    def get(cls, name, version=None, not_found_ok=False):
+    def get(cls, name, version=None, workspace=None, type=..., **kwargs) -> 'Job':
+        subcls = cls.__type_name_mapper__.get(type, None)
+        if not subcls:
+            raise ValueError(f'Invalid type {type}')
+        return subcls.get(name=name, version=version, workspace=workspace, **kwargs)
+
+    def upstream(self, n=1, type=None):
+        pass
+
+    def downstream(self, n=1, type=None):
         pass
 
     # @classmethod
@@ -119,3 +133,23 @@ class BaseModel(abc.ABC):
             version = str(version or '*').lower()
 
         return workspace, name, version
+
+    @classmethod
+    def __register_job_type(cls):
+        """Register data class to job, this is essential load data class from job."""
+        for sub_cls in cls.__subclasses__():
+            cls.__type_name_mapper__[sub_cls.type_name] = sub_cls
+
+
+@dataclass(frozen=True)
+class JobView:
+    type: str
+    workspace: str
+    name: str
+    version: str = None
+
+    def get(self) -> 'Job':
+        return Job.get(workspace=self.workspace, name=self.name, version=self.version, type=self.type)
+
+    def dict(self):
+        return asdict(self)
