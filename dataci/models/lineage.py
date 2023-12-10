@@ -5,6 +5,7 @@ Author: Li Yuanming
 Email: yuanmingleee@gmail.com
 Date: Nov 22, 2023
 """
+import dataclasses
 import warnings
 from itertools import chain
 from typing import TYPE_CHECKING
@@ -152,38 +153,40 @@ class LineageGraph:
             job_config = job.dict(id_only=True)
         else:
             job_config = job
+        job_view = JobView(**job_config)
 
         g = nx.DiGraph()
-        g.add_node(JobView(**job_config))
-        job_configs = [job_config]
+        g.add_node(job_view)
+        job_views = {job_view}
         # Retrieve upstream lineage up to n levels
         for _ in range(n):
             # (level n) ->      .    .
             # job configs to query for next iteration, job configs to query and add to graph
-            job_configs, job_configs_add = list(), job_configs
+            job_views, job_views_add = set(), job_views
             # Recursively query for upstream lineage until all lineage_configs are the same `type` as the argument
-            while len(job_configs_add) > 0:
-                lineage_configs = list_many_upstream_lineage(job_configs_add)
-                for upstreams, downstream in zip(lineage_configs, job_configs_add):
-                    downstream_job_view = JobView(**downstream)
-                    g.add_edges_from((JobView(**upstream), downstream_job_view) for upstream in upstreams)
-                job_configs_add.clear()
-                #  (level n+1) ->  .  . .  x
+            while len(job_views_add) > 0:
+                lineage_configs = list_many_upstream_lineage([job_view.dict() for job_view in job_views_add])
+                for upstream_job_view, upstreams in zip(job_views_add, lineage_configs):
+                    g.add_edges_from((JobView(**upstream), upstream_job_view) for upstream in upstreams)
+                job_views_add.clear()
+                #  (level n-1) ->  .  . .  x
                 #                   \/   \/
                 # (level n)         .    .
                 # upstreams that are the same `type` as the argument (represented as dot ".")
                 # will be queried for next level of lineage
                 # the others (represented as cross "x") will query for next iteration in the loop, because they
                 # are not considered as a valid node for the current level
-                for upstreams in chain.from_iterable(lineage_configs):
-                    if type is None or upstreams['type'] == type:
-                        job_configs.append(upstreams)
+                for upstream in chain.from_iterable(lineage_configs):
+                    upstream_job_view = JobView(**upstream)
+                    if type is None or upstream_job_view.type == type:
+                        job_views.add(upstream_job_view)
                     else:
-                        job_configs_add.append(upstreams)
+                        job_views_add.add(upstream_job_view)
         return g
 
+
     @classmethod
-    def downstream(cls, job: 'Union[LineageAllowedType, dict]', n: 'int' = 1, type: 'str' = None) -> 'nx.DiGraph':
+    def downstream(cls, job: 'Union[Job, dict]', n: 'int' = 1, type: 'str' = None) -> 'nx.DiGraph':
         """Retrieves outgoing edges that are connected to a vertex.
         """
         from dataci.models import Job
@@ -192,22 +195,22 @@ class LineageGraph:
             job_config = job.dict(id_only=True)
         else:
             job_config = job
+        job_view = JobView(**job_config)
 
         g = nx.DiGraph()
-        g.add_node(JobView(**job_config))
-        job_configs = [job_config]
+        g.add_node(job_view)
+        job_views = {job_view}
         # Retrieve downstream lineage up to n levels
         for _ in range(n):
             # (level n) ->      .    .
             # job configs to query for next iteration, job configs to query and add to graph
-            job_configs, job_configs_add = list(), job_configs
+            job_views, job_views_add = set(), job_views
             # Recursively query for downstream lineage until all lineage_configs are the same `type` as the argument
-            while len(job_configs_add) > 0:
-                lineage_configs = list_many_downstream_lineage(job_configs_add)
-                for upstream, downstreams in zip(job_configs_add, lineage_configs):
-                    upstream_job_view = JobView(**upstream)
+            while len(job_views_add) > 0:
+                lineage_configs = list_many_downstream_lineage([job_view.dict() for job_view in job_views_add])
+                for upstream_job_view, downstreams in zip(job_views_add, lineage_configs):
                     g.add_edges_from((upstream_job_view, JobView(**downstream)) for downstream in downstreams)
-                job_configs_add.clear()
+                job_views_add.clear()
                 # (level n)         .    .
                 #                   /\   /\
                 #  (level n+1) ->  .  . .  x
@@ -215,9 +218,10 @@ class LineageGraph:
                 # will be queried for next level of lineage
                 # the others (represented as cross "x") will query for next iteration in the loop, because they
                 # are not considered as a valid node for the current level
-                for downstreams in chain.from_iterable(lineage_configs):
-                    if type is None or downstreams['type'] == type:
-                        job_configs.append(downstreams)
+                for downstream in chain.from_iterable(lineage_configs):
+                    downstream_job_view = JobView(**downstream)
+                    if type is None or downstream_job_view.type == type:
+                        job_views.add(downstream_job_view)
                     else:
-                        job_configs_add.append(downstreams)
+                        job_views_add.add(downstream_job_view)
         return g
