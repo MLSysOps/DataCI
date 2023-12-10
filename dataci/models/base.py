@@ -78,11 +78,11 @@ class Job(abc.ABC):
         pass
 
     @classmethod
-    def get(cls, name, version=None, workspace=None, type=..., not_found_ok=False) -> 'Job':
+    def get(cls, name, version=None, workspace=None, type=..., **kwargs) -> 'Job':
         subcls = cls.__type_name_mapper__.get(type, None)
         if not subcls:
             raise ValueError(f'Invalid type {type}')
-        return subcls.get(name, version, workspace, not_found_ok)
+        return subcls.get(name=name, version=version, workspace=workspace, **kwargs)
 
     def upstream(self, n=1, type=None):
         pass

@@ -455,7 +455,16 @@ class Dataset(Job):
         return self.reload(config)
 
     @classmethod
-    def get(cls, name: str, workspace=None, version=None, not_found_ok=False, file_reader='auto', file_writer='csv'):
+    def get(
+            cls,
+            name: str,
+            workspace=None,
+            version=None,
+            not_found_ok=False,
+            file_reader='auto',
+            file_writer='csv',
+            **kwargs,
+    ):
         name = workspace + '.' + name if workspace else name
         workspace, name, version_or_tag = cls.parse_data_model_get_identifier(name, version)
 

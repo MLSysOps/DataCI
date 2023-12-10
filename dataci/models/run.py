@@ -51,6 +51,7 @@ class Run(Job):
             update_time: 'Optional[datetime]' = None,
             **kwargs
     ):
+        # TODO: get workspace from job
         super().__init__(name, **kwargs)
         self.status: str = status
         self._job = job
@@ -142,7 +143,7 @@ class Run(Job):
         return self.reload(config)
 
     @classmethod
-    def get(cls, name, version=None, workspace=None, not_found_ok=False):
+    def get(cls, name, version=None, workspace=None, not_found_ok=False, **kwargs):
         """Get run by name and version."""
         workspace, name, version = cls.parse_data_model_get_identifier(name, version)
         # If version not set, get the latest version

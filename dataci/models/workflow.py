@@ -345,9 +345,11 @@ class Workflow(Job, ABC):
         return self.reload(config)
 
     @classmethod
-    def get_config(cls, name: str, version: str = None):
+    def get_config(cls, name: str, version: str = None, workspace: str = None):
         """Get workflow config only"""
-        workspace, name, version = cls.parse_data_model_get_identifier(name, version)
+        workspace_, name, version = cls.parse_data_model_get_identifier(name, version)
+        # Override the workspace if specified
+        workspace = workspace or workspace_
 
         if version is None or version == 'latest' or version.startswith('v'):
             # Get by tag
@@ -360,9 +362,9 @@ class Workflow(Job, ABC):
         return config
 
     @classmethod
-    def get(cls, name: str, version: str = None):
+    def get(cls, name: str, version: str = None, workspace: str = None, not_found_ok=False, **kwargs):
         """Get a models from the workspace."""
-        config = cls.get_config(name, version)
+        config = cls.get_config(name=name, version=version, workspace=workspace)
         if config is None:
             return
 

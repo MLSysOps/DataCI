@@ -9,7 +9,7 @@ from typing import Union
 
 from fastapi import APIRouter, FastAPI
 
-from dataci.models import Run as RunModel, Lineage
+from dataci.models import Run as RunModel, Lineage, Stage
 from metadata.models import RunEvent, DatasetEvent, JobEvent, RunState
 
 app = FastAPI()
@@ -30,27 +30,25 @@ def post_lineage(event: Union[RunEvent, DatasetEvent, JobEvent]):
 
     # Parse job type
     if '.' in event.job.name:
-        job_type = 'stage'
         # Get job
         job_workspace, job_name, job_version = name_parts
         job_version, stage_name = job_version.split('.')
+        job = Stage.get_by_workflow(stage_name, f'{job_workspace}.{job_name}@{job_version}')
     else:
-        job_type = 'workflow'
         job_workspace, job_name, job_version = name_parts
-        stage_name = None
+        job = {
+            'workspace': job_workspace,
+            'type': 'workflow',
+            'name': job_name,
+            'version': job_version,
+        }
 
     # If event type is START, create a new run
     if event.eventType == RunState.START:
         run = RunModel(
             name=str(event.run.runId),
             status=event.eventType.value,
-            job={
-                'workspace': job_workspace,
-                'type': job_type,
-                'name': job_name,
-                'version': job_version,
-                'stage_name': stage_name,
-            },
+            job=job,
             create_time=event.eventTime,
         )
         run.save()
@@ -58,13 +56,7 @@ def post_lineage(event: Union[RunEvent, DatasetEvent, JobEvent]):
         run = RunModel(
             name=str(event.run.runId),
             status=event.eventType.value,
-            job={
-                'workspace': job_workspace,
-                'type': job_type,
-                'name': job_name,
-                'version': job_version,
-                'stage_name': stage_name,
-            },
+            job=job,
             update_time=event.eventTime,
         )
         run.update()

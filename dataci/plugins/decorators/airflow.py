@@ -60,7 +60,8 @@ class _TaskDecorator(_AirflowTaskDecorator, DecoratedOperatorStageMixin):
                     self._stage.input_table[key] = ...
             elif isinstance(arg, _Dataset):  # arg is a DataCI dataset
                 self._stage.input_table[key] = {
-                    'name': arg.identifier, 'file_reader': arg.file_reader.NAME, 'file_writer': arg.file_writer.NAME
+                    'name': arg.identifier, 'file_reader': arg.file_reader.NAME, 'file_writer': arg.file_writer.NAME,
+                    'type': arg.type_name,
                 }
                 # Rewrite the argument with the dataset identifier
                 bound.arguments[key] = arg.identifier

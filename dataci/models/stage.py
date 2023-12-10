@@ -199,7 +199,7 @@ class Stage(Job):
         return config
 
     @classmethod
-    def get(cls, name, version=None, workspace=None, not_found_ok=False):
+    def get(cls, name, version=None, workspace=None, not_found_ok=False, **kwargs):
         """Get the stage from the workspace."""
         config = cls.get_config(name, version, workspace)
         if config is None:
@@ -224,6 +224,10 @@ class Stage(Job):
                 break
         else:
             raise ValueError(f'Stage {stage_name} not found in workflow {workflow_name}@{workflow_version}')
+
+        if '.' not in stage_name:
+            stage_workspace = workflow_config['workspace']
+            stage_name = stage_workspace + '.' + stage_name
 
         return cls.get(stage_name, stage_version)
 
