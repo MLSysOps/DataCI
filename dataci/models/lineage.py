@@ -6,6 +6,7 @@ Email: yuanmingleee@gmail.com
 Date: Nov 22, 2023
 """
 import warnings
+from itertools import chain
 from typing import TYPE_CHECKING, TypeVar
 
 import networkx as nx
@@ -17,6 +18,8 @@ from dataci.db.lineage import (
     list_many_upstream_lineage,
     list_many_downstream_lineage,
 )
+from dataci.models.base import JobView
+from dataci.utils import dict_to_frozenset
 
 if TYPE_CHECKING:
     from typing import List, Union
@@ -164,74 +167,78 @@ class LineageGraph:
     def upstream(cls, job: 'Union[LineageAllowedType, dict]', n: 'int' = 1, type: 'str' = None) -> 'nx.DiGraph':
         """Retrieves incoming edges that are connected to a vertex.
         """
-        if isinstance(job, dict):
-            job_config = job
-        else:
+        from dataci.models import Job
+
+        if isinstance(job, Job):
             job_config = job.dict(id_only=True)
+        else:
+            job_config = job
 
         g = nx.DiGraph()
-        g.add_node(job_config)
+        g.add_node(JobView(**job_config))
         job_configs = [job_config]
         # Retrieve upstream lineage up to n levels
         for _ in range(n):
-            lineage_configs = list_many_upstream_lineage(job_configs)
-            g.add_edges_from(
-                (lineage_config['upstream'], lineage_config['downstream']) for lineage_config in lineage_configs
-            )
-            # With type filter, we need to retrieve extra upstream jobs if the current job does not match the type
-            job_configs = [
-                lineage_config for lineage_config in lineage_configs
-                if type is not None and lineage_config['upstream']['type'] != type
-            ]
-
-            add_lineage_configs = list_many_upstream_lineage(job_configs)
-            g.add_edges_from(
-                (lineage_config['upstream'], lineage_config['downstream']) for lineage_config in add_lineage_configs
-            )
-            # Add upstream jobs to job_configs for next iteration of lineage retrieval
-            job_configs = [
-                lineage_config['upstream'] for lineage_config in lineage_configs
-                if type is None or lineage_config['upstream']['type'] == type
-            ] + [
-                lineage_config['upstream'] for lineage_config in add_lineage_configs
-            ]
-
+            # (level n) ->      .    .
+            # job configs to query for next iteration, job configs to query and add to graph
+            job_configs, job_configs_add = list(), job_configs
+            # Recursively query for upstream lineage until all lineage_configs are the same `type` as the argument
+            while len(job_configs_add) > 0:
+                lineage_configs = list_many_upstream_lineage(job_configs_add)
+                for upstreams, downstream in zip(lineage_configs, job_configs_add):
+                    downstream_job_view = JobView(**downstream)
+                    g.add_edges_from((JobView(**upstream), downstream_job_view) for upstream in upstreams)
+                job_configs_add.clear()
+                #  (level n+1) ->  .  . .  x
+                #                   \/   \/
+                # (level n)         .    .
+                # upstreams that are the same `type` as the argument (represented as dot ".")
+                # will be queried for next level of lineage
+                # the others (represented as cross "x") will query for next iteration in the loop, because they
+                # are not considered as a valid node for the current level
+                for upstreams in chain.from_iterable(lineage_configs):
+                    if type is None or upstreams['type'] == type:
+                        job_configs.append(upstreams)
+                    else:
+                        job_configs_add.append(upstreams)
         return g
 
     @classmethod
     def downstream(cls, job: 'Union[LineageAllowedType, dict]', n: 'int' = 1, type: 'str' = None) -> 'nx.DiGraph':
         """Retrieves outgoing edges that are connected to a vertex.
         """
-        if isinstance(job, dict):
-            job_config = job
-        else:
+        from dataci.models import Job
+
+        if isinstance(job, Job):
             job_config = job.dict(id_only=True)
+        else:
+            job_config = job
 
         g = nx.DiGraph()
-        g.add_node(job_config)
+        g.add_node(JobView(**job_config))
         job_configs = [job_config]
         # Retrieve downstream lineage up to n levels
         for _ in range(n):
-            lineage_configs = list_many_downstream_lineage(job_configs)
-            g.add_edges_from(
-                (lineage_config['upstream'], lineage_config['downstream']) for lineage_config in lineage_configs
-            )
-            # With type filter, we need to retrieve extra downstream jobs if the current job does not match the type
-            job_configs = [
-                lineage_config for lineage_config in lineage_configs
-                if type is not None and lineage_config['downstream']['type'] != type
-            ]
-
-            add_lineage_configs = list_many_downstream_lineage(job_configs)
-            g.add_edges_from(
-                (lineage_config['upstream'], lineage_config['downstream']) for lineage_config in add_lineage_configs
-            )
-            # Add downstream jobs to job_configs for next iteration of lineage retrieval
-            job_configs = [
-                lineage_config['downstream'] for lineage_config in lineage_configs
-                if type is None or lineage_config['downstream']['type'] == type
-            ] + [
-                lineage_config['downstream'] for lineage_config in add_lineage_configs
-            ]
-
+            # (level n) ->      .    .
+            # job configs to query for next iteration, job configs to query and add to graph
+            job_configs, job_configs_add = list(), job_configs
+            # Recursively query for downstream lineage until all lineage_configs are the same `type` as the argument
+            while len(job_configs_add) > 0:
+                lineage_configs = list_many_downstream_lineage(job_configs_add)
+                for upstream, downstreams in zip(job_configs_add, lineage_configs):
+                    upstream_job_view = JobView(**upstream)
+                    g.add_edges_from((upstream_job_view, JobView(**downstream)) for downstream in downstreams)
+                job_configs_add.clear()
+                # (level n)         .    .
+                #                   /\   /\
+                #  (level n+1) ->  .  . .  x
+                # downstreams that are the same `type` as the argument (represented as dot ".")
+                # will be queried for next level of lineage
+                # the others (represented as cross "x") will query for next iteration in the loop, because they
+                # are not considered as a valid node for the current level
+                for downstreams in chain.from_iterable(lineage_configs):
+                    if type is None or downstreams['type'] == type:
+                        job_configs.append(downstreams)
+                    else:
+                        job_configs_add.append(downstreams)
         return g

@@ -7,6 +7,7 @@ Date: May 03, 2023
 """
 import abc
 import re
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from dataci.config import DEFAULT_WORKSPACE
@@ -138,3 +139,14 @@ class Job(abc.ABC):
         """Register data class to job, this is essential load data class from job."""
         for sub_cls in cls.__subclasses__():
             cls.__type_name_mapper__[sub_cls.type_name] = sub_cls
+
+
+@dataclass(frozen=True)
+class JobView:
+    type: str
+    workspace: str
+    name: str
+    version: str = None
+
+    def get(self) -> 'Job':
+        return Job.get(workspace=self.workspace, name=self.name, version=self.version, type=self.type)

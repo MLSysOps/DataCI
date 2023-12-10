@@ -78,6 +78,10 @@ def hash_file(filepaths: 'Union[str, os.PathLike, List[Union[os.PathLike, str]]]
     return sha_hash.hexdigest()
 
 
+def dict_to_frozenset(d):
+    return frozenset((k, d[k]) for k in sorted(d.keys()))
+
+
 def hash_binary(b: bytes):
     """
     Compute the hash of a binary.

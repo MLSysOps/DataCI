@@ -7,7 +7,6 @@ Date: Nov 27, 2023
 """
 import sqlite3
 from collections import OrderedDict
-from contextlib import nullcontext
 
 from dataci.config import DB_FILE
 
@@ -85,7 +84,7 @@ def list_many_upstream_lineage(downstream_configs):
         od[(
             downstream_config['workspace'],
             downstream_config['name'],
-            downstream_config['version'],
+            str(downstream_config['version']),
             downstream_config['type']
         )] = list()
 
@@ -95,7 +94,7 @@ def list_many_upstream_lineage(downstream_configs):
             repr((
                 downstream_config['workspace'],
                 downstream_config['name'],
-                downstream_config['version'],
+                str(downstream_config['version']),
                 downstream_config['type'],
             ))
             for downstream_config in downstream_configs
@@ -163,7 +162,7 @@ def list_many_downstream_lineage(upstream_configs):
         od[(
             upstream_config['workspace'],
             upstream_config['name'],
-            upstream_config['version'],
+            str(upstream_config['version']),
             upstream_config['type']
         )] = list()
 
@@ -173,7 +172,7 @@ def list_many_downstream_lineage(upstream_configs):
             repr((
                 upstream_config['workspace'],
                 upstream_config['name'],
-                upstream_config['version'],
+                str(upstream_config['version']),
                 upstream_config['type'],
             ))
             for upstream_config in upstream_configs

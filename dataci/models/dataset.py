@@ -33,6 +33,7 @@ from dataci.db.dataset import (
 from dataci.decorators.event import event
 from dataci.utils import hash_binary
 from .base import Job
+from .lineage import LineageGraph
 
 if TYPE_CHECKING:
     from typing import Optional, Union, Type
@@ -523,3 +524,13 @@ class Dataset(Job):
             return dict(dataset_dict)
 
         return dataset_list
+
+    def upstream(self, n=1, type=None):
+        """Get upstream"""
+        """Get upstream lineage."""
+        g = LineageGraph.upstream(self, n, type)
+        return g
+
+    def downstream(self, n=1, type=None):
+        """Get downstream lineage."""
+        return LineageGraph.downstream(self, n, type)

@@ -63,19 +63,11 @@ class Run(Job):
         return self.version
 
     @property
-    def job(self) -> 'Union[Workflow, Stage]':
+    def job(self) -> 'Job':
         """Lazy load job (workflow or stage) from database."""
-        from dataci.models import Workflow, Stage
         from dataci.decorators.base import DecoratedOperatorStageMixin
-
-        if not isinstance(self._job, (Workflow, Stage, DecoratedOperatorStageMixin)):
-            workflow_id = self._job['workspace'] + '.' + self._job['name'] + '@' + self._job['version']
-            if self._job['type'] == 'workflow':
-                self._job = Workflow.get(workflow_id)
-            elif self._job['type'] == 'stage':
-                self._job = Stage.get_by_workflow(self._job['stage_name'], workflow_id)
-            else:
-                raise ValueError(f'Invalid job type: {self._job}')
+        if not isinstance(self._job, (Job, DecoratedOperatorStageMixin)):
+            self._job = Job.get(**self._job)
         return self._job
 
     def dict(self, id_only=False):
@@ -173,19 +165,8 @@ class Run(Job):
     def upstream(self, n=1, type=None):
         """Get upstream lineage."""
         g = LineageGraph.upstream(self, n, type)
-        node_mapping = {node.id: node for node in g.nodes()}
-        for node in g.nodes():
-            if node['type'] == 'run':
-                node_mapping[node] = Run.get(name=node['name'], version=node['version'])
-        nx.relabel_nodes(g, node_mapping, copy=False)
         return g
 
     def downstream(self, n=1, type=None):
         """Get downstream lineage."""
-        g = LineageGraph.downstream(self, n, type)
-        node_mapping = {node.id: node for node in g.nodes()}
-        for node in g.nodes():
-            if node['type'] == 'run':
-                node_mapping[node] = Run.get(name=node['name'], version=node['version'])
-        nx.relabel_nodes(g, node_mapping, copy=False)
-        return g
+        return LineageGraph.downstream(self, n, type)

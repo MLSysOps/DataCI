@@ -23,7 +23,7 @@ from dataci.db.stage import (
     get_next_stage_version_tag,
     get_many_stages, create_one_stage_tag
 )
-from .base import Job
+from .base import Job, JobView
 from .script import Script
 from ..utils import hash_binary, cwd
 
@@ -247,24 +247,18 @@ class Stage(Job):
         """
         from dataci.models.run import Run
 
-        runs = Run.find(self.full_name, job_type=self.type_name)
+        runs = Run.find_by_job(workspace=self.workspace.name, name=self.name, version=self.version, type=self.type_name)
         graphs = list()
         node_mapping = dict()
         for run in runs:
             g = run.upstream(n=n, type=type)
             for node in g.nodes:
-                if isinstance(node, Run):
-                    node_mapping[node] = node._job
+                if node.type == Run.type_name:
+                    node_mapping[node] = JobView(**node.get()._job)
             nx.relabel_nodes(g, node_mapping, copy=False)
             graphs.append(g)
         # Merge all graphs
         upstream_graph = nx.compose_all(graphs)
-        # Replace the node with the stage object
-        node_mapping = {
-            node: Stage.get(name=node['name'], version=node['version'], workspace=node['workspace'])
-            for node in upstream_graph.nodes() if node['type'] == 'stage'
-        }
-        nx.relabel_nodes(upstream_graph, node_mapping, copy=False)
         return upstream_graph
 
     def downstream(self, n=1, type=None):
@@ -278,16 +272,10 @@ class Stage(Job):
         for run in runs:
             g = run.downstream(n=n, type=type)
             for node in g.nodes:
-                if isinstance(node, Run):
-                    node_mapping[node] = node._job
+                if node.type == Run.type_name:
+                    node_mapping[node] = JobView(**node.get()._job)
             nx.relabel_nodes(g, node_mapping, copy=False)
             graphs.append(g)
         # Merge all graphs
         downstream_graph = nx.compose_all(graphs)
-        # Replace the node with the stage object
-        node_mapping = {
-            node: Stage.get(name=node['name'], version=node['version'], workspace=node['workspace'])
-            for node in downstream_graph.nodes() if node['type'] == 'stage'
-        }
-        nx.relabel_nodes(downstream_graph, node_mapping, copy=False)
         return downstream_graph
